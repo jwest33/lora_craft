@@ -23,8 +23,8 @@ pillow>=10.0.0
 # System and Utilities
 psutil>=5.9.0
 nvidia-ml-py>=13.580.82  # For NVIDIA GPU detection
-# gpustat>=1.1.0  # Optional: Additional GPU stats
-# py-cpuinfo>=9.0.0  # Optional: Detailed CPU information
+gpustat>=1.1.0  # Optional: Additional GPU stats
+py-cpuinfo>=9.0.0  # Optional: Detailed CPU information
 
 # Configuration and Logging
 pyyaml>=6.0

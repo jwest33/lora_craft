@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:docs.unsloth.ai)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -103,12 +103,15 @@ class ModelTrainingTab:
                 row=0, column=0, sticky=tk.W, padx=(SPACING['sm'], SPACING['lg']), pady=SPACING['sm'])
         else:
             ttk.Label(model_content, text="Model:").grid(row=0, column=0, sticky=tk.W, padx=(5, 15), pady=5)
-        self.model_name = tk.StringVar(value="qwen2.5-0.5b")
+        self.model_name = tk.StringVar(value="unsloth/Qwen3-1.7B")
         models = [
-            "qwen2.5-0.5b", "qwen2.5-1.5b", "qwen2.5-3b", "qwen2.5-7b",
-            "qwen2.5-14b", "qwen2.5-32b",
-            "llama-3.2-1b", "llama-3.2-3b", "llama-3.1-8b", "llama-3.1-70b",
-            "mistral-7b", "phi-3-mini", "gemma-2b", "gemma-7b"
+            "unsloth/phi-4-reasoning",
+            "unsloth/Qwen3-0.6B",
+            "unsloth/Qwen3-1.7B",
+            "unsloth/Qwen3-4B",
+            "unsloth/Qwen3-8B",
+            "unsloth/Llama-3.2-1B-Instruct",
+            "unsloth/Llama-3.2-3B-Instruct"
         ]
         model_combo = ttk.Combobox(model_content, textvariable=self.model_name, values=models,
                                    width=35, style='Styled.TCombobox' if STYLED_WIDGETS else '')
@@ -168,27 +171,27 @@ class ModelTrainingTab:
 
         # LoRA Alpha
         ttk.Label(lora_content, text="LoRA Alpha:").grid(row=0, column=3, sticky=tk.W, padx=(20, 15), pady=5)
-        self.lora_alpha = tk.IntVar(value=16)
+        self.lora_alpha = tk.IntVar(value=32)  # 2x rank for faster training
         alpha_spinbox = ttk.Spinbox(lora_content, from_=1, to=256, textvariable=self.lora_alpha, width=15)
         alpha_spinbox.grid(row=0, column=4, sticky=tk.W, padx=5, pady=5)
-        ttk.Label(lora_content, text="Usually equals rank",
+        ttk.Label(lora_content, text="2x rank for faster training",
                  font=('TkDefaultFont', 9, 'italic')).grid(row=0, column=5, padx=5, pady=5)
 
         # LoRA Dropout
         ttk.Label(lora_content, text="LoRA Dropout:").grid(row=1, column=0, sticky=tk.W, padx=(5, 15), pady=5)
-        self.lora_dropout = tk.DoubleVar(value=0.1)
+        self.lora_dropout = tk.DoubleVar(value=0.0)  # Optimized to 0
         dropout_spinbox = ttk.Spinbox(lora_content, from_=0.0, to=0.5, increment=0.05,
                                      textvariable=self.lora_dropout, width=15)
         dropout_spinbox.grid(row=1, column=1, sticky=tk.W, padx=5, pady=5)
-        ttk.Label(lora_content, text="Regularization",
+        ttk.Label(lora_content, text="0 is optimized",
                  font=('TkDefaultFont', 9, 'italic')).grid(row=1, column=2, padx=5, pady=5)
 
         # Target Modules
         ttk.Label(lora_content, text="Target Modules:").grid(row=1, column=3, sticky=tk.W, padx=(20, 15), pady=5)
-        self.target_modules = tk.StringVar(value="q_proj,v_proj,k_proj,o_proj")
-        modules_entry = ttk.Entry(lora_content, textvariable=self.target_modules, width=25)
+        self.target_modules = tk.StringVar(value="q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj")
+        modules_entry = ttk.Entry(lora_content, textvariable=self.target_modules, width=35)
         modules_entry.grid(row=1, column=4, sticky=tk.W, padx=5, pady=5)
-        ttk.Label(lora_content, text="Comma-separated",
+        ttk.Label(lora_content, text="All attention + FFN",
                  font=('TkDefaultFont', 9, 'italic')).grid(row=1, column=5, padx=5, pady=5)
 
         # Training Parameters Section with enhanced styling
@@ -212,12 +215,12 @@ class ModelTrainingTab:
         if STYLED_WIDGETS:
             StyledLabel(training_content, "Learning Rate:", style_type='label_bold').grid(
                 row=0, column=0, sticky=tk.W, padx=(SPACING['sm'], SPACING['lg']), pady=SPACING['sm'])
-            self.learning_rate = tk.StringVar(value="2e-4")
+            self.learning_rate = tk.StringVar(value="5e-6")  # Lower for GRPO
             lr_entry = StyledEntry(training_content, textvariable=self.learning_rate, placeholder="e.g., 2e-4")
             lr_entry.configure(width=15)
         else:
             ttk.Label(training_content, text="Learning Rate:").grid(row=0, column=0, sticky=tk.W, padx=(5, 15), pady=5)
-            self.learning_rate = tk.StringVar(value="2e-4")
+            self.learning_rate = tk.StringVar(value="5e-6")  # Lower for GRPO
             lr_entry = ttk.Entry(training_content, textvariable=self.learning_rate, width=15)
 
         lr_entry.grid(row=0, column=1, sticky=tk.W,
@@ -226,7 +229,7 @@ class ModelTrainingTab:
 
         # Batch Size
         ttk.Label(training_content, text="Batch Size:").grid(row=0, column=2, sticky=tk.W, padx=(20, 15), pady=5)
-        self.batch_size = tk.IntVar(value=4)
+        self.batch_size = tk.IntVar(value=1)  # Small batch for GRPO
         batch_spinbox = ttk.Spinbox(training_content, from_=1, to=128, textvariable=self.batch_size, width=15)
         batch_spinbox.grid(row=0, column=3, sticky=tk.W, padx=5, pady=5)
 
@@ -238,19 +241,19 @@ class ModelTrainingTab:
 
         # Epochs
         ttk.Label(training_content, text="Epochs:").grid(row=1, column=2, sticky=tk.W, padx=(20, 15), pady=5)
-        self.num_epochs = tk.IntVar(value=3)
+        self.num_epochs = tk.IntVar(value=2)  # 1-2 epochs for GRPO
         epoch_spinbox = ttk.Spinbox(training_content, from_=1, to=100, textvariable=self.num_epochs, width=15)
         epoch_spinbox.grid(row=1, column=3, sticky=tk.W, padx=5, pady=5)
 
         # Warmup Steps
         ttk.Label(training_content, text="Warmup Steps:").grid(row=2, column=0, sticky=tk.W, padx=(5, 15), pady=5)
-        self.warmup_steps = tk.IntVar(value=100)
+        self.warmup_steps = tk.IntVar(value=5)  # Small warmup for pre-training
         warmup_spinbox = ttk.Spinbox(training_content, from_=0, to=5000, textvariable=self.warmup_steps, width=15)
         warmup_spinbox.grid(row=2, column=1, sticky=tk.W, padx=5, pady=5)
 
         # Max Steps
         ttk.Label(training_content, text="Max Steps (-1 = auto):").grid(row=2, column=2, sticky=tk.W, padx=(20, 15), pady=5)
-        self.max_steps = tk.IntVar(value=-1)
+        self.max_steps = tk.IntVar(value=100)  # 100 steps for GRPO training
         steps_spinbox = ttk.Spinbox(training_content, from_=-1, to=100000, textvariable=self.max_steps, width=15)
         steps_spinbox.grid(row=2, column=3, sticky=tk.W, padx=5, pady=5)
 
@@ -309,7 +312,7 @@ class ModelTrainingTab:
         else:
             ttk.Label(gen_content, text="Temperature:").grid(row=0, column=0, sticky=tk.W, padx=(5, 15), pady=5)
 
-        self.temperature = tk.DoubleVar(value=0.7)
+        self.temperature = tk.DoubleVar(value=1.0)  # Higher for GRPO generation
         temp_scale = ttk.Scale(gen_content, from_=0.1, to=2.0, variable=self.temperature,
                               orient=tk.HORIZONTAL, length=150,
                               style='Styled.Horizontal.TScale' if STYLED_WIDGETS else '')
@@ -333,7 +336,7 @@ class ModelTrainingTab:
         else:
             ttk.Label(gen_content, text="Top-p:").grid(row=0, column=3, sticky=tk.W, padx=(20, 15), pady=5)
 
-        self.top_p = tk.DoubleVar(value=0.95)
+        self.top_p = tk.DoubleVar(value=1.0)  # Full probability for GRPO
         top_p_scale = ttk.Scale(gen_content, from_=0.1, to=1.0, variable=self.top_p,
                                orient=tk.HORIZONTAL, length=150,
                                style='Styled.Horizontal.TScale' if STYLED_WIDGETS else '')
@@ -385,7 +388,7 @@ class ModelTrainingTab:
         else:
             ttk.Label(gen_content, text="Max New Tokens:").grid(row=2, column=0, sticky=tk.W, padx=(5, 15), pady=5)
 
-        self.max_new_tokens = tk.IntVar(value=512)
+        self.max_new_tokens = tk.IntVar(value=1024)  # Longer for reasoning traces
         tokens_spinbox = ttk.Spinbox(gen_content, from_=32, to=4096, increment=32,
                                     textvariable=self.max_new_tokens, width=15,
                                     style='Styled.TSpinbox' if STYLED_WIDGETS else '')
@@ -401,20 +404,13 @@ class ModelTrainingTab:
         """Update model info label based on selection."""
         model = self.model_name.get()
         model_info = {
-            "qwen2.5-0.5b": "500M params, ~1GB VRAM",
-            "qwen2.5-1.5b": "1.5B params, ~3GB VRAM",
-            "qwen2.5-3b": "3B params, ~6GB VRAM",
-            "qwen2.5-7b": "7B params, ~14GB VRAM",
-            "qwen2.5-14b": "14B params, ~28GB VRAM",
-            "qwen2.5-32b": "32B params, ~64GB VRAM",
-            "llama-3.2-1b": "1B params, ~2GB VRAM",
-            "llama-3.2-3b": "3B params, ~6GB VRAM",
-            "llama-3.1-8b": "8B params, ~16GB VRAM",
-            "llama-3.1-70b": "70B params, ~140GB VRAM",
-            "mistral-7b": "7B params, ~14GB VRAM",
-            "phi-3-mini": "3.8B params, ~8GB VRAM",
-            "gemma-2b": "2B params, ~4GB VRAM",
-            "gemma-7b": "7B params, ~14GB VRAM",
+            "unsloth/phi-4-reasoning": "~15B params, ~30GB VRAM",
+            "unsloth/Qwen3-0.6B": "0.6B params, ~1.2GB VRAM",
+            "unsloth/Qwen3-1.7B": "1.7B params, ~3.4GB VRAM",
+            "unsloth/Qwen3-4B": "4B params, ~8GB VRAM",
+            "unsloth/Qwen3-8B": "8B params, ~16GB VRAM",
+            "unsloth/Llama-3.2-1B-Instruct": "1B params, ~2GB VRAM",
+            "unsloth/Llama-3.2-3B-Instruct": "3B params, ~6GB VRAM",
         }
         info = model_info.get(model, "")
         self.model_info.config(text=info)
@@ -430,6 +426,10 @@ class ModelTrainingTab:
             "dr_grpo": "DR-GRPO - Doubly Robust GRPO variant"
         }
         self.loss_info.config(text=descriptions.get(loss_type, ""))
+
+        # Auto-adjust learning rate for RL methods (GRPO/GSPO/DR-GRPO)
+        # Keep current value as is - user may have customized it
+        # This is just a note that 5e-6 is recommended for RL
 
         # Clear dynamic frame
         for widget in self.dynamic_frame.winfo_children():

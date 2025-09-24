@@ -19,12 +19,6 @@ except ImportError:
     warnings.warn("nvidia-ml-py not available. NVIDIA GPU detection will be limited.")
 
 try:
-    import py3nvml
-    PY3NVML_AVAILABLE = True
-except ImportError:
-    PY3NVML_AVAILABLE = False
-
-try:
     import gpustat
     GPUSTAT_AVAILABLE = True
 except ImportError:
@@ -93,21 +87,13 @@ class SystemConfig:
 
     # Model size estimates (in MB)
     MODEL_SIZES = {
-        "qwen2.5-0.5b": 1024,
-        "qwen2.5-1.5b": 3072,
-        "qwen2.5-3b": 6144,
-        "qwen2.5-7b": 14336,
-        "qwen2.5-14b": 28672,
-        "qwen2.5-32b": 65536,
-        "qwen2.5-72b": 147456,
-        "llama-3.2-1b": 2048,
-        "llama-3.2-3b": 6144,
-        "llama-3.1-8b": 16384,
-        "llama-3.1-70b": 143360,
-        "mistral-7b": 14336,
-        "phi-3-mini": 7680,
-        "gemma-2b": 4096,
-        "gemma-7b": 14336,
+        "unsloth/phi-4-reasoning": 30720,  # ~15B params, ~30GB VRAM
+        "unsloth/Qwen3-0.6B": 1229,       # 0.6B params, ~1.2GB VRAM
+        "unsloth/Qwen3-1.7B": 3482,       # 1.7B params, ~3.4GB VRAM
+        "unsloth/Qwen3-4B": 8192,          # 4B params, ~8GB VRAM
+        "unsloth/Qwen3-8B": 16384,         # 8B params, ~16GB VRAM
+        "unsloth/Llama-3.2-1B-Instruct": 2048,  # 1B params, ~2GB VRAM
+        "unsloth/Llama-3.2-3B-Instruct": 6144,  # 3B params, ~6GB VRAM
     }
 
     def __init__(self):
@@ -222,7 +208,7 @@ class SystemConfig:
         return gpus
 
     def get_optimal_config(self,
-                          model_size: str = "qwen2.5-3b",
+                          model_size: str = "unsloth/Qwen3-1.7B",
                           task: str = "training") -> TrainingConfig:
         """Get optimal training configuration based on system capabilities.
 
@@ -234,7 +220,7 @@ class SystemConfig:
             TrainingConfig with optimized settings
         """
         # Get model memory requirements
-        model_memory = self.MODEL_SIZES.get(model_size.lower(), 6144)  # Default 6GB
+        model_memory = self.MODEL_SIZES.get(model_size, 3482)  # Default to Qwen3-1.7B size
 
         # Calculate available memory
         if self.gpu_info:
@@ -265,7 +251,12 @@ class SystemConfig:
                 max_batch_size = max(1, available_ram // (memory_per_sample * 2))
 
         # Determine optimal batch size and gradient accumulation
-        if max_batch_size >= 8:
+        # For GRPO with Qwen3-1.7B, use smaller batches
+        if "Qwen3" in model_size and task == "training":
+            # GRPO works best with batch_size=1 and gradient accumulation
+            batch_size = 1
+            gradient_accumulation = 1  # Can increase to 4 for smoother training
+        elif max_batch_size >= 8:
             batch_size = 8
             gradient_accumulation = 1
         elif max_batch_size >= 4:
@@ -276,10 +267,13 @@ class SystemConfig:
             gradient_accumulation = 4
         else:
             batch_size = 1
-            gradient_accumulation = 8
+            gradient_accumulation = 4
 
         # Determine sequence length based on memory
-        if total_vram > 16000:  # 16GB+
+        # For GRPO reasoning, we want 2048 for reasoning traces
+        if "Qwen3" in model_size and task == "training":
+            max_seq_length = 2048  # Optimal for reasoning traces
+        elif total_vram > 16000:  # 16GB+
             max_seq_length = 2048
         elif total_vram > 8000:  # 8GB+
             max_seq_length = 1024
@@ -289,8 +283,10 @@ class SystemConfig:
             max_seq_length = 256
 
         # Determine optimization flags
-        use_mixed_precision = self.system_info.cuda_available and total_vram > 4000
-        use_gradient_checkpointing = total_vram < 8000 or model_memory > 8192
+        # For Qwen3 models, use 16-bit LoRA (not 4-bit) for better performance
+        use_mixed_precision = self.system_info.cuda_available and total_vram > 2000
+        # Enable gradient checkpointing for memory efficiency ("unsloth" mode)
+        use_gradient_checkpointing = True  # Always use for GRPO
         use_cpu_offload = total_vram < 4000 and available_ram > 16000
 
         # Check for flash attention support (requires Ampere or newer)
@@ -406,8 +402,8 @@ if __name__ == "__main__":
     # Test the system configuration
     config = SystemConfig()
     print(config.get_system_summary())
-    print("\nOptimal Training Config for Qwen2.5-3B:")
-    optimal = config.get_optimal_config("qwen2.5-3b")
+    print("\nOptimal Training Config for unsloth/Qwen3-1.7B:")
+    optimal = config.get_optimal_config("unsloth/Qwen3-1.7B")
     for key, value in optimal.to_dict().items():
         print(f"  {key}: {value}")
 
