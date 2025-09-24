@@ -6,6 +6,9 @@ from typing import Dict, Any, Optional
 import datetime
 import threading
 from pathlib import Path
+import shutil
+import tempfile
+from core import GGUFConverter
 
 
 class ExportTab:
@@ -80,9 +83,15 @@ class ExportTab:
         format_frame.pack(fill=tk.X, padx=10, pady=(0, 5))  # No padding on top, 5 on bottom
 
         ttk.Label(format_frame, text="Format:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-        self.export_format = tk.StringVar(value="safetensors")
-        formats = ["SafeTensors (16-bit)", "SafeTensors (4-bit)", "GGUF (Q4_K_M)", "GGUF (Q5_K_M)", "GGUF (Q8_0)", "HuggingFace"]
-        ttk.Combobox(format_frame, textvariable=self.export_format, values=formats, width=30).grid(row=0, column=1, padx=5, pady=5)
+        self.export_format = tk.StringVar(value="GGUF (Q8_0)")
+        formats = ["GGUF (Q8_0)", "GGUF (Q6_K)", "GGUF (Q5_K_M)", "GGUF (Q4_K_M)", "GGUF (Q4_0)", "SafeTensors (16-bit)", "SafeTensors (4-bit)", "HuggingFace"]
+        format_combo = ttk.Combobox(format_frame, textvariable=self.export_format, values=formats, width=30)
+        format_combo.grid(row=0, column=1, padx=5, pady=5)
+        format_combo.bind('<<ComboboxSelected>>', self._on_format_changed)
+
+        # Format info label
+        self.format_info_label = ttk.Label(format_frame, text="8-bit quantization (best quality) - ~1GB per billion parameters", font=('TkDefaultFont', 8), foreground='gray')
+        self.format_info_label.grid(row=1, column=1, sticky=tk.W, padx=5, pady=(0, 5))
 
         # Output Settings
         output_frame = ttk.LabelFrame(scrollable_frame, text="Output Settings", padding=10)
@@ -267,32 +276,74 @@ class ExportTab:
 
             # Export based on format
             if "GGUF" in format_type:
-                # Export to GGUF format
-                self.step_label.config(text="Converting to GGUF format...")
-                self.progress_bar['value'] = 20
+                # Export to GGUF format using llama.cpp converter
+                self.step_label.config(text="Preparing GGUF export...")
+                self.progress_bar['value'] = 10
 
                 # Determine quantization from format
-                if "Q4_K_M" in format_type:
-                    quantization = "q4_k_m"
+                if "Q8_0" in format_type:
+                    quantization = "q8_0"
+                elif "Q6_K" in format_type:
+                    quantization = "q6_k"
                 elif "Q5_K_M" in format_type:
                     quantization = "q5_k_m"
-                elif "Q8_0" in format_type:
-                    quantization = "q8_0"
-                else:
+                elif "Q4_K_M" in format_type:
                     quantization = "q4_k_m"
+                elif "Q4_0" in format_type:
+                    quantization = "q4_0"
+                else:
+                    quantization = "q8_0"
 
-                # Save model in GGUF format using Unsloth's export
+                # First, save model in HuggingFace format for conversion
+                self.step_label.config(text="Saving model for GGUF conversion...")
+                self.progress_bar['value'] = 20
+
+                temp_model_dir = output_dir / f"{model_name}_temp_hf"
+
+                # Use save_pretrained_merged for Unsloth models to get proper HF format
+                if hasattr(trainer.model, 'save_pretrained_merged'):
+                    # Save merged model in 16-bit for GGUF conversion
+                    trainer.model.save_pretrained_merged(
+                        str(temp_model_dir),
+                        trainer.tokenizer,
+                        save_method="merged_16bit",
+                    )
+                else:
+                    # Fallback to regular save_pretrained
+                    temp_model_dir.mkdir(parents=True, exist_ok=True)
+                    trainer.model.save_pretrained(str(temp_model_dir))
+                    trainer.tokenizer.save_pretrained(str(temp_model_dir))
+
+                self.progress_bar['value'] = 40
+
+                # Convert to GGUF using llama.cpp
+                self.step_label.config(text=f"Converting to GGUF {quantization.upper()}...")
                 output_path = output_dir / f"{model_name}.gguf"
 
-                # Use Unsloth's GGUF export if available
-                if hasattr(trainer.model, 'save_pretrained_gguf'):
-                    self.step_label.config(text="Exporting to GGUF...")
-                    self.progress_bar['value'] = 50
-                    trainer.model.save_pretrained_gguf(str(output_dir), trainer.tokenizer, quantization_method=quantization)
+                # Use the converter with progress callback
+                def progress_callback(msg):
+                    self.step_label.config(text=msg)
+
+                success, error_msg = GGUFConverter.convert_with_llama_cpp(
+                    temp_model_dir,
+                    output_path,
+                    quantization,
+                    progress_callback
+                )
+
+                if success:
                     self.step_label.config(text="GGUF export complete")
                     self.progress_bar['value'] = 90
+                    # Clean up temporary HF model
+                    shutil.rmtree(temp_model_dir, ignore_errors=True)
                 else:
-                    raise ValueError("GGUF export not supported. Please ensure you're using an Unsloth model.")
+                    # Clean up temporary HF model
+                    shutil.rmtree(temp_model_dir, ignore_errors=True)
+
+                    # If llama.cpp not found, show setup dialog
+                    if "llama.cpp not found" in error_msg:
+                        self._show_llama_cpp_setup_dialog()
+                    raise ValueError(error_msg)
 
             elif "SafeTensors" in format_type:
                 # Export to SafeTensors format
@@ -376,18 +427,21 @@ class ExportTab:
             self.export_stats['end_time'] = datetime.datetime.now()
             self.export_stats['output_path'] = str(output_path)
 
-            # Add to history
-            self._add_to_history()
-
-            # Show success
-            self._show_export_summary()
-
         except Exception as e:
             self.export_stats['error_message'] = str(e)
             self.export_stats['export_successful'] = False
+            self.export_stats['end_time'] = datetime.datetime.now()
             messagebox.showerror("Export Failed", f"Export failed: {e}")
 
         finally:
+            # Only add to history after we know the final status
+            if self.export_stats.get('end_time'):
+                self._add_to_history()
+
+            # Show summary only if successful
+            if self.export_stats.get('export_successful'):
+                self._show_export_summary()
+
             self.is_exporting = False
             self._set_export_state(False)
 
@@ -438,18 +492,18 @@ class ExportTab:
 
     def _add_to_history(self):
         """Add export to history list."""
-        if self.export_stats['export_successful']:
-            time_str = self.export_stats['start_time'].strftime('%H:%M:%S')
-            format_str = self.export_stats['format'].split(' ')[0]
-            size_str = f"{self.export_stats.get('file_size', 0)} MB"
-            status_str = "✅ Success"
+        time_str = self.export_stats['start_time'].strftime('%H:%M:%S')
+        format_str = self.export_stats['format'].split(' ')[0]
+        file_size = self.export_stats.get('file_size', 0) or 0
+        size_str = f"{file_size:.1f} MB" if self.export_stats['export_successful'] else "N/A"
+        status_str = "✅ Success" if self.export_stats['export_successful'] else "❌ Failed"
 
-            self.history_tree.insert('', 0, values=(time_str, format_str, size_str, status_str))
+        self.history_tree.insert('', 0, values=(time_str, format_str, size_str, status_str))
 
-            # Keep only last 10 entries
-            items = self.history_tree.get_children()
-            if len(items) > 10:
-                self.history_tree.delete(items[-1])
+        # Keep only last 10 entries
+        items = self.history_tree.get_children()
+        if len(items) > 10:
+            self.history_tree.delete(items[-1])
 
     def _view_export_logs(self):
         """View detailed export logs."""
@@ -475,8 +529,8 @@ class ExportTab:
             self.export_stats.get('format', 'N/A'),
             self.export_stats.get('output_path', 'N/A'),
             self.export_stats.get('model_name', 'N/A'),
-            self.export_stats.get('file_size', 0),
-            self.export_stats.get('compression_ratio', 0)
+            self.export_stats.get('file_size', 0) or 0,
+            self.export_stats.get('compression_ratio', 0) or 0
         )
 
         text_widget.insert('1.0', logs)
@@ -524,8 +578,8 @@ class ExportTab:
                 ("Duration", duration_str),
             ]),
             ("💾 Output Statistics", [
-                ("File Size", f"{self.export_stats.get('file_size', 0)} MB"),
-                ("Compression Ratio", f"{self.export_stats.get('compression_ratio', 0):.1%}"),
+                ("File Size", f"{self.export_stats.get('file_size', 0) or 0:.1f} MB"),
+                ("Compression Ratio", f"{(self.export_stats.get('compression_ratio', 0) or 0):.1%}"),
                 ("Status", "✅ Successfully exported" if self.export_stats['export_successful'] else "❌ Export failed"),
             ])
         ]
@@ -594,6 +648,90 @@ class ExportTab:
                 os.system(f'open "{folder}"')
             else:
                 os.system(f'xdg-open "{folder}"')
+
+    def _on_format_changed(self, event=None):
+        """Update format info label when format changes."""
+        format_type = self.export_format.get()
+
+        format_info = {
+            "GGUF (Q8_0)": "8-bit quantization (best quality) - ~1GB per billion parameters",
+            "GGUF (Q6_K)": "6-bit quantization (very good) - ~750MB per billion parameters",
+            "GGUF (Q5_K_M)": "5-bit quantization (good) - ~650MB per billion parameters",
+            "GGUF (Q4_K_M)": "4-bit quantization (acceptable) - ~550MB per billion parameters",
+            "GGUF (Q4_0)": "4-bit quantization (smaller) - ~500MB per billion parameters",
+            "SafeTensors (16-bit)": "Full precision - ~2GB per billion parameters",
+            "SafeTensors (4-bit)": "4-bit quantized SafeTensors - ~500MB per billion parameters",
+            "HuggingFace": "Standard HuggingFace format - Full precision"
+        }
+
+        info_text = format_info.get(format_type, "")
+        self.format_info_label.config(text=info_text)
+
+    def _show_llama_cpp_setup_dialog(self):
+        """Show dialog to setup llama.cpp for GGUF conversion."""
+        result = messagebox.askyesno(
+            "Setup Required",
+            "GGUF export requires llama.cpp to be installed.\n\n"
+            "Would you like to install it now?\n\n"
+            "This will:\n"
+            "1. Clone llama.cpp repository\n"
+            "2. Install Python dependencies\n"
+            "3. Set up conversion tools"
+        )
+
+        if result:
+            # Run setup script
+            setup_window = tk.Toplevel(self.frame)
+            setup_window.title("Installing llama.cpp")
+            setup_window.geometry("600x400")
+            setup_window.transient(self.frame)
+            setup_window.grab_set()
+
+            # Text widget for output
+            text_widget = tk.Text(setup_window, wrap=tk.WORD, bg='black', fg='white')
+            text_widget.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+            # Run setup in thread
+            def run_setup():
+                import subprocess
+                import sys
+
+                text_widget.insert('end', "Starting llama.cpp setup...\n")
+                text_widget.see('end')
+                setup_window.update()
+
+                try:
+                    process = subprocess.Popen(
+                        [sys.executable, "setup_llama_cpp.py"],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        bufsize=1
+                    )
+
+                    for line in process.stdout:
+                        text_widget.insert('end', line)
+                        text_widget.see('end')
+                        setup_window.update()
+
+                    process.wait()
+
+                    if process.returncode == 0:
+                        text_widget.insert('end', "\nSetup completed successfully!\n")
+                        messagebox.showinfo("Success", "llama.cpp has been installed successfully!\nYou can now export models to GGUF format.")
+                    else:
+                        text_widget.insert('end', "\nSetup failed. Please check the errors above.\n")
+
+                except Exception as e:
+                    text_widget.insert('end', f"\nError: {e}\n")
+
+                text_widget.see('end')
+
+            # Start setup in thread
+            threading.Thread(target=run_setup, daemon=True).start()
+
+            # Close button
+            ttk.Button(setup_window, text="Close", command=setup_window.destroy).pack(pady=5)
 
     def _export_report(self):
         """Export detailed report of the export process."""

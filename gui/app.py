@@ -715,12 +715,27 @@ class GRPOFineTunerApp:
             # Load model
             self.trainer.setup_model()
 
-            # Simulate training progress for testing
-            # In real implementation, this would be replaced by actual training
+            # Track GPU memory during training
+            import torch
             import time
             import random
+
+            # Function to get current GPU memory usage
+            def get_gpu_memory_mb():
+                if torch.cuda.is_available():
+                    return torch.cuda.memory_allocated() / 1024 / 1024  # Convert to MB
+                return 0
+
+            # Get initial GPU memory after model load
+            initial_gpu_memory = get_gpu_memory_mb()
+            self.training_stats['gpu_memory_peak'] = initial_gpu_memory
+
+            # Simulate training progress for testing
+            # TODO: Replace with actual GRPO training when dataset is properly configured
             num_epochs = self.config.get('num_epochs', 3)
             steps_per_epoch = 100  # Simulated
+
+            max_gpu_memory = initial_gpu_memory  # Track peak GPU memory
 
             for epoch in range(num_epochs):
                 if not self.is_training:
@@ -740,12 +755,18 @@ class GRPOFineTunerApp:
                     loss = 2.0 - (1.5 * progress) + random.uniform(-0.1, 0.1)
                     reward = -1.0 + (2.0 * progress) + random.uniform(-0.1, 0.1)
 
+                    # Track GPU memory
+                    current_gpu_memory = get_gpu_memory_mb()
+                    max_gpu_memory = max(max_gpu_memory, current_gpu_memory)
+                    self.training_stats['gpu_memory_peak'] = max_gpu_memory
+
                     self.message_queue.put(('progress', progress))
                     self.message_queue.put(('metrics', {
                         'step': total_steps,
                         'loss': loss,
                         'reward': reward,
-                        'epoch': epoch + 1
+                        'epoch': epoch + 1,
+                        'gpu_memory_mb': current_gpu_memory
                     }))
 
                     self.training_stats['samples_processed'] += self.config.get('batch_size', 4)
@@ -944,7 +965,7 @@ class GRPOFineTunerApp:
             ]),
             ("⚙️ Training Configuration", [
                 ("Learning Rate", f"{self.training_stats.get('learning_rate_final', 'Unknown')}"),
-                ("GPU Memory Peak", f"{self.training_stats.get('gpu_memory_peak', 0)} MB"),
+                ("GPU Memory Peak", f"{self.training_stats.get('gpu_memory_peak', 0):.1f} MB"),
                 ("Training Status", "Interrupted" if self.training_stats.get('training_interrupted') else "Completed Successfully"),
             ])
         ]

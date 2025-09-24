@@ -5,7 +5,6 @@ datasets>=3.6.0
 accelerate>=1.10.1
 bitsandbytes>=0.41.0
 xformers>=0.0.33 # pip install -v --no-build-isolation -U git+https://github.com/facebookresearch/xformers.git@main#egg=xformers --no-deps
-llama-cpp-python>=0.3.16
 
 # GRPO and Fine-tuning
 unsloth>=2025.9.7
@@ -27,6 +26,9 @@ psutil>=5.9.0
 nvidia-ml-py>=13.580.82  # For NVIDIA GPU detection
 gpustat>=1.1.0  # Optional: Additional GPU stats
 py-cpuinfo>=9.0.0  # Optional: Detailed CPU information
+llama-cpp-python>=0.3.16
+mistral-common>=1.8.3
+gguf>=0.1.0
 
 # Configuration and Logging
 pyyaml>=6.0

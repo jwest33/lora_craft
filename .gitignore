@@ -8,3 +8,4 @@ logs/
 output/
 unsloth_compiled_cache/
 llama.cpp/
+tools/llama.cpp/
