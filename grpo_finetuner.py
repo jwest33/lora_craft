@@ -77,35 +77,66 @@ def setup_environment():
             os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 
-def run_gui_mode(config_file: str = None):
+def run_gui_mode(config_file: str = None, use_improved_ui: bool = True):
     """Run application in GUI mode.
 
     Args:
         config_file: Optional configuration file to load
+        use_improved_ui: Whether to use the improved UI (default True)
     """
     import tkinter as tk
-    from gui.app import GRPOFineTunerApp
 
-    # Create root window
-    root = tk.Tk()
+    # Check for --classic flag to use old UI
+    if '--classic' in sys.argv:
+        use_improved_ui = False
 
-    # Create application
-    app = GRPOFineTunerApp(root)
+    if use_improved_ui:
+        from gui.app_v2 import SimplifiedGRPOApp
 
-    # Load configuration if provided
-    if config_file and Path(config_file).exists():
-        try:
-            with open(config_file, 'r') as f:
-                config = json.load(f)
-            app.config = config
-            app._apply_config_to_ui()
-            print(f"Loaded configuration from {config_file}")
-        except Exception as e:
-            print(f"Warning: Failed to load config file: {e}")
+        # Create root window
+        root = tk.Tk()
 
-    icon_image = tk.PhotoImage(file='assets/icon.png')
-    root.iconphoto(True, icon_image)
-    
+        # Create improved application
+        app = SimplifiedGRPOApp(root)
+
+        # Load configuration if provided
+        if config_file and Path(config_file).exists():
+            try:
+                with open(config_file, 'r') as f:
+                    config = json.load(f)
+                app.config = config
+                print(f"Loaded configuration from {config_file}")
+            except Exception as e:
+                print(f"Warning: Failed to load config file: {e}")
+    else:
+        from gui.app import GRPOFineTunerApp
+
+        # Create root window
+        root = tk.Tk()
+
+        # Create classic application
+        app = GRPOFineTunerApp(root)
+
+        # Load configuration if provided
+        if config_file and Path(config_file).exists():
+            try:
+                with open(config_file, 'r') as f:
+                    config = json.load(f)
+                app.config = config
+                app._apply_config_to_ui()
+                print(f"Loaded configuration from {config_file}")
+            except Exception as e:
+                print(f"Warning: Failed to load config file: {e}")
+
+    # Try to set icon if it exists
+    try:
+        icon_path = Path('assets/icon.png')
+        if icon_path.exists():
+            icon_image = tk.PhotoImage(file=str(icon_path))
+            root.iconphoto(True, icon_image)
+    except Exception:
+        pass  # Icon is optional
+
     # Start application
     root.mainloop()
 
@@ -293,6 +324,12 @@ def main():
         '--version', '-v',
         action='version',
         version='GRPO Fine-Tuner v1.0.0'
+    )
+
+    parser.add_argument(
+        '--classic',
+        action='store_true',
+        help='Use the classic GUI interface instead of the improved UI'
     )
 
     args = parser.parse_args()
