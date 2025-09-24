@@ -1,0 +1,28 @@
+{
+  "name": "grpo",
+  "description": "GRPO template for reasoning models (Unsloth-compatible)",
+  "version": "1.0",
+  "system_prompt": "You are given a problem.\nThink about the problem and provide your working out.\nPlace it between <start_working_out> and <end_working_out>.\nThen, provide your solution between <SOLUTION></SOLUTION>",
+  "instruction_template": "{{ instruction }}",
+  "response_template": "{{ response }}",
+  "chat_template": "{% if messages[0]['role'] == 'system' %}{{ messages[0]['content'] + eos_token }}{% set loop_messages = messages[1:] %}{% else %}{{ system_prompt + eos_token }}{% set loop_messages = messages %}{% endif %}{% for message in loop_messages %}{% if message['role'] == 'user' %}{{ message['content'] }}{% elif message['role'] == 'assistant' %}{{ message['content'] + eos_token }}{% endif %}{% endfor %}{% if add_generation_prompt %}{{ reasoning_start }}{% endif %}",
+  "reasoning_start_marker": "<start_working_out>",
+  "reasoning_end_marker": "<end_working_out>",
+  "solution_start_marker": "<SOLUTION>",
+  "solution_end_marker": "</SOLUTION>",
+  "prepend_reasoning_start": true,
+  "include_eos_in_response": true,
+  "add_bos_token": true,
+  "add_eos_token": true,
+  "strip_whitespace": true,
+  "preserve_formatting": false,
+  "model_type": "grpo",
+  "tokenizer_chat_template": null,
+  "eos_token": null,
+  "bos_token": null,
+  "conversation_extension": 1,
+  "message_field_mapping": {
+    "role": "role",
+    "content": "content"
+  }
+}

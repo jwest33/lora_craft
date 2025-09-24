@@ -1,0 +1,41 @@
+# Core ML Dependencies
+# torch --index-url https://download.pytorch.org/whl/cu128
+transformers>=4.51.3
+datasets>=3.6.0
+accelerate>=1.10.1
+bitsandbytes>=0.41.0
+
+# GRPO and Fine-tuning
+unsloth>=2025.9.7
+trl>=0.7.0
+# vllm>=0.2.0  # Optional: Linux/Mac only for faster generation
+peft>=0.5.0
+
+# Data Processing
+pandas>=2.0.0
+numpy>=2.2.6
+pyarrow>=12.0.0
+
+# GUI and Visualization
+matplotlib>=3.10.6
+pillow>=10.0.0
+
+# System and Utilities
+psutil>=5.9.0
+nvidia-ml-py>=13.580.82  # For NVIDIA GPU detection
+# gpustat>=1.1.0  # Optional: Additional GPU stats
+# py-cpuinfo>=9.0.0  # Optional: Detailed CPU information
+
+# Configuration and Logging
+pyyaml>=6.0
+jsonschema>=4.0.0
+python-dotenv>=1.0.0
+jinja2>=3.1.0
+
+# Optional: Export formats
+safetensors>=0.6.2
+
+# Optional: Development
+pytest>=7.0.0
+black>=23.0.0
+flake8>=6.0.0

@@ -1,0 +1,8 @@
+.venv/
+cache/
+__pycache__/
+checkpoints/
+exports/
+datasets_cache/
+logs/
+output/
