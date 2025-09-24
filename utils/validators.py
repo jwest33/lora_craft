@@ -555,11 +555,60 @@ def validate_training_config(config: Dict[str, Any]) -> Tuple[bool, List[str]]:
         if not valid:
             errors.append(f"Model: {msg}")
 
-    # Validate dataset
-    if 'dataset_name' in config:
-        valid, msg = Validators.validate_dataset_name(config['dataset_name'])
-        if not valid:
-            errors.append(f"Dataset: {msg}")
+    # Validate dataset - REQUIRED for training
+    dataset_configured = False
+    dataset_source = config.get('dataset_source', '')
+
+    # Check for HuggingFace dataset
+    if 'HuggingFace' in dataset_source or dataset_source == 'huggingface_hub':
+        # Check both possible keys: dataset_name and dataset_path
+        dataset_value = config.get('dataset_name') or config.get('dataset_path')
+        if dataset_value and dataset_value.strip():
+            valid, msg = Validators.validate_dataset_name(dataset_value)
+            if not valid:
+                errors.append(f"Dataset: {msg}")
+            else:
+                dataset_configured = True
+        else:
+            errors.append("HuggingFace dataset not specified")
+
+    # Check for local dataset file
+    elif 'Local' in dataset_source or dataset_source == 'local_file':
+        # Check both possible keys: dataset_file and dataset_path
+        dataset_value = config.get('dataset_file') or config.get('dataset_path')
+        if dataset_value and dataset_value.strip():
+            valid, msg = Validators.validate_file_path(
+                dataset_value,
+                must_exist=True,
+                extensions=['.json', '.jsonl', '.csv', '.parquet']
+            )
+            if not valid:
+                errors.append(f"Dataset file: {msg}")
+            else:
+                dataset_configured = True
+        else:
+            errors.append("Local dataset file not specified")
+
+    # Check for API endpoint
+    elif 'API' in dataset_source:
+        dataset_value = config.get('dataset_path')
+        if dataset_value and dataset_value.strip():
+            dataset_configured = True
+        else:
+            errors.append("API endpoint not specified")
+
+    # Check for direct input/custom dataset
+    elif 'Direct' in dataset_source or 'Custom' in dataset_source:
+        # For direct input, we don't need a dataset path
+        dataset_configured = True
+
+    # Check if dataset_path exists regardless of source (catch-all)
+    elif config.get('dataset_path') and config.get('dataset_path').strip():
+        dataset_configured = True
+
+    # No dataset configured at all
+    if not dataset_configured and not config.get('dataset_path'):
+        errors.append("No dataset configured. Please select a dataset source and provide dataset details.")
 
     # Validate numeric parameters
     numeric_params = {

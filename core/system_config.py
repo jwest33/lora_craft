@@ -112,7 +112,6 @@ class SystemConfig:
             cpu_model = cpu_info.get('brand_raw', 'Unknown')
         except ImportError:
             # cpuinfo not installed, try alternative methods
-            import platform
             cpu_model = platform.processor() or "Unknown"
 
         # Get memory info
@@ -166,12 +165,25 @@ class SystemConfig:
                     util = pynvml.nvmlDeviceGetUtilizationRates(handle)
 
                     # Get CUDA capability
-                    major, minor = pynvml.nvmlDeviceGetCudaComputeCapability(handle)
+                    try:
+                        major, minor = pynvml.nvmlDeviceGetCudaComputeCapability(handle)
+                    except AttributeError:
+                        # Fallback if function doesn't exist
+                        major, minor = None, None
 
-                    # Get driver version
-                    driver = pynvml.nvmlDriverGetVersion()
-                    if isinstance(driver, bytes):
-                        driver = driver.decode('utf-8')
+                    # Get driver version - check if function exists
+                    driver = None
+                    try:
+                        if hasattr(pynvml, 'nvmlSystemGetDriverVersion'):
+                            driver = pynvml.nvmlSystemGetDriverVersion()
+                        elif hasattr(pynvml, 'nvmlDriverGetVersion'):
+                            driver = pynvml.nvmlDriverGetVersion()
+
+                        if driver and isinstance(driver, bytes):
+                            driver = driver.decode('utf-8')
+                    except (AttributeError, Exception):
+                        # Driver version not available - catch all exceptions
+                        pass
 
                     gpu = GPUInfo(
                         index=i,
@@ -180,7 +192,7 @@ class SystemConfig:
                         memory_free=mem_info.free // (1024 * 1024),
                         memory_used=mem_info.used // (1024 * 1024),
                         utilization=util.gpu,
-                        cuda_capability=(major, minor),
+                        cuda_capability=(major, minor) if major and minor else None,
                         driver_version=driver
                     )
                     gpus.append(gpu)

@@ -205,7 +205,8 @@ class MonitoringTab:
         self.ax2.set_xlabel("Step", fontsize=10, color=theme['fg'])
         self.ax2.set_ylabel("Reward", fontsize=10, color=theme['fg'])
 
-        if self.steps_history:
+        # Only update plots if we have data and not called from _update_plots
+        if self.steps_history and not getattr(self, '_updating_plots', False):
             self._update_plots()
 
     def _update_plots(self):
@@ -213,25 +214,42 @@ class MonitoringTab:
         if not self.steps_history:
             return
 
+        # Set flag to prevent recursion
+        self._updating_plots = True
+
         theme = self.chart_themes[self.current_theme]
 
         # Clear and redraw loss plot
         self.ax1.clear()
-        self._apply_chart_theme()  # Reapply theme after clearing
+        self.ax1.set_facecolor(theme['bg'])
         self.ax1.plot(self.steps_history, self.loss_history,
                      color=theme['line_color'], linewidth=2,
                      alpha=theme['alpha'], label='Loss')
         self.ax1.fill_between(self.steps_history, self.loss_history,
                              alpha=0.2, color=theme['line_color'])
 
+        # Reapply labels and styling for ax1
+        self.ax1.set_title("Training Loss", fontsize=12, fontweight='bold', color=theme['fg'])
+        self.ax1.set_xlabel("Step", fontsize=10, color=theme['fg'])
+        self.ax1.set_ylabel("Loss", fontsize=10, color=theme['fg'])
+        self.ax1.grid(True, alpha=0.3, color=theme['grid'], linestyle='-', linewidth=0.5)
+        self.ax1.tick_params(colors=theme['fg'])
+
         # Clear and redraw reward plot
         self.ax2.clear()
-        self._apply_chart_theme()  # Reapply theme after clearing
+        self.ax2.set_facecolor(theme['bg'])
         self.ax2.plot(self.steps_history, self.reward_history,
                      color=theme['line2_color'], linewidth=2,
                      alpha=theme['alpha'], label='Reward')
         self.ax2.fill_between(self.steps_history, self.reward_history,
                              alpha=0.2, color=theme['line2_color'])
+
+        # Reapply labels and styling for ax2
+        self.ax2.set_title("Average Reward", fontsize=12, fontweight='bold', color=theme['fg'])
+        self.ax2.set_xlabel("Step", fontsize=10, color=theme['fg'])
+        self.ax2.set_ylabel("Reward", fontsize=10, color=theme['fg'])
+        self.ax2.grid(True, alpha=0.3, color=theme['grid'], linestyle='-', linewidth=0.5)
+        self.ax2.tick_params(colors=theme['fg'])
 
         # Auto scale if enabled
         if self.auto_scale_var.get():
@@ -243,14 +261,36 @@ class MonitoringTab:
         # Redraw canvas
         self.canvas.draw()
 
+        # Reset flag
+        self._updating_plots = False
+
     def clear_charts(self):
         """Clear all chart data."""
         self.steps_history.clear()
         self.loss_history.clear()
         self.reward_history.clear()
+
+        theme = self.chart_themes[self.current_theme]
+
+        # Clear axes
         self.ax1.clear()
         self.ax2.clear()
-        self._apply_chart_theme()
+
+        # Reapply basic styling without recursion
+        self.ax1.set_facecolor(theme['bg'])
+        self.ax1.set_title("Training Loss", fontsize=12, fontweight='bold', color=theme['fg'])
+        self.ax1.set_xlabel("Step", fontsize=10, color=theme['fg'])
+        self.ax1.set_ylabel("Loss", fontsize=10, color=theme['fg'])
+        self.ax1.grid(True, alpha=0.3, color=theme['grid'], linestyle='-', linewidth=0.5)
+        self.ax1.tick_params(colors=theme['fg'])
+
+        self.ax2.set_facecolor(theme['bg'])
+        self.ax2.set_title("Average Reward", fontsize=12, fontweight='bold', color=theme['fg'])
+        self.ax2.set_xlabel("Step", fontsize=10, color=theme['fg'])
+        self.ax2.set_ylabel("Reward", fontsize=10, color=theme['fg'])
+        self.ax2.grid(True, alpha=0.3, color=theme['grid'], linestyle='-', linewidth=0.5)
+        self.ax2.tick_params(colors=theme['fg'])
+
         self.canvas.draw()
 
     def export_charts(self):

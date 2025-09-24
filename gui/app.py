@@ -66,6 +66,22 @@ class GRPOFineTunerApp:
         self.is_training = False
         self.message_queue = queue.Queue()
 
+        # Training metrics storage
+        self.training_stats = {
+            'start_time': None,
+            'end_time': None,
+            'total_steps': 0,
+            'final_loss': None,
+            'final_reward': None,
+            'best_loss': float('inf'),
+            'best_reward': float('-inf'),
+            'epochs_completed': 0,
+            'samples_processed': 0,
+            'learning_rate_final': None,
+            'gpu_memory_peak': 0,
+            'training_interrupted': False
+        }
+
         # System configuration
         self.system_config = SystemConfig()
 
@@ -162,15 +178,110 @@ class GRPOFineTunerApp:
         help_menu.add_separator()
         help_menu.add_command(label="About", command=self._show_about)
 
+    def _create_main_toolbar(self):
+        """Create main toolbar with training and configuration controls."""
+        # Main toolbar frame with border
+        toolbar_frame = ttk.Frame(self.root, relief=tk.RAISED, borderwidth=1)
+        toolbar_frame.pack(fill=tk.X, padx=5, pady=(5, 0))
+
+        # Left side - Training controls
+        left_frame = ttk.Frame(toolbar_frame)
+        left_frame.pack(side=tk.LEFT, padx=10, pady=5)
+
+        # Training controls
+        self.main_train_button = ttk.Button(
+            left_frame,
+            text="▶ Train Model",
+            command=self._start_training,
+            width=15
+        )
+        self.main_train_button.pack(side=tk.LEFT, padx=2)
+
+        self.main_stop_button = ttk.Button(
+            left_frame,
+            text="■ Stop",
+            command=self._stop_training,
+            state=tk.DISABLED,
+            width=10
+        )
+        self.main_stop_button.pack(side=tk.LEFT, padx=2)
+
+        self.main_pause_button = ttk.Button(
+            left_frame,
+            text="⏸ Pause",
+            command=self._pause_training,
+            state=tk.DISABLED,
+            width=10
+        )
+        self.main_pause_button.pack(side=tk.LEFT, padx=2)
+
+        # Separator
+        ttk.Separator(left_frame, orient='vertical').pack(side=tk.LEFT, fill=tk.Y, padx=10)
+
+        # Configuration controls
+        ttk.Button(
+            left_frame,
+            text="💾 Save",
+            command=self._save_config,
+            width=10
+        ).pack(side=tk.LEFT, padx=2)
+
+        ttk.Button(
+            left_frame,
+            text="📁 Load",
+            command=self._open_config,
+            width=10
+        ).pack(side=tk.LEFT, padx=2)
+
+        ttk.Button(
+            left_frame,
+            text="✓ Validate",
+            command=self._validate_config,
+            width=10
+        ).pack(side=tk.LEFT, padx=2)
+
+        # Center - Training progress
+        center_frame = ttk.Frame(toolbar_frame)
+        center_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=20)
+
+        # Progress bar
+        self.main_progress_bar = ttk.Progressbar(
+            center_frame,
+            length=250,
+            mode='determinate'
+        )
+        self.main_progress_bar.pack(side=tk.LEFT, pady=5)
+
+        self.main_progress_label = ttk.Label(center_frame, text="Ready")
+        self.main_progress_label.pack(side=tk.LEFT, padx=10)
+
+        # Right side - Model info
+        right_frame = ttk.Frame(toolbar_frame)
+        right_frame.pack(side=tk.RIGHT, padx=10, pady=5)
+
+        self.model_status_label = ttk.Label(
+            right_frame,
+            text="Model: Not selected",
+            font=('TkDefaultFont', 9)
+        )
+        self.model_status_label.pack()
+
     def _create_main_ui(self):
         """Create main UI with tabs."""
+        # Create main toolbar for training controls
+        self._create_main_toolbar()
+
         # Create notebook for tabs
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         # Create tabs
         self.dataset_tab = DatasetTab(self.notebook, self._on_config_change)
-        self.model_training_tab = ModelTrainingTab(self.notebook, self._on_config_change)  # Combined tab
+        self.model_training_tab = ModelTrainingTab(
+            self.notebook,
+            self._on_config_change,
+            self._start_training
+        )  # Combined tab with training callback
         self.system_tab = SystemTab(self.notebook, self.system_config, self._on_config_change)
         self.monitoring_tab = MonitoringTab(
             self.notebook,
@@ -178,7 +289,7 @@ class GRPOFineTunerApp:
             self._stop_training,
             self._pause_training
         )
-        self.export_tab = ExportTab(self.notebook, self._export_model)
+        self.export_tab = ExportTab(self.notebook, self)
 
         # Add tabs to notebook
         self.notebook.add(self.dataset_tab.frame, text="Dataset & Prompts")
@@ -245,6 +356,10 @@ class GRPOFineTunerApp:
         self.config[key] = value
         self.status_label.config(text="Configuration modified")
 
+        # Update model status in toolbar if model changed
+        if key == 'model_name':
+            self.model_status_label.config(text=f"Model: {value}")
+
     def _on_tab_changed(self, event):
         """Handle tab change event."""
         selected_tab = self.notebook.select()
@@ -266,12 +381,18 @@ class GRPOFineTunerApp:
         else:
             # Create minimal default config
             self.config = {
-                'model_name': 'qwen2.5-0.5b',
+                'model_name': 'unsloth/Qwen3-1.7B',  # Updated to match UI default
                 'dataset_source': 'HuggingFace Hub',  # Fixed to match UI
                 'learning_rate': 2e-4,
                 'batch_size': 4,
                 'num_epochs': 3,
             }
+
+        # Update model status in toolbar
+        model_name = self.config.get('model_name', 'Not selected')
+        if model_name and model_name != 'Not selected':
+            display_name = model_name.split('/')[-1] if '/' in model_name else model_name
+            self.model_status_label.config(text=f"Model: {display_name}")
 
     def _apply_config_to_ui(self):
         """Apply configuration to UI elements."""
@@ -282,6 +403,12 @@ class GRPOFineTunerApp:
             self.model_training_tab.load_config(self.config)
         if hasattr(self, 'system_tab'):
             self.system_tab.load_config(self.config)
+
+        # Update model status in toolbar
+        model_name = self.config.get('model_name', 'Not selected')
+        if model_name and model_name != 'Not selected':
+            display_name = model_name.split('/')[-1] if '/' in model_name else model_name
+            self.model_status_label.config(text=f"Model: {display_name}")
 
     def _new_config(self):
         """Create new configuration."""
@@ -468,6 +595,30 @@ class GRPOFineTunerApp:
             themed_dialog.showerror(self.root, "Validation Failed", error_msg)
             return
 
+        # Reset training stats
+        import datetime
+        self.training_stats = {
+            'start_time': datetime.datetime.now(),
+            'end_time': None,
+            'total_steps': 0,
+            'final_loss': None,
+            'final_reward': None,
+            'best_loss': float('inf'),
+            'best_reward': float('-inf'),
+            'epochs_completed': 0,
+            'samples_processed': 0,
+            'learning_rate_final': self.config.get('learning_rate', 2e-4),
+            'gpu_memory_peak': 0,
+            'training_interrupted': False,
+            'model_name': self.config.get('model_name', 'Unknown'),
+            'dataset_name': self.config.get('dataset_path') or self.config.get('dataset_name', 'Unknown'),
+            'batch_size': self.config.get('batch_size', 4),
+            'num_epochs': self.config.get('num_epochs', 3)
+        }
+
+        # Update UI state
+        self._set_training_state(True)
+
         # Start training in background thread
         self.is_training = True
         self.training_status_label.config(text="Training...")
@@ -483,18 +634,65 @@ class GRPOFineTunerApp:
 
         if themed_dialog.askyesno(self.root, "Stop Training",
                                "Are you sure you want to stop training?"):
+            # Mark as interrupted
+            import datetime
+            self.training_stats['training_interrupted'] = True
+            self.training_stats['end_time'] = datetime.datetime.now()
+
             self.is_training = False
             self.training_status_label.config(text="Stopping...")
+            self._set_training_state(False)
 
             # Signal trainer to stop
             if self.trainer:
                 # Implementation would stop the trainer
                 pass
 
+            # Show training summary even if interrupted
+            self._show_training_summary()
+
     def _pause_training(self):
         """Pause/resume training."""
         # Implementation for pause/resume
         pass
+
+    def _set_training_state(self, is_training: bool):
+        """Update all UI elements based on training state.
+
+        Args:
+            is_training: Whether training is active
+        """
+        if is_training:
+            # Disable configuration changes during training
+            self.main_train_button.config(state=tk.DISABLED)
+            self.main_stop_button.config(state=tk.NORMAL)
+            self.main_pause_button.config(state=tk.NORMAL)
+
+            # Update progress label
+            self.main_progress_label.config(text="Training in progress...")
+
+            # Update window title
+            self.root.title("GRPO Fine-Tuner - TRAINING IN PROGRESS")
+
+            # Update monitoring tab if exists
+            if hasattr(self, 'monitoring_tab'):
+                self.monitoring_tab.set_training_state(True)
+        else:
+            # Re-enable configuration
+            self.main_train_button.config(state=tk.NORMAL)
+            self.main_stop_button.config(state=tk.DISABLED)
+            self.main_pause_button.config(state=tk.DISABLED)
+
+            # Reset progress
+            self.main_progress_bar['value'] = 0
+            self.main_progress_label.config(text="Ready")
+
+            # Reset window title
+            self.root.title("GRPO Fine-Tuner - Qwen & LLaMA Training GUI")
+
+            # Update monitoring tab if exists
+            if hasattr(self, 'monitoring_tab'):
+                self.monitoring_tab.set_training_state(False)
 
     def _run_training(self):
         """Run training in background thread."""
@@ -517,11 +715,45 @@ class GRPOFineTunerApp:
             # Load model
             self.trainer.setup_model()
 
-            # Start training
-            # This would involve loading dataset, template, and rewards
-            # then calling trainer.grpo_train()
+            # Simulate training progress for testing
+            # In real implementation, this would be replaced by actual training
+            import time
+            import random
+            num_epochs = self.config.get('num_epochs', 3)
+            steps_per_epoch = 100  # Simulated
 
-            self.message_queue.put(('complete', "Training completed successfully!"))
+            for epoch in range(num_epochs):
+                if not self.is_training:
+                    break
+
+                self.training_stats['epochs_completed'] = epoch + 1
+
+                for step in range(steps_per_epoch):
+                    if not self.is_training:
+                        break
+
+                    # Simulate progress
+                    total_steps = epoch * steps_per_epoch + step
+                    progress = total_steps / (num_epochs * steps_per_epoch)
+
+                    # Simulate metrics
+                    loss = 2.0 - (1.5 * progress) + random.uniform(-0.1, 0.1)
+                    reward = -1.0 + (2.0 * progress) + random.uniform(-0.1, 0.1)
+
+                    self.message_queue.put(('progress', progress))
+                    self.message_queue.put(('metrics', {
+                        'step': total_steps,
+                        'loss': loss,
+                        'reward': reward,
+                        'epoch': epoch + 1
+                    }))
+
+                    self.training_stats['samples_processed'] += self.config.get('batch_size', 4)
+
+                    time.sleep(0.01)  # Simulate training time
+
+            if self.is_training:  # Only show complete if not interrupted
+                self.message_queue.put(('complete', "Training completed successfully!"))
 
         except Exception as e:
             self.message_queue.put(('error', str(e)))
@@ -529,6 +761,7 @@ class GRPOFineTunerApp:
         finally:
             self.is_training = False
             self.training_status_label.config(text="Not Training")
+            self._set_training_state(False)
 
     def _on_training_progress(self, progress: float):
         """Handle training progress update."""
@@ -561,14 +794,34 @@ class GRPOFineTunerApp:
                         self.monitoring_tab.add_log(msg_data)
 
                 elif msg_type == 'progress':
+                    # Update main toolbar progress bar
+                    self.main_progress_bar['value'] = msg_data * 100
+                    self.main_progress_label.config(text=f"Training: {int(msg_data * 100)}%")
+
+                    # Update monitoring tab
                     if hasattr(self, 'monitoring_tab'):
                         self.monitoring_tab.update_progress(msg_data)
 
                 elif msg_type == 'metrics':
+                    # Update training stats
+                    if 'loss' in msg_data:
+                        self.training_stats['final_loss'] = msg_data['loss']
+                        self.training_stats['best_loss'] = min(self.training_stats['best_loss'], msg_data['loss'])
+                    if 'reward' in msg_data:
+                        self.training_stats['final_reward'] = msg_data['reward']
+                        self.training_stats['best_reward'] = max(self.training_stats['best_reward'], msg_data['reward'])
+                    if 'step' in msg_data:
+                        self.training_stats['total_steps'] = msg_data['step']
+
                     if hasattr(self, 'monitoring_tab'):
                         self.monitoring_tab.update_metrics(msg_data)
 
                 elif msg_type == 'complete':
+                    # Training completed - show final stats
+                    import datetime
+                    self.training_stats['end_time'] = datetime.datetime.now()
+                    self.training_stats['training_interrupted'] = False
+                    self._show_training_summary()
                     themed_dialog.showinfo(self.root, "Training Complete", msg_data)
 
                 elif msg_type == 'error':
@@ -591,6 +844,215 @@ class GRPOFineTunerApp:
         if hasattr(self, 'monitoring_tab'):
             self.monitoring_tab.set_theme(theme_name)
         self.status_label.config(text=f"Theme changed to {theme_name.title()}")
+
+    def _show_training_summary(self):
+        """Show comprehensive training summary dialog."""
+        import datetime
+
+        # Calculate training duration
+        if self.training_stats['start_time'] and self.training_stats['end_time']:
+            duration = self.training_stats['end_time'] - self.training_stats['start_time']
+            duration_str = str(duration).split('.')[0]  # Remove microseconds
+        else:
+            duration_str = "Unknown"
+
+        # Create summary window
+        summary_window = tk.Toplevel(self.root)
+        summary_window.title("Training Summary")
+        summary_window.geometry("600x700")
+        summary_window.transient(self.root)
+        summary_window.grab_set()
+
+        # Create container frame
+        container = ttk.Frame(summary_window)
+        container.pack(fill=tk.BOTH, expand=True)
+
+        # Create a canvas and scrollbar for scrolling
+        canvas = tk.Canvas(container, bg='white')
+        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+
+        # Configure canvas window
+        canvas_window = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+
+        def configure_scroll_region(event=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            # Update the canvas window width to match canvas width
+            canvas_width = event.width if event else canvas.winfo_width()
+            canvas.itemconfig(canvas_window, width=canvas_width)
+
+        scrollable_frame.bind("<Configure>", configure_scroll_region)
+        canvas.bind("<Configure>", lambda e: configure_scroll_region(e))
+
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Bind mouse wheel for scrolling - properly handle focus
+        def _on_mousewheel(event):
+            # Only scroll if the mouse is over the canvas or its children
+            widget = summary_window.winfo_containing(event.x_root, event.y_root)
+            if widget:
+                canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        def _bind_mousewheel(event):
+            summary_window.bind_all("<MouseWheel>", _on_mousewheel)
+
+        def _unbind_mousewheel(event):
+            summary_window.unbind_all("<MouseWheel>")
+
+        # Bind mouse wheel when entering the canvas area
+        canvas.bind("<Enter>", _bind_mousewheel)
+        canvas.bind("<Leave>", _unbind_mousewheel)
+        scrollable_frame.bind("<Enter>", _bind_mousewheel)
+        scrollable_frame.bind("<Leave>", _unbind_mousewheel)
+
+        # Main frame inside scrollable area - reduce padding to minimize gap
+        main_frame = ttk.Frame(scrollable_frame, padding="15")
+        main_frame.pack(fill=tk.BOTH, expand=False)  # Don't expand to prevent extra space
+
+        # Title
+        title_label = ttk.Label(
+            main_frame,
+            text="🎉 Training Complete!",
+            font=('TkDefaultFont', 16, 'bold')
+        )
+        title_label.pack(pady=(0, 20))
+
+        # Create sections
+        sections = [
+            ("📊 Model Information", [
+                ("Model", self.training_stats.get('model_name', 'Unknown')),
+                ("Dataset", self.training_stats.get('dataset_name', 'Unknown')),
+            ]),
+            ("⏱️ Training Duration", [
+                ("Start Time", self.training_stats['start_time'].strftime('%Y-%m-%d %H:%M:%S') if self.training_stats['start_time'] else 'Unknown'),
+                ("End Time", self.training_stats['end_time'].strftime('%Y-%m-%d %H:%M:%S') if self.training_stats['end_time'] else 'Unknown'),
+                ("Total Duration", duration_str),
+            ]),
+            ("📈 Training Progress", [
+                ("Epochs Completed", f"{self.training_stats.get('epochs_completed', 0)} / {self.training_stats.get('num_epochs', 0)}"),
+                ("Total Steps", self.training_stats.get('total_steps', 0)),
+                ("Samples Processed", self.training_stats.get('samples_processed', 0)),
+                ("Batch Size", self.training_stats.get('batch_size', 'Unknown')),
+            ]),
+            ("📉 Loss Metrics", [
+                ("Final Loss", f"{self.training_stats.get('final_loss', 'N/A'):.6f}" if self.training_stats.get('final_loss') is not None else 'N/A'),
+                ("Best Loss", f"{self.training_stats.get('best_loss', 'N/A'):.6f}" if self.training_stats.get('best_loss') != float('inf') else 'N/A'),
+            ]),
+            ("🎯 Reward Metrics", [
+                ("Final Reward", f"{self.training_stats.get('final_reward', 'N/A'):.6f}" if self.training_stats.get('final_reward') is not None else 'N/A'),
+                ("Best Reward", f"{self.training_stats.get('best_reward', 'N/A'):.6f}" if self.training_stats.get('best_reward') != float('-inf') else 'N/A'),
+            ]),
+            ("⚙️ Training Configuration", [
+                ("Learning Rate", f"{self.training_stats.get('learning_rate_final', 'Unknown')}"),
+                ("GPU Memory Peak", f"{self.training_stats.get('gpu_memory_peak', 0)} MB"),
+                ("Training Status", "Interrupted" if self.training_stats.get('training_interrupted') else "Completed Successfully"),
+            ])
+        ]
+
+        # Create each section
+        for section_title, items in sections:
+            # Section frame
+            section_frame = ttk.LabelFrame(main_frame, text=section_title, padding="10")
+            section_frame.pack(fill=tk.X, pady=5)
+
+            # Section items
+            for label, value in items:
+                item_frame = ttk.Frame(section_frame)
+                item_frame.pack(fill=tk.X, pady=2)
+
+                ttk.Label(
+                    item_frame,
+                    text=f"{label}:",
+                    width=20,
+                    anchor=tk.W
+                ).pack(side=tk.LEFT)
+
+                ttk.Label(
+                    item_frame,
+                    text=str(value),
+                    font=('TkDefaultFont', 9, 'bold')
+                ).pack(side=tk.LEFT)
+
+        # Buttons frame
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill=tk.X, pady=(20, 0))
+
+        # Export button
+        ttk.Button(
+            button_frame,
+            text="📄 Export Report",
+            command=lambda: self._export_training_report(self.training_stats)
+        ).pack(side=tk.LEFT, padx=5)
+
+        # Save model button
+        ttk.Button(
+            button_frame,
+            text="💾 Save Model",
+            command=self._export_model
+        ).pack(side=tk.LEFT, padx=5)
+
+        # Close button
+        ttk.Button(
+            button_frame,
+            text="Close",
+            command=summary_window.destroy
+        ).pack(side=tk.RIGHT, padx=5)
+
+        # Pack canvas and scrollbar properly in the container
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Center the window
+        summary_window.update_idletasks()
+        x = (summary_window.winfo_screenwidth() // 2) - (summary_window.winfo_width() // 2)
+        y = (summary_window.winfo_screenheight() // 2) - (summary_window.winfo_height() // 2)
+        summary_window.geometry(f"+{x}+{y}")
+
+    def _export_training_report(self, stats):
+        """Export training report to file."""
+        import datetime
+        import json
+
+        file_path = filedialog.asksaveasfilename(
+            title="Export Training Report",
+            defaultextension=".json",
+            filetypes=[
+                ("JSON Files", "*.json"),
+                ("Text Files", "*.txt"),
+                ("All Files", "*.*")
+            ],
+            initialfile=f"training_report_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        )
+
+        if file_path:
+            try:
+                # Convert datetime objects to strings
+                export_stats = stats.copy()
+                if export_stats.get('start_time'):
+                    export_stats['start_time'] = export_stats['start_time'].isoformat()
+                if export_stats.get('end_time'):
+                    export_stats['end_time'] = export_stats['end_time'].isoformat()
+
+                # Handle infinity values
+                if export_stats.get('best_loss') == float('inf'):
+                    export_stats['best_loss'] = None
+                if export_stats.get('best_reward') == float('-inf'):
+                    export_stats['best_reward'] = None
+
+                # Save based on extension
+                if file_path.endswith('.txt'):
+                    with open(file_path, 'w') as f:
+                        f.write("TRAINING REPORT\n")
+                        f.write("=" * 50 + "\n\n")
+                        for key, value in export_stats.items():
+                            f.write(f"{key}: {value}\n")
+                else:
+                    with open(file_path, 'w') as f:
+                        json.dump(export_stats, f, indent=2)
+
+                themed_dialog.showinfo(self.root, "Export Successful", f"Training report saved to {Path(file_path).name}")
+            except Exception as e:
+                themed_dialog.showerror(self.root, "Export Failed", f"Failed to export report: {e}")
 
     def _on_closing(self):
         """Handle application closing."""

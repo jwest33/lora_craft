@@ -6,3 +6,5 @@ exports/
 datasets_cache/
 logs/
 output/
+unsloth_compiled_cache/
+llama.cpp/

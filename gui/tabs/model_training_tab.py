@@ -19,9 +19,11 @@ except ImportError:
 class ModelTrainingTab:
     """Combined tab for model configuration and training settings."""
 
-    def __init__(self, parent, on_config_change: Callable):
+    def __init__(self, parent, on_config_change: Callable, start_training_callback: Callable = None):
         """Initialize model and training tab."""
+        self.parent = parent
         self.on_config_change = on_config_change
+        self.start_training_callback = start_training_callback
         self.frame = ttk.Frame(parent)
         self._create_widgets()
 
@@ -396,6 +398,50 @@ class ModelTrainingTab:
                           padx=SPACING['sm'] if STYLED_WIDGETS else 5,
                           pady=SPACING['sm'] if STYLED_WIDGETS else 5)
 
+        # Training Action Section - Bottom of the form
+        if STYLED_WIDGETS:
+            SectionHeader(scrollable_frame, "Training Actions",
+                         "Start training with current configuration").pack(
+                fill=tk.X, padx=SPACING['lg'], pady=(SPACING['lg'], SPACING['md']))
+
+            action_frame = Card(scrollable_frame, padding='section')
+            action_content = action_frame.content
+        else:
+            action_frame = ttk.LabelFrame(scrollable_frame, text="Training Actions", padding=15)
+            action_content = action_frame
+
+        action_frame.pack(fill=tk.X, padx=SPACING['lg'] if STYLED_WIDGETS else 10,
+                         pady=SPACING['md'] if STYLED_WIDGETS else 5)
+
+        # Training controls frame
+        controls_frame = ttk.Frame(action_content)
+        controls_frame.pack(pady=10)
+
+        # Start Training button - prominent and centered
+        self.start_training_button = ttk.Button(
+            controls_frame,
+            text="🚀 Start Training",
+            command=self._on_start_training,
+            style='Primary.TButton' if STYLED_WIDGETS else None
+        )
+        self.start_training_button.pack(side=tk.LEFT, padx=10)
+
+        # Validate Configuration button
+        self.validate_button = ttk.Button(
+            controls_frame,
+            text="✓ Validate Config",
+            command=self._validate_config
+        )
+        self.validate_button.pack(side=tk.LEFT, padx=10)
+
+        # Estimated requirements label
+        self.requirements_label = ttk.Label(
+            action_content,
+            text="Select a model to see estimated requirements",
+            font=('TkDefaultFont', 9, 'italic')
+        )
+        self.requirements_label.pack(pady=(10, 5))
+
         # Pack canvas and scrollbar
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
@@ -415,6 +461,17 @@ class ModelTrainingTab:
         info = model_info.get(model, "")
         self.model_info.config(text=info)
 
+        # Update requirements label if it exists
+        if hasattr(self, 'requirements_label'):
+            batch_size = self.batch_size.get() if hasattr(self, 'batch_size') else 4
+            requirements_text = f"Estimated requirements for {model.split('/')[-1]}: {info}"
+            if batch_size:
+                requirements_text += f" (batch size {batch_size})"
+            self.requirements_label.config(text=requirements_text)
+
+        # Notify config change
+        self.on_config_change('model_name', model)
+
     def _on_loss_type_change(self, event=None):
         """Handle loss type change and update dynamic parameters."""
         loss_type = self.loss_type.get()
@@ -426,6 +483,43 @@ class ModelTrainingTab:
             "dr_grpo": "DR-GRPO - Doubly Robust GRPO variant"
         }
         self.loss_info.config(text=descriptions.get(loss_type, ""))
+
+    def _on_start_training(self):
+        """Handle start training button click."""
+        if self.start_training_callback:
+            self.start_training_callback()
+        else:
+            # Try to find and call the main app's start training method
+            try:
+                from .. import themed_dialog
+                themed_dialog.showinfo(self.parent, "Info", "Please use the main toolbar Train button or press F5 to start training.")
+            except:
+                print("Start training callback not configured. Use main toolbar or F5.")
+
+    def _validate_config(self):
+        """Validate current configuration."""
+        try:
+            # Get current config
+            config = self.get_config()
+
+            # Basic validation
+            errors = []
+            if not config.get('model_name'):
+                errors.append("Model not selected")
+            if config.get('batch_size', 0) <= 0:
+                errors.append("Batch size must be positive")
+            if config.get('num_epochs', 0) <= 0:
+                errors.append("Number of epochs must be positive")
+
+            # Show result
+            from .. import themed_dialog
+            if errors:
+                themed_dialog.showerror(self.parent, "Validation Failed", "\n".join(errors))
+            else:
+                themed_dialog.showinfo(self.parent, "Validation", "Configuration is valid!")
+
+        except Exception as e:
+            print(f"Error validating config: {e}")
 
         # Auto-adjust learning rate for RL methods (GRPO/GSPO/DR-GRPO)
         # Keep current value as is - user may have customized it

@@ -4,6 +4,8 @@ transformers>=4.51.3
 datasets>=3.6.0
 accelerate>=1.10.1
 bitsandbytes>=0.41.0
+xformers>=0.0.33 # pip install -v --no-build-isolation -U git+https://github.com/facebookresearch/xformers.git@main#egg=xformers --no-deps
+llama-cpp-python>=0.3.16
 
 # GRPO and Fine-tuning
 unsloth>=2025.9.7
