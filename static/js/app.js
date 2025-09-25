@@ -529,7 +529,7 @@ function selectDatasetType(type) {
 
     const datasetConfig = document.getElementById('dataset-config');
     const datasetCatalogEl = document.getElementById('dataset-catalog');
-    const datasetUpload = document.getElementById('dataset-upload');
+    const datasetUploadArea = document.getElementById('dataset-upload-area');
 
     // Show dataset configuration section
     datasetConfig.style.display = 'block';
@@ -537,12 +537,12 @@ function selectDatasetType(type) {
     if (type === 'popular') {
         // Show catalog
         datasetCatalogEl.style.display = 'block';
-        datasetUpload.style.display = 'none';
+        datasetUploadArea.style.display = 'none';
         loadDatasetCatalog();
     } else if (type === 'upload') {
         // Show upload area
         datasetCatalogEl.style.display = 'none';
-        datasetUpload.style.display = 'block';
+        datasetUploadArea.style.display = 'block';
     }
 }
 
