@@ -135,9 +135,14 @@ class DatasetHandler:
                 with open(self._cache_info_file, 'r') as f:
                     data = json.load(f)
                     for key, value in data.items():
-                        value['download_date'] = datetime.fromisoformat(value['download_date'])
-                        value['cache_path'] = Path(value['cache_path'])
-                        self.cache_info[key] = CacheInfo(**value)
+                        if isinstance(value, dict):
+                            value['download_date'] = datetime.fromisoformat(value['download_date'])
+                            value['cache_path'] = Path(value['cache_path'])
+                            # Convert size_mb back to size_bytes if needed (for backward compatibility)
+                            if 'size_mb' in value and 'size_bytes' not in value:
+                                value['size_bytes'] = int(value['size_mb'] * 1024 * 1024)
+                                del value['size_mb']
+                            self.cache_info[key] = CacheInfo(**value)
             except Exception as e:
                 logger.warning(f"Failed to load cache info: {e}")
                 self.cache_info = {}

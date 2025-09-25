@@ -14,7 +14,10 @@ let stepValidation = {
 };
 let lossChart = null;
 let lrChart = null;
+let rewardChart = null;
 let datasetStatusCache = {};
+let trainedModels = [];
+let selectedModelsForExport = new Set();
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
@@ -71,22 +74,27 @@ function initializeSocketIO() {
     });
     
     socket.on('training_progress', function(data) {
+        console.log('Training progress:', data);
         updateTrainingProgress(data.progress);
     });
-    
+
     socket.on('training_metrics', function(data) {
+        console.log('Training metrics received:', data);
         updateTrainingMetrics(data);
     });
-    
+
     socket.on('training_log', function(data) {
+        console.log('Training log:', data.message);
         appendLog(data.message);
     });
-    
+
     socket.on('training_complete', function(data) {
+        console.log('Training complete:', data);
         handleTrainingComplete(data);
     });
-    
+
     socket.on('training_error', function(data) {
+        console.error('Training error:', data);
         handleTrainingError(data);
     });
 
@@ -130,7 +138,7 @@ function toggleStep(stepNum) {
         chevron.classList.add('fa-chevron-down');
     } else {
         // Collapse all other steps first
-        for (let i = 1; i <= 4; i++) {
+        for (let i = 1; i <= 5; i++) {
             if (i !== stepNum) {
                 const otherContent = document.getElementById(`step-${i}-content`);
                 const otherChevron = document.getElementById(`step-${i}-chevron`);
@@ -149,6 +157,13 @@ function toggleStep(stepNum) {
         bsCollapse.show();
         chevron.classList.remove('fa-chevron-down');
         chevron.classList.add('fa-chevron-up');
+
+        // If opening exports section (step 5), refresh the models
+        if (stepNum === 5) {
+            setTimeout(() => {
+                refreshTrainedModels();
+            }, 100);
+        }
     }
 
     currentStep = stepNum;
@@ -182,6 +197,13 @@ function goToStep(stepNum) {
 
     currentStep = stepNum;
     updateStepIndicators();
+
+    // If navigating to exports section (step 5), refresh the models
+    if (stepNum === 5) {
+        setTimeout(() => {
+            refreshTrainedModels();
+        }, 100);
+    }
 
     // Smooth scroll to step after a short delay to allow animation
     setTimeout(() => {
@@ -386,6 +408,7 @@ const datasetCatalog = {
     'gsm8k': {
         name: 'GSM8K',
         path: 'openai/gsm8k',
+        config: 'main',  // GSM8K requires config specification (main or socratic)
         size: '8.5K problems',
         category: 'math',
         description: 'Grade school math problems',
@@ -545,7 +568,7 @@ function createDatasetCard(key, dataset) {
             <button class="btn btn-sm btn-success mt-2" onclick="selectDataset('${key}')">
                 <i class="fas fa-check"></i> Use Dataset
             </button>
-            <button class="btn btn-sm btn-outline-secondary mt-2" onclick="previewDataset('${key}')">
+            <button class="btn btn-sm btn-info mt-2" onclick="previewDataset('${key}')">
                 <i class="fas fa-eye"></i> Preview
             </button>
             <div class="mt-1">
@@ -590,6 +613,12 @@ function selectDataset(key) {
     if (dataset) {
         // Update the dataset path
         document.getElementById('dataset-path').value = dataset.path;
+
+        // Store the config if available (for multi-config datasets)
+        if (dataset.config) {
+            // Store config in a data attribute or hidden field
+            document.getElementById('dataset-path').setAttribute('data-config', dataset.config);
+        }
 
         // Auto-configure field mappings
         document.getElementById('instruction-field').value = dataset.fields.instruction;
@@ -1346,6 +1375,7 @@ function gatherConfig() {
         // Dataset configuration
         dataset_source: document.getElementById('dataset-source').value,
         dataset_path: document.getElementById('dataset-path').value,
+        dataset_config: document.getElementById('dataset-path').getAttribute('data-config') || null,
         dataset_split: document.getElementById('dataset-split').value,
         instruction_field: document.getElementById('instruction-field').value,
         response_field: document.getElementById('response-field').value,
@@ -1460,10 +1490,10 @@ async function startTraining() {
     document.getElementById('training-monitor').style.display = 'block';
     document.getElementById('step-4-nav').style.display = 'none';
 
-    // Disable launch button
-    const launchBtn = document.getElementById('launch-btn');
-    launchBtn.disabled = true;
-    launchBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting...';
+    // Disable train button
+    const trainBtn = document.getElementById('train-btn');
+    trainBtn.disabled = true;
+    trainBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting...';
 
     // Clear previous logs
     document.getElementById('training-logs').innerHTML = '';
@@ -1485,19 +1515,23 @@ async function startTraining() {
         if (response.ok) {
             currentSessionId = data.session_id;
 
+            // Reset charts for new training
+            resetCharts();
+
             // Join the session room for updates
             if (socket) {
+                console.log('Joining training session:', currentSessionId);
                 socket.emit('join_session', { session_id: currentSessionId });
             }
 
-            launchBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Training...';
+            trainBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Training...';
             showAlert('Training started successfully!', 'success');
         } else {
             throw new Error(data.error || 'Failed to start training');
         }
     } catch (error) {
-        launchBtn.disabled = false;
-        launchBtn.innerHTML = '<i class="fas fa-rocket"></i> Start Training';
+        trainBtn.disabled = false;
+        trainBtn.innerHTML = '<i class="fas fa-rocket"></i> Start Training';
         showAlert('Failed to start training: ' + error.message, 'danger');
     }
 }
@@ -1526,6 +1560,7 @@ function pauseTraining() {
 function initializeCharts() {
     const lossCtx = document.getElementById('loss-chart').getContext('2d');
     const lrCtx = document.getElementById('lr-chart').getContext('2d');
+    const rewardCtx = document.getElementById('reward-chart').getContext('2d');
 
     lossChart = new Chart(lossCtx, {
         type: 'line',
@@ -1550,6 +1585,47 @@ function initializeCharts() {
             scales: {
                 y: {
                     beginAtZero: false
+                }
+            }
+        }
+    });
+
+    // Initialize reward chart
+    rewardChart = new Chart(rewardCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Mean Reward',
+                data: [],
+                borderColor: 'rgb(34, 197, 94)',
+                backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return 'Reward: ' + context.parsed.y.toFixed(6);
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    ticks: {
+                        callback: function(value) {
+                            return value.toFixed(4);
+                        }
+                    }
                 }
             }
         }
@@ -1584,6 +1660,33 @@ function initializeCharts() {
     });
 }
 
+function resetCharts() {
+    // Clear all chart data
+    if (lossChart) {
+        lossChart.data.labels = [];
+        lossChart.data.datasets[0].data = [];
+        lossChart.update();
+    }
+    if (rewardChart) {
+        rewardChart.data.labels = [];
+        rewardChart.data.datasets[0].data = [];
+        rewardChart.update();
+    }
+    if (lrChart) {
+        lrChart.data.labels = [];
+        lrChart.data.datasets[0].data = [];
+        lrChart.update();
+    }
+
+    // Reset metrics panel
+    document.getElementById('metric-step').textContent = '0';
+    document.getElementById('metric-loss').textContent = '--';
+    document.getElementById('metric-reward').textContent = '--';
+    document.getElementById('metric-grad-norm').textContent = '--';
+    document.getElementById('metric-lr').textContent = '--';
+    document.getElementById('metric-epoch').textContent = '0';
+}
+
 function updateTrainingProgress(progress) {
     const progressBar = document.getElementById('training-progress');
     progressBar.style.width = progress + '%';
@@ -1595,18 +1698,58 @@ function updateTrainingProgress(progress) {
 }
 
 function updateTrainingMetrics(metrics) {
+    // Debug: Log incoming metrics
+    console.log('Received metrics:', metrics);
+
+    // Update metrics panel
+    if (metrics.step !== undefined) {
+        document.getElementById('metric-step').textContent = metrics.step;
+    }
+    if (metrics.loss !== undefined) {
+        // Format loss value based on magnitude
+        const lossValue = parseFloat(metrics.loss);
+        const formattedLoss = lossValue < 0.01 ? lossValue.toFixed(6) : lossValue.toFixed(4);
+        document.getElementById('metric-loss').textContent = formattedLoss;
+    }
+    if (metrics.mean_reward !== undefined) {
+        document.getElementById('metric-reward').textContent = parseFloat(metrics.mean_reward).toFixed(6);
+    }
+    if (metrics.grad_norm !== undefined) {
+        document.getElementById('metric-grad-norm').textContent = parseFloat(metrics.grad_norm).toFixed(4);
+    }
+    if (metrics.learning_rate !== undefined) {
+        document.getElementById('metric-lr').textContent = parseFloat(metrics.learning_rate).toExponential(2);
+    }
+    if (metrics.epoch !== undefined) {
+        document.getElementById('metric-epoch').textContent = parseFloat(metrics.epoch).toFixed(2);
+    }
+
     // Update loss chart
     if (lossChart && metrics.loss !== undefined) {
         lossChart.data.labels.push(metrics.step || lossChart.data.labels.length);
         lossChart.data.datasets[0].data.push(metrics.loss);
 
-        // Keep only last 50 points
-        if (lossChart.data.labels.length > 50) {
+        // Keep last 100 points for better visualization
+        if (lossChart.data.labels.length > 100) {
             lossChart.data.labels.shift();
             lossChart.data.datasets[0].data.shift();
         }
 
-        lossChart.update();
+        lossChart.update('none'); // Disable animation for smoother updates
+    }
+
+    // Update reward chart
+    if (rewardChart && metrics.mean_reward !== undefined) {
+        rewardChart.data.labels.push(metrics.step || rewardChart.data.labels.length);
+        rewardChart.data.datasets[0].data.push(metrics.mean_reward);
+
+        // Keep last 100 points
+        if (rewardChart.data.labels.length > 100) {
+            rewardChart.data.labels.shift();
+            rewardChart.data.datasets[0].data.shift();
+        }
+
+        rewardChart.update('none');
     }
 
     // Update learning rate chart
@@ -1614,13 +1757,13 @@ function updateTrainingMetrics(metrics) {
         lrChart.data.labels.push(metrics.step || lrChart.data.labels.length);
         lrChart.data.datasets[0].data.push(metrics.learning_rate);
 
-        // Keep only last 50 points
-        if (lrChart.data.labels.length > 50) {
+        // Keep last 100 points
+        if (lrChart.data.labels.length > 100) {
             lrChart.data.labels.shift();
             lrChart.data.datasets[0].data.shift();
         }
 
-        lrChart.update();
+        lrChart.update('none');
     }
 }
 
@@ -1638,21 +1781,27 @@ function clearLogs() {
 }
 
 function handleTrainingComplete(data) {
-    const launchBtn = document.getElementById('launch-btn');
-    launchBtn.disabled = false;
-    launchBtn.innerHTML = '<i class="fas fa-check"></i> Training Complete';
-    launchBtn.classList.add('btn-success');
+    const trainBtn = document.getElementById('train-btn');
+    trainBtn.disabled = false;
+    trainBtn.innerHTML = '<i class="fas fa-check"></i> Training Complete';
+    trainBtn.classList.add('btn-success');
 
     showAlert('Training completed successfully!', 'success');
 
+    // Store as last completed session
+    lastCompletedSessionId = currentSessionId;
+
     // Show export options
-    // TODO: Implement export functionality
+    showExportModal(currentSessionId);
+
+    // Also refresh the sessions list to show the updated status
+    refreshSessions();
 }
 
 function handleTrainingError(data) {
-    const launchBtn = document.getElementById('launch-btn');
-    launchBtn.disabled = false;
-    launchBtn.innerHTML = '<i class="fas fa-rocket"></i> Start Training';
+    const trainBtn = document.getElementById('train-btn');
+    trainBtn.disabled = false;
+    trainBtn.innerHTML = '<i class="fas fa-rocket"></i> Start Training';
 
     showAlert('Training error: ' + data.error, 'danger');
 }
@@ -1672,16 +1821,26 @@ async function refreshSessions() {
         sessions.forEach(session => {
             const sessionItem = document.createElement('div');
             sessionItem.className = 'session-item p-2 border-bottom';
+
+            // Create export button HTML for completed sessions
+            const exportBtnHtml = session.status === 'completed'
+                ? `<button class="btn btn-sm btn-success ms-2" onclick="event.stopPropagation(); showExportModal('${session.session_id}')">
+                       <i class="fas fa-file-export"></i>
+                   </button>`
+                : '';
+
             sessionItem.innerHTML = `
                 <div class="d-flex justify-content-between align-items-center">
-                    <div>
+                    <div class="flex-grow-1" style="cursor: pointer;" onclick="loadSession('${session.session_id}')">
                         <div class="fw-bold">${session.model.split('/').pop()}</div>
                         <small class="text-muted">${new Date(session.created_at).toLocaleString()}</small>
                     </div>
-                    <span class="badge bg-${getStatusColor(session.status)}">${session.status}</span>
+                    <div class="d-flex align-items-center">
+                        <span class="badge bg-${getStatusColor(session.status)}">${session.status}</span>
+                        ${exportBtnHtml}
+                    </div>
                 </div>
             `;
-            sessionItem.onclick = () => loadSession(session.session_id);
             sessionsList.appendChild(sessionItem);
         });
     } catch (error) {
@@ -1699,8 +1858,80 @@ function getStatusColor(status) {
 }
 
 function loadSession(sessionId) {
-    // TODO: Implement session loading
-    showAlert('Session loading coming soon!', 'info');
+    currentSessionId = sessionId;
+
+    // Fetch session details and show info panel
+    fetch(`/api/training/sessions`)
+        .then(response => response.json())
+        .then(sessions => {
+            const session = sessions.find(s => s.session_id === sessionId);
+            if (session) {
+                showSessionInfoPanel(session);
+                if (session.status === 'completed') {
+                    lastCompletedSessionId = sessionId;
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Failed to load session:', error);
+            showAlert('Failed to load session details.', 'danger');
+        });
+}
+
+function showSessionInfoPanel(session) {
+    // Find or create session info panel
+    let infoPanel = document.getElementById('session-info-panel');
+    if (!infoPanel) {
+        // Create panel container in the main content area
+        const mainContent = document.querySelector('.main-container');
+        if (!mainContent) return;
+
+        infoPanel = document.createElement('div');
+        infoPanel.id = 'session-info-panel';
+        infoPanel.className = 'alert alert-info alert-dismissible fade show mt-3';
+
+        // Insert after the navbar or at the top of main container
+        const firstChild = mainContent.firstChild;
+        mainContent.insertBefore(infoPanel, firstChild);
+    }
+
+    // Build panel content
+    const statusBadge = `<span class="badge bg-${getStatusColor(session.status)}">${session.status}</span>`;
+    const exportButton = session.status === 'completed'
+        ? `<button class="btn btn-success btn-sm" onclick="showExportModal('${session.session_id}')">
+               <i class="fas fa-file-export"></i> Export Model
+           </button>`
+        : '';
+
+    infoPanel.innerHTML = `
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <h5 class="alert-heading">
+            <i class="fas fa-info-circle"></i> Session Details
+        </h5>
+        <div class="row">
+            <div class="col-md-8">
+                <p class="mb-1"><strong>Model:</strong> ${session.model}</p>
+                <p class="mb-1"><strong>Session ID:</strong> ${session.session_id}</p>
+                <p class="mb-1"><strong>Created:</strong> ${new Date(session.created_at).toLocaleString()}</p>
+                <p class="mb-1"><strong>Status:</strong> ${statusBadge}</p>
+            </div>
+            <div class="col-md-4 text-end">
+                ${exportButton}
+                ${session.status === 'running'
+                    ? `<button class="btn btn-primary btn-sm" onclick="reconnectToSession('${session.session_id}')">
+                           <i class="fas fa-plug"></i> Reconnect
+                       </button>`
+                    : ''}
+            </div>
+        </div>
+    `;
+}
+
+function reconnectToSession(sessionId) {
+    // Reconnect to a running training session
+    currentSessionId = sessionId;
+    socket.emit('join', { session_id: sessionId });
+    showAlert('Reconnected to training session!', 'success');
 }
 
 // ============================================================================
@@ -1968,13 +2199,20 @@ async function downloadDataset(key) {
         document.getElementById('download-status-message').textContent = 'Initializing download...';
 
         // Start download
+        const requestBody = {
+            dataset_name: dataset.path,
+            force_download: false
+        };
+
+        // Add config if specified (for multi-config datasets like GSM8K)
+        if (dataset.config) {
+            requestBody.config = dataset.config;
+        }
+
         const response = await fetch('/api/datasets/download', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                dataset_name: dataset.path,
-                force_download: false
-            })
+            body: JSON.stringify(requestBody)
         });
 
         const result = await response.json();
@@ -2054,13 +2292,20 @@ async function previewDataset(key) {
         document.getElementById('dataset-preview-content').style.display = 'none';
 
         // Fetch dataset samples
+        const requestBody = {
+            dataset_name: dataset.path,
+            sample_size: 5
+        };
+
+        // Add config if specified (for multi-config datasets)
+        if (dataset.config) {
+            requestBody.config = dataset.config;
+        }
+
         const response = await fetch('/api/datasets/sample', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                dataset_name: dataset.path,
-                sample_size: 5
-            })
+            body: JSON.stringify(requestBody)
         });
 
         const result = await response.json();
@@ -2201,3 +2446,741 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+
+// ============================================================================
+// Model Export Functions
+// ============================================================================
+
+let exportFormats = {};
+let ggufQuantizations = {};
+let lastCompletedSessionId = null;
+
+async function loadExportFormats() {
+    try {
+        const response = await fetch('/api/export/formats');
+        const data = await response.json();
+        exportFormats = data.formats;
+        ggufQuantizations = data.gguf_quantizations;
+    } catch (error) {
+        console.error('Failed to load export formats:', error);
+    }
+}
+
+function showExportModal(sessionId) {
+    // Remove any existing export modal
+    const existingModal = document.getElementById('exportModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // Store this as the last session
+    lastCompletedSessionId = sessionId;
+
+    // Create and show export modal
+    const modal = createExportModal(sessionId);
+    document.body.appendChild(modal);
+    const exportModal = new bootstrap.Modal(modal);
+    exportModal.show();
+
+    // Load export formats if not already loaded
+    if (Object.keys(exportFormats).length === 0) {
+        loadExportFormats().then(() => updateExportFormatOptions());
+    } else {
+        updateExportFormatOptions();
+    }
+}
+
+async function showExportOptions() {
+    // Show list of completed sessions that can be exported
+    try {
+        const response = await fetch('/api/training/sessions');
+        const sessions = await response.json();
+        const completedSessions = sessions.filter(s => s.status === 'completed');
+
+        if (completedSessions.length === 0) {
+            showAlert('No completed training sessions available for export.', 'warning');
+            return;
+        }
+
+        if (completedSessions.length === 1) {
+            // If only one session, directly open export modal
+            showExportModal(completedSessions[0].session_id);
+        } else {
+            // Show selection modal if multiple sessions
+            showSessionSelectionModal(completedSessions);
+        }
+    } catch (error) {
+        console.error('Failed to load sessions:', error);
+        showAlert('Failed to load sessions for export.', 'danger');
+    }
+}
+
+function showSessionSelectionModal(sessions) {
+    // Remove any existing selection modal
+    const existingModal = document.getElementById('sessionSelectModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    const modalDiv = document.createElement('div');
+    modalDiv.className = 'modal fade';
+    modalDiv.id = 'sessionSelectModal';
+    modalDiv.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-list"></i> Select Session to Export
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="list-group">
+                        ${sessions.map(session => `
+                            <button class="list-group-item list-group-item-action"
+                                    onclick="document.querySelector('#sessionSelectModal .btn-close').click(); showExportModal('${session.session_id}')">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>${session.model.split('/').pop()}</strong>
+                                        <br>
+                                        <small class="text-muted">${new Date(session.created_at).toLocaleString()}</small>
+                                    </div>
+                                    <i class="fas fa-chevron-right"></i>
+                                </div>
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modalDiv);
+    const selectModal = new bootstrap.Modal(modalDiv);
+    selectModal.show();
+}
+
+function createExportModal(sessionId) {
+    const modalDiv = document.createElement('div');
+    modalDiv.className = 'modal fade';
+    modalDiv.id = 'exportModal';
+    modalDiv.innerHTML = `
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-file-export"></i> Export Model
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="export-format" class="form-label">Export Format</label>
+                        <select class="form-select" id="export-format" onchange="updateExportOptions()">
+                            <option value="huggingface">HuggingFace (Standard)</option>
+                            <option value="safetensors">SafeTensors (Efficient)</option>
+                            <option value="gguf">GGUF (llama.cpp)</option>
+                            <option value="merged">Merged Model (LoRA + Base)</option>
+                        </select>
+                        <small class="form-text text-muted" id="format-description"></small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="export-name" class="form-label">Export Name (Optional)</label>
+                        <input type="text" class="form-control" id="export-name"
+                               placeholder="Leave empty for auto-generated name">
+                    </div>
+
+                    <div id="gguf-options" style="display: none;">
+                        <div class="mb-3">
+                            <label for="quantization" class="form-label">Quantization</label>
+                            <select class="form-select" id="quantization">
+                                <option value="q4_k_m" selected>Q4_K_M (Recommended)</option>
+                                <option value="q5_k_m">Q5_K_M (Balanced)</option>
+                                <option value="q6_k">Q6_K (Good Quality)</option>
+                                <option value="q8_0">Q8_0 (Best Quality)</option>
+                                <option value="f16">F16 (No Quantization)</option>
+                            </select>
+                            <small class="form-text text-muted" id="quant-description"></small>
+                        </div>
+                    </div>
+
+                    <div id="lora-options" class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="merge-lora">
+                            <label class="form-check-label" for="merge-lora">
+                                Merge LoRA weights with base model
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="export-progress" style="display: none;">
+                        <div class="progress mb-2">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                 id="export-progress-bar" style="width: 0%"></div>
+                        </div>
+                        <p class="text-muted mb-0" id="export-status"></p>
+                    </div>
+
+                    <div id="export-result" style="display: none;">
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle"></i> Export completed successfully!
+                        </div>
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-primary" onclick="downloadExport()">
+                                <i class="fas fa-download"></i> Download Model
+                            </button>
+                            <button class="btn btn-secondary" onclick="viewExportDetails()">
+                                <i class="fas fa-info-circle"></i> View Details
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" id="start-export-btn"
+                            onclick="startExport('${sessionId}')">
+                        <i class="fas fa-file-export"></i> Start Export
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    return modalDiv;
+}
+
+function updateExportOptions() {
+    const format = document.getElementById('export-format').value;
+    const ggufOptions = document.getElementById('gguf-options');
+    const loraOptions = document.getElementById('lora-options');
+    const formatDesc = document.getElementById('format-description');
+
+    // Show/hide format-specific options
+    if (format === 'gguf') {
+        ggufOptions.style.display = 'block';
+        updateQuantizationDescription();
+    } else {
+        ggufOptions.style.display = 'none';
+    }
+
+    // Update format description
+    if (exportFormats[format]) {
+        formatDesc.textContent = exportFormats[format];
+    }
+
+    // Show/hide LoRA options based on format
+    if (format === 'merged') {
+        loraOptions.style.display = 'none'; // Always merges
+    } else if (format === 'gguf') {
+        loraOptions.style.display = 'block';
+    } else {
+        loraOptions.style.display = 'block';
+    }
+}
+
+function updateQuantizationDescription() {
+    const quant = document.getElementById('quantization').value;
+    const desc = document.getElementById('quant-description');
+    if (ggufQuantizations[quant]) {
+        desc.textContent = ggufQuantizations[quant];
+    }
+}
+
+function updateExportFormatOptions() {
+    const formatSelect = document.getElementById('export-format');
+    if (!formatSelect) return;
+
+    formatSelect.innerHTML = '';
+    for (const [key, value] of Object.entries(exportFormats)) {
+        const option = document.createElement('option');
+        option.value = key;
+        option.textContent = key.charAt(0).toUpperCase() + key.slice(1);
+        formatSelect.appendChild(option);
+    }
+
+    updateExportOptions();
+}
+
+let currentExportPath = null;
+let currentExportSession = null;
+
+async function startExport(sessionId) {
+    const format = document.getElementById('export-format').value;
+    const name = document.getElementById('export-name').value || null;
+    const quantization = document.getElementById('quantization').value;
+    const mergeLora = document.getElementById('merge-lora').checked;
+
+    // Hide button, show progress
+    document.getElementById('start-export-btn').disabled = true;
+    document.getElementById('export-progress').style.display = 'block';
+    document.getElementById('export-result').style.display = 'none';
+
+    currentExportSession = sessionId;
+
+    // Join WebSocket room for progress updates
+    socket.emit('join', { session_id: sessionId });
+
+    try {
+        const response = await fetch(`/api/export/${sessionId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                format: format,
+                name: name,
+                quantization: format === 'gguf' ? quantization : null,
+                merge_lora: mergeLora
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            currentExportPath = result.path;
+            document.getElementById('export-progress').style.display = 'none';
+            document.getElementById('export-result').style.display = 'block';
+            showAlert('Model exported successfully!', 'success');
+        } else {
+            showAlert('Export failed: ' + result.error, 'danger');
+            document.getElementById('start-export-btn').disabled = false;
+            document.getElementById('export-progress').style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Export error:', error);
+        showAlert('Export failed: ' + error.message, 'danger');
+        document.getElementById('start-export-btn').disabled = false;
+        document.getElementById('export-progress').style.display = 'none';
+    }
+}
+
+function downloadExport() {
+    if (!currentExportPath || !currentExportSession) {
+        showAlert('No export available', 'warning');
+        return;
+    }
+
+    // Extract relative path from full path
+    const pathParts = currentExportPath.split('/');
+    const exportIndex = pathParts.indexOf('exports');
+    const relativePath = pathParts.slice(exportIndex + 2).join('/');
+
+    const downloadUrl = `/api/export/download/${currentExportSession}/${relativePath}`;
+    window.open(downloadUrl, '_blank');
+}
+
+function viewExportDetails() {
+    // TODO: Show detailed export information
+    showAlert('Export details coming soon!', 'info');
+}
+
+function showExportButton(sessionId) {
+    // Add export button to the UI
+    const controlsDiv = document.querySelector('.training-controls');
+    if (controlsDiv && !document.getElementById('export-model-btn')) {
+        const exportBtn = document.createElement('button');
+        exportBtn.id = 'export-model-btn';
+        exportBtn.className = 'btn btn-success ms-2';
+        exportBtn.innerHTML = '<i class="fas fa-file-export"></i> Export Model';
+        exportBtn.onclick = () => showExportModal(sessionId);
+        controlsDiv.appendChild(exportBtn);
+    }
+}
+
+// Listen for export progress updates
+socket.on('export_progress', (data) => {
+    const progressBar = document.getElementById('export-progress-bar');
+    const statusText = document.getElementById('export-status');
+
+    if (progressBar) {
+        progressBar.style.width = `${data.progress}%`;
+    }
+    if (statusText) {
+        statusText.textContent = data.message;
+    }
+});
+
+// ============================================================================
+// Exports Management Functions
+// ============================================================================
+
+function goToExportsTab() {
+    // Navigate to the exports section (step 5)
+    goToStep(5);
+    // Refresh the trained models list after a short delay to ensure DOM is ready
+    setTimeout(() => {
+        refreshTrainedModels();
+    }, 100);
+}
+
+async function refreshTrainedModels() {
+    const modelsList = document.getElementById('trained-models-list');
+    if (!modelsList) {
+        console.warn('trained-models-list element not found');
+        return;
+    }
+
+    try {
+        console.log('Fetching trained models...');
+        const response = await fetch('/api/models/trained');
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('Loaded models:', data);
+
+        trainedModels = data.models || [];
+        displayTrainedModels(trainedModels);
+
+        // Also refresh export history
+        refreshExportHistory();
+    } catch (error) {
+        console.error('Failed to load trained models:', error);
+        modelsList.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i> Failed to load models: ${error.message}
+            </div>
+        `;
+    }
+}
+
+function displayTrainedModels(models) {
+    const modelsList = document.getElementById('trained-models-list');
+
+    if (!models || models.length === 0) {
+        modelsList.innerHTML = `
+            <div class="text-center text-muted p-4">
+                <i class="fas fa-info-circle"></i>
+                <p class="mb-0">No trained models found</p>
+                <small>Train a model first to see it here</small>
+            </div>
+        `;
+        return;
+    }
+
+    modelsList.innerHTML = models.map(model => `
+        <div class="model-card card mb-3">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <h6 class="card-title mb-1">
+                            <i class="fas fa-brain"></i> ${model.model_name || 'Model'}
+                        </h6>
+                        <p class="text-muted small mb-2">
+                            Session: ${model.session_id.substring(0, 8)}...
+                            <br>
+                            Trained: ${new Date(model.modified_at).toLocaleDateString()}
+                        </p>
+                        ${model.epochs ? `<span class="badge bg-info">Epochs: ${model.epochs}</span>` : ''}
+                        ${model.best_reward ? `<span class="badge bg-success ms-1">Reward: ${model.best_reward.toFixed(3)}</span>` : ''}
+                        ${model.has_final_checkpoint ? '<span class="badge bg-primary ms-1">Final</span>' : ''}
+                    </div>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-primary" onclick="showModelDetails('${model.session_id}')">
+                            <i class="fas fa-info"></i>
+                        </button>
+                        <button class="btn btn-success" onclick="showExportModalForModel('${model.session_id}')">
+                            <i class="fas fa-file-export"></i> Export
+                        </button>
+                    </div>
+                </div>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox"
+                           id="select-${model.session_id}"
+                           onchange="toggleModelSelection('${model.session_id}')">
+                    <label class="form-check-label small" for="select-${model.session_id}">
+                        Select for batch export
+                    </label>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function showExportModalForModel(sessionId) {
+    // Use the existing export modal function
+    showExportModal(sessionId);
+}
+
+async function showModelDetails(sessionId) {
+    try {
+        const response = await fetch(`/api/models/${sessionId}/info`);
+        const modelInfo = await response.json();
+
+        const detailsPanel = document.getElementById('model-details-panel');
+        const detailsContent = document.getElementById('model-details-content');
+
+        detailsContent.innerHTML = `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Training Information</h6>
+                    <p class="mb-1"><strong>Session ID:</strong> ${sessionId}</p>
+                    <p class="mb-1"><strong>Checkpoints:</strong> ${modelInfo.checkpoints.length}</p>
+                    ${modelInfo.checkpoints.map(cp => `
+                        <div class="ms-3 small">
+                            <i class="fas fa-save"></i> ${cp.name}
+                            ${cp.training_state ? `(Step: ${cp.training_state.global_step})` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="col-md-6">
+                    <h6>Export History</h6>
+                    ${modelInfo.exports.length > 0 ?
+                        modelInfo.exports.map(exp => `
+                            <div class="small mb-1">
+                                <i class="fas fa-file-export"></i> ${exp.export_format}
+                                <br>
+                                <small class="text-muted">${new Date(exp.export_timestamp).toLocaleDateString()}</small>
+                            </div>
+                        `).join('') :
+                        '<p class="text-muted small">No exports yet</p>'
+                    }
+                </div>
+            </div>
+            <div class="mt-3">
+                <button class="btn btn-sm btn-primary" onclick="showExportModalForModel('${sessionId}')">
+                    <i class="fas fa-file-export"></i> Export This Model
+                </button>
+            </div>
+        `;
+
+        detailsPanel.style.display = 'block';
+    } catch (error) {
+        console.error('Failed to load model details:', error);
+        showAlert('Failed to load model details', 'danger');
+    }
+}
+
+function hideModelDetails() {
+    document.getElementById('model-details-panel').style.display = 'none';
+}
+
+function toggleModelSelection(sessionId) {
+    if (selectedModelsForExport.has(sessionId)) {
+        selectedModelsForExport.delete(sessionId);
+    } else {
+        selectedModelsForExport.add(sessionId);
+    }
+
+    // Update batch export button
+    updateBatchExportButton();
+}
+
+function updateBatchExportButton() {
+    const batchBtn = document.querySelector('[onclick="showBatchExport()"]');
+    if (batchBtn) {
+        if (selectedModelsForExport.size > 0) {
+            batchBtn.innerHTML = `<i class="fas fa-file-archive"></i> Batch Export (${selectedModelsForExport.size})`;
+            batchBtn.classList.add('btn-warning');
+            batchBtn.classList.remove('btn-success');
+        } else {
+            batchBtn.innerHTML = '<i class="fas fa-file-archive"></i> Batch Export';
+            batchBtn.classList.remove('btn-warning');
+            batchBtn.classList.add('btn-success');
+        }
+    }
+}
+
+async function showBatchExport() {
+    if (selectedModelsForExport.size === 0) {
+        showAlert('Please select at least one model for batch export', 'warning');
+        return;
+    }
+
+    // Create batch export modal
+    const modalDiv = document.createElement('div');
+    modalDiv.className = 'modal fade';
+    modalDiv.id = 'batchExportModal';
+    modalDiv.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-file-archive"></i> Batch Export ${selectedModelsForExport.size} Models
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Export Format</label>
+                        <select class="form-select" id="batch-export-format">
+                            <option value="huggingface">HuggingFace</option>
+                            <option value="safetensors">SafeTensors</option>
+                            <option value="gguf">GGUF (llama.cpp)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="batch-quantization-options" style="display: none;">
+                        <label class="form-label">GGUF Quantization</label>
+                        <select class="form-select" id="batch-quantization">
+                            <option value="q4_k_m">Q4_K_M (Recommended)</option>
+                            <option value="q5_k_m">Q5_K_M</option>
+                            <option value="q6_k">Q6_K</option>
+                            <option value="q8_0">Q8_0</option>
+                        </select>
+                    </div>
+                    <div id="batch-export-progress" style="display: none;">
+                        <div class="progress mb-2">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                 id="batch-progress-bar" style="width: 0%"></div>
+                        </div>
+                        <p class="small text-muted" id="batch-status"></p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="startBatchExport()">
+                        <i class="fas fa-play"></i> Start Export
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modalDiv);
+    const modal = new bootstrap.Modal(modalDiv);
+    modal.show();
+
+    // Show/hide quantization options
+    document.getElementById('batch-export-format').addEventListener('change', (e) => {
+        document.getElementById('batch-quantization-options').style.display =
+            e.target.value === 'gguf' ? 'block' : 'none';
+    });
+}
+
+async function startBatchExport() {
+    const format = document.getElementById('batch-export-format').value;
+    const quantization = document.getElementById('batch-quantization').value;
+
+    document.getElementById('batch-export-progress').style.display = 'block';
+
+    try {
+        const response = await fetch('/api/exports/batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_ids: Array.from(selectedModelsForExport),
+                format: format,
+                quantization: quantization
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.successful > 0) {
+            showAlert(`Successfully exported ${result.successful} out of ${result.total} models`, 'success');
+
+            // Clear selection
+            selectedModelsForExport.clear();
+            document.querySelectorAll('[id^="select-"]').forEach(cb => cb.checked = false);
+            updateBatchExportButton();
+
+            // Refresh export history
+            refreshExportHistory();
+        } else {
+            showAlert('Batch export failed for all models', 'danger');
+        }
+
+        // Close modal
+        bootstrap.Modal.getInstance(document.getElementById('batchExportModal')).hide();
+
+    } catch (error) {
+        console.error('Batch export error:', error);
+        showAlert('Batch export failed: ' + error.message, 'danger');
+    }
+}
+
+async function refreshExportHistory() {
+    try {
+        const historyList = document.getElementById('export-history-list');
+        if (!historyList) return; // Exit if element doesn't exist
+
+        let allExports = [];
+
+        // Only fetch exports if we have trained models
+        if (trainedModels && trainedModels.length > 0) {
+            // Get exports for all models
+            for (const model of trainedModels) {
+                try {
+                    const response = await fetch(`/api/export/list/${model.session_id}`);
+                    const data = await response.json();
+                    if (data.exports) {
+                        allExports = allExports.concat(data.exports.map(exp => ({
+                            ...exp,
+                            session_id: model.session_id,
+                            model_name: model.model_name
+                        })));
+                    }
+                } catch (err) {
+                    console.warn(`Failed to load exports for ${model.session_id}:`, err);
+                }
+            }
+        }
+
+        // Sort by date (most recent first)
+        allExports.sort((a, b) => new Date(b.export_timestamp) - new Date(a.export_timestamp));
+
+        // Display only recent exports (last 10)
+        const recentExports = allExports.slice(0, 10);
+
+        if (recentExports.length === 0) {
+            historyList.innerHTML = `
+                <div class="text-center text-muted p-4">
+                    <p class="mb-0">No exports yet</p>
+                    <small>Exported models will appear here</small>
+                </div>
+            `;
+            return;
+        }
+
+        historyList.innerHTML = recentExports.map(exp => `
+            <div class="export-item card mb-2">
+                <div class="card-body p-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong class="small">${exp.export_format.toUpperCase()}</strong>
+                            ${exp.quantization ? `<span class="badge bg-secondary ms-1">${exp.quantization}</span>` : ''}
+                            <br>
+                            <small class="text-muted">
+                                ${exp.model_name || 'Model'} - ${new Date(exp.export_timestamp).toLocaleDateString()}
+                            </small>
+                            ${exp.total_size_mb ? `<br><small>Size: ${exp.total_size_mb} MB</small>` : ''}
+                        </div>
+                        <button class="btn btn-sm btn-primary"
+                                onclick="downloadExportFromHistory('${exp.session_id}', '${exp.export_format}', '${exp.export_name}')">
+                            <i class="fas fa-download"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+    } catch (error) {
+        console.error('Failed to load export history:', error);
+    }
+}
+
+function downloadExportFromHistory(sessionId, format, exportName) {
+    const downloadUrl = `/api/export/download/${sessionId}/${format}/${exportName}`;
+    window.open(downloadUrl, '_blank');
+}
+
+// Initialize export formats on page load
+document.addEventListener('DOMContentLoaded', () => {
+    loadExportFormats();
+
+    // Add keyboard shortcut for export (Ctrl+E or Cmd+E)
+    document.addEventListener('keydown', (event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key === 'e') {
+            event.preventDefault();
+
+            if (lastCompletedSessionId) {
+                showExportModal(lastCompletedSessionId);
+            } else {
+                // Try to find any completed session
+                showExportOptions();
+            }
+        }
+    });
+
+    // Auto-refresh sessions on page load
+    refreshSessions();
+});

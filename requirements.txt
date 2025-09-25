@@ -8,7 +8,7 @@ xformers>=0.0.33 # pip install -v --no-build-isolation -U git+https://github.com
 
 # GRPO and Fine-tuning
 unsloth>=2025.9.7
-trl>=0.7.0
+trl==0.21.0
 # vllm>=0.2.0  # Optional: Linux/Mac only for faster generation
 peft>=0.5.0
 

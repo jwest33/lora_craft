@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GRPO Fine-Tuner</title>
 
+    <!-- Favicon and App Icons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/icon.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/icon.png') }}">
+    <meta name="theme-color" content="#6366f1">
+
+    <!-- PWA Manifest (optional) -->
+    <link rel="manifest" href="/manifest.json">
+
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 
@@ -23,7 +31,7 @@
         <div class="container-fluid">
             <a class="navbar-brand d-flex align-items-center" href="#">
                 <div class="brand-icon">
-                    <i class="fas fa-brain"></i>
+                    <img src="{{ url_for('static', filename='images/icon.png') }}" alt="GRPO" style="width: 32px; height: 32px;">
                 </div>
                 <span class="brand-text">GRPO Fine-Tuner</span>
             </a>
@@ -91,6 +99,9 @@
                         <button class="btn btn-gradient-primary w-100 mb-2" onclick="showQuickStart()">
                             <i class="fas fa-magic"></i> Quick Start Wizard
                         </button>
+                        <button class="btn btn-success w-100 mb-2" onclick="goToExportsTab()">
+                            <i class="fas fa-file-export"></i> Manage Exports
+                        </button>
                         <button class="btn btn-outline-secondary w-100 mb-2" onclick="loadConfig()">
                             <i class="fas fa-folder-open"></i> Load Config
                         </button>
@@ -131,7 +142,14 @@
                             <div class="step-icon">
                                 <i class="fas fa-rocket"></i>
                             </div>
-                            <div class="step-label">Launch</div>
+                            <div class="step-label">Train</div>
+                        </div>
+                        <div class="step-line"></div>
+                        <div class="step" id="step-5-indicator">
+                            <div class="step-icon">
+                                <i class="fas fa-file-export"></i>
+                            </div>
+                            <div class="step-label">Exports</div>
                         </div>
                     </div>
                 </div>
@@ -286,9 +304,10 @@
                                         <div class="form-group">
                                             <label class="form-label">Quantization</label>
                                             <select class="form-select" id="quantization">
-                                                <option value="none">None (Full Precision)</option>
-                                                <option value="4bit" selected>4-bit Quantization</option>
-                                                <option value="8bit">8-bit Quantization</option>
+                                                <option value="none">None (Full Precision F32)</option>
+                                                <option value="f16">Half Precision (F16)</option>
+                                                <option value="q8_0" selected>8-bit Quantization (Q8_0)</option>
+                                                <option value="auto">Auto (Let converter decide)</option>
                                             </select>
                                         </div>
                                         <div class="form-group mt-3">
@@ -805,13 +824,13 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                     </div>
                 </div>
 
-                <!-- Step 4: Review & Launch -->
+                <!-- Step 4: Review & Train -->
                 <div class="workflow-step" id="step-4">
                     <div class="step-card">
                         <div class="step-header" onclick="toggleStep(4)">
                             <div class="d-flex align-items-center">
                                 <span class="step-number">4</span>
-                                <h4 class="step-title">Review & Launch</h4>
+                                <h4 class="step-title">Review & Train</h4>
                                 <span class="step-status ms-auto">
                                     <i class="fas fa-chevron-down" id="step-4-chevron"></i>
                                 </span>
@@ -861,9 +880,9 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                 </button>
                             </div>
 
-                            <!-- Launch Button -->
-                            <div class="launch-section mt-4">
-                                <button class="btn btn-launch" onclick="startTraining()" id="launch-btn">
+                            <!-- Train Button -->
+                            <div class="train-section mt-4">
+                                <button class="btn btn-train" onclick="startTraining()" id="train-btn">
                                     <i class="fas fa-rocket"></i> Start Training
                                 </button>
                             </div>
@@ -880,12 +899,57 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                          role="progressbar" style="width: 0%">0%</div>
                                 </div>
 
-                                <!-- Metrics -->
+                                <!-- Metrics Panel -->
+                                <div class="metrics-panel mb-3">
+                                    <div class="row">
+                                        <div class="col-md-2">
+                                            <div class="metric-item">
+                                                <span class="metric-label">Step</span>
+                                                <span class="metric-value" id="metric-step">0</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="metric-item">
+                                                <span class="metric-label">Loss</span>
+                                                <span class="metric-value" id="metric-loss">--</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="metric-item">
+                                                <span class="metric-label">Reward</span>
+                                                <span class="metric-value" id="metric-reward">--</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="metric-item">
+                                                <span class="metric-label">Grad Norm</span>
+                                                <span class="metric-value" id="metric-grad-norm">--</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="metric-item">
+                                                <span class="metric-label">Learning Rate</span>
+                                                <span class="metric-value" id="metric-lr">--</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="metric-item">
+                                                <span class="metric-label">Epoch</span>
+                                                <span class="metric-value" id="metric-epoch">0</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Charts -->
                                 <div class="row">
-                                    <div class="col-md-6">
+                                    <div class="col-md-4">
                                         <canvas id="loss-chart"></canvas>
                                     </div>
-                                    <div class="col-md-6">
+                                    <div class="col-md-4">
+                                        <canvas id="reward-chart"></canvas>
+                                    </div>
+                                    <div class="col-md-4">
                                         <canvas id="lr-chart"></canvas>
                                     </div>
                                 </div>
@@ -916,6 +980,95 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                             <div class="step-navigation mt-4" id="step-4-nav">
                                 <button class="btn btn-outline-secondary" onclick="goToStep(3)">
                                     <i class="fas fa-arrow-left"></i> Back
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 5: Exports Management -->
+                <div class="workflow-step" id="step-5">
+                    <div class="step-card">
+                        <div class="step-header" onclick="toggleStep(5)">
+                            <div class="d-flex align-items-center">
+                                <span class="step-number">5</span>
+                                <h4 class="step-title">Model Exports</h4>
+                                <span class="step-status ms-auto">
+                                    <i class="fas fa-chevron-down" id="step-5-chevron"></i>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="step-content collapse" id="step-5-content">
+                            <!-- Exports Controls -->
+                            <div class="d-flex justify-content-between align-items-center mb-4">
+                                <h5 class="section-title mb-0">
+                                    <i class="fas fa-history"></i> Trained Models & Exports
+                                </h5>
+                                <div>
+                                    <button class="btn btn-sm btn-outline-primary me-2" onclick="refreshTrainedModels()">
+                                        <i class="fas fa-sync"></i> Refresh
+                                    </button>
+                                    <button class="btn btn-sm btn-success" onclick="showBatchExport()">
+                                        <i class="fas fa-file-archive"></i> Batch Export
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <!-- Left Column: Trained Models -->
+                                <div class="col-lg-7">
+                                    <div class="models-section">
+                                        <h6 class="fw-bold mb-3">
+                                            <i class="fas fa-brain"></i> Available Models
+                                        </h6>
+                                        <div id="trained-models-list" class="models-list">
+                                            <!-- Model cards will be populated here -->
+                                            <div class="text-center text-muted p-4">
+                                                <i class="fas fa-spinner fa-spin"></i> Loading models...
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Right Column: Export History -->
+                                <div class="col-lg-5">
+                                    <div class="exports-section">
+                                        <h6 class="fw-bold mb-3">
+                                            <i class="fas fa-file-export"></i> Recent Exports
+                                        </h6>
+                                        <div id="export-history-list" class="export-history">
+                                            <!-- Export history will be populated here -->
+                                            <div class="text-center text-muted p-4">
+                                                <p class="mb-0">No exports yet</p>
+                                                <small>Exported models will appear here</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Model Details Panel (Hidden by default) -->
+                            <div id="model-details-panel" class="model-details mt-4" style="display: none;">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-info-circle"></i> Model Details
+                                        </h6>
+                                        <button type="button" class="btn-close float-end" onclick="hideModelDetails()"></button>
+                                    </div>
+                                    <div class="card-body" id="model-details-content">
+                                        <!-- Details will be populated here -->
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step Navigation -->
+                            <div class="step-navigation mt-4" id="step-5-nav">
+                                <button class="btn btn-outline-secondary" onclick="goToStep(4)">
+                                    <i class="fas fa-arrow-left"></i> Back
+                                </button>
+                                <button class="btn btn-primary ms-2" onclick="goToStep(1)">
+                                    <i class="fas fa-plus"></i> Train New Model
                                 </button>
                             </div>
                         </div>

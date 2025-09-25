@@ -1,5 +1,14 @@
 /* GRPO Fine-Tuner Professional Theme */
 
+/* Custom Font */
+@font-face {
+    font-family: 'Rationale';
+    src: url('/static/fonts/Rationale-Regular.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap; /* Improve loading performance */
+}
+
 :root {
     /* Modern Color Palette */
 
@@ -131,7 +140,7 @@
 }
 
 body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-family: 'Rationale', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     background: var(--bg-secondary);
     color: var(--text-primary);
     line-height: 1.6;
@@ -648,6 +657,39 @@ body {
     overflow: hidden;
 }
 
+/* Metrics Panel */
+.metrics-panel {
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.metric-item {
+    text-align: center;
+    padding: 0.5rem;
+    background: var(--bg-primary);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.metric-label {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+    text-transform: uppercase;
+    font-weight: 500;
+}
+
+.metric-value {
+    display: block;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--primary);
+    font-family: 'Fira Code', monospace;
+}
+
 .preview-header {
     padding: 1rem;
     background: var(--bg-secondary);
@@ -752,8 +794,8 @@ body {
     color: var(--text-primary);
 }
 
-/* Launch Button */
-.btn-launch {
+/* Train Button */
+.btn-train {
     width: 100%;
     padding: 1.5rem;
     background: var(--gradient-success);
@@ -767,12 +809,12 @@ body {
     box-shadow: var(--shadow-lg);
 }
 
-.btn-launch:hover {
+.btn-train:hover {
     transform: translateY(-4px);
     box-shadow: var(--shadow-xl);
 }
 
-.btn-launch:active {
+.btn-train:active {
     transform: translateY(0);
 }
 
@@ -929,3 +971,254 @@ body {
 .d-flex { display: flex !important; }
 .align-items-center { align-items: center !important; }
 .justify-content-between { justify-content: space-between !important; }
+
+/* ============================================================================ */
+/* Modal Styles */
+/* ============================================================================ */
+
+/* Base modal content styling */
+.modal-content {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: var(--shadow-xl);
+    color: var(--text-primary);
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+/* Modal header styling */
+.modal-header {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%);
+    border-bottom: 1px solid var(--border-color);
+    padding: 1.25rem 1.5rem;
+    border-radius: 12px 12px 0 0;
+}
+
+.modal-header .modal-title {
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+}
+
+.modal-header .btn-close {
+    background: transparent;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+}
+
+.modal-header .btn-close:hover {
+    opacity: 1;
+}
+
+/* Modal body styling */
+.modal-body {
+    padding: 1.5rem;
+    color: var(--text-primary);
+}
+
+.modal-body h6 {
+    color: var(--primary);
+    font-weight: 600;
+    margin-bottom: 1rem;
+}
+
+.modal-body .alert {
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+
+/* Modal footer styling */
+.modal-footer {
+    background-color: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+    padding: 1rem 1.5rem;
+    border-radius: 0 0 12px 12px;
+}
+
+.modal-footer .btn {
+    padding: 0.5rem 1.25rem;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.modal-footer .btn-primary {
+    background: var(--gradient-primary);
+    border: none;
+    color: white;
+}
+
+.modal-footer .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-lg);
+}
+
+.modal-footer .btn-secondary {
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.modal-footer .btn-secondary:hover {
+    background-color: var(--border-color);
+}
+
+/* Modal backdrop for better contrast */
+.modal-backdrop {
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] .modal-backdrop {
+    background-color: rgba(0, 0, 0, 0.7);
+}
+
+/* Dark theme specific modal styles */
+[data-theme="dark"] .modal-content {
+    background-color: var(--bg-card);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .modal-header {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+}
+
+[data-theme="dark"] .modal-header .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+/* Specific modal customizations */
+
+/* Dataset Preview Modal */
+#datasetPreviewModal .modal-body {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+#datasetPreviewModal .spinner-border {
+    color: var(--primary);
+}
+
+#dataset-samples {
+    background-color: var(--bg-tertiary);
+    border-radius: 8px;
+    padding: 1rem;
+    font-family: 'Monaco', 'Courier New', monospace;
+    font-size: 0.9rem;
+}
+
+#dataset-stats {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%);
+    border: 1px solid var(--primary);
+    border-radius: 8px;
+}
+
+/* Download Progress Modal */
+#downloadProgressModal .progress {
+    height: 1.5rem;
+    background-color: var(--bg-tertiary);
+    border-radius: 8px;
+}
+
+#downloadProgressModal .progress-bar {
+    background: var(--gradient-primary);
+    font-weight: 500;
+}
+
+#download-status-message {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+}
+
+/* Save Template Modal */
+#saveTemplateModal .form-control {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+#saveTemplateModal .form-control:focus {
+    background-color: var(--bg-primary);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
+}
+
+/* Animation for modal appearance */
+@keyframes modalSlideIn {
+    from {
+        transform: translateY(-20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Responsive modal adjustments */
+@media (max-width: 768px) {
+    .modal-dialog {
+        margin: 1rem;
+    }
+
+    .modal-content {
+        border-radius: 8px;
+    }
+
+    .modal-header,
+    .modal-footer {
+        padding: 1rem;
+    }
+}
+
+/* Exports Section Styles */
+.models-list {
+    max-height: 500px;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.model-card {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.model-card:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+.export-history {
+    max-height: 500px;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.export-item {
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.export-item:hover {
+    background-color: var(--hover-bg);
+}
+
+.model-details {
+    margin-top: 20px;
+}
+
+.model-details .card {
+    border-color: var(--primary);
+    border-width: 2px;
+}
+
+.models-section,
+.exports-section {
+    background-color: var(--card-bg);
+    padding: 15px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+}

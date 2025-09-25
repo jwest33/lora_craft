@@ -189,12 +189,10 @@ class GGUFConverter:
             Tuple of (description, approximate_size)
         """
         quant_info = {
-            "q8_0": ("8-bit quantization (best quality)", "~1GB per billion parameters"),
-            "q6_k": ("6-bit quantization (very good)", "~750MB per billion parameters"),
-            "q5_k_m": ("5-bit quantization (good)", "~650MB per billion parameters"),
-            "q4_k_m": ("4-bit quantization (acceptable)", "~550MB per billion parameters"),
-            "q4_0": ("4-bit quantization (smaller)", "~500MB per billion parameters"),
-            "f16": ("No quantization (largest)", "~2GB per billion parameters"),
+            "f32": ("32-bit floating point (full precision)", "~4GB per billion parameters"),
+            "f16": ("16-bit floating point (half precision)", "~2GB per billion parameters"),
+            "q8_0": ("8-bit quantization (excellent quality)", "~1GB per billion parameters"),
+            "auto": ("Automatic selection by converter", "Varies based on model"),
         }
 
         return quant_info.get(quantization, ("Unknown quantization", "Unknown size"))

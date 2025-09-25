@@ -11,6 +11,8 @@ import uuid
 import threading
 import queue
 import logging
+import io
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
@@ -27,13 +29,16 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # Import existing core modules
 from core import (
     SystemConfig,
-    GRPOTrainer,
-    GRPOConfig,
+    GRPOModelTrainer,
+    GRPOTrainingConfig,
     DatasetHandler,
     DatasetConfig,
     PromptTemplate,
     TemplateConfig,
-    CustomRewardBuilder
+    CustomRewardBuilder,
+    ModelExporter,
+    SessionRegistry,
+    SessionInfo
 )
 from utils.logging_config import setup_logging, get_logger
 from utils.validators import validate_training_config
@@ -61,6 +66,9 @@ session_queues = {}
 
 # System configuration (shared)
 system_config = SystemConfig()
+
+# Session registry for fast model lookup
+session_registry = SessionRegistry()
 
 
 class TrainingSession:
@@ -173,6 +181,68 @@ def process_training_queue(session_id: str):
 
 def run_training(session_id: str, config: Dict[str, Any]):
     """Run training in background thread."""
+
+    # Create a custom output capture for console logs
+    class OutputCapture:
+        def __init__(self, queue, original_stream):
+            self.queue = queue
+            self.original = original_stream
+            self.buffer = io.StringIO()
+
+        def write(self, text):
+            # Write to original stream
+            self.original.write(text)
+            self.original.flush()
+
+            # Also capture for processing
+            self.buffer.write(text)
+
+            # Check if we have a complete line
+            if '\n' in text:
+                content = self.buffer.getvalue()
+                lines = content.split('\n')
+
+                # Process complete lines
+                for line in lines[:-1]:
+                    if line.strip():
+                        # Try to parse as a metrics dictionary
+                        if line.startswith('{') and ('loss' in line or 'reward' in line):
+                            try:
+                                # Use ast.literal_eval for safer parsing
+                                import ast
+                                metrics_dict = ast.literal_eval(line)
+
+                                # Extract key metrics
+                                processed_metrics = {
+                                    'step': metrics_dict.get('step', 0),
+                                    'epoch': metrics_dict.get('epoch', 0),
+                                    'loss': metrics_dict.get('loss', 0),
+                                    'mean_reward': metrics_dict.get('reward', metrics_dict.get('rewards/reward_wrapper/mean', 0)),
+                                    'learning_rate': metrics_dict.get('learning_rate', config.get('learning_rate', 2e-4)),
+                                    'grad_norm': metrics_dict.get('grad_norm', 0),
+                                    'reward_std': metrics_dict.get('reward_std', metrics_dict.get('rewards/reward_wrapper/std', 0))
+                                }
+
+                                # Send metrics update
+                                self.queue.put(('metrics', processed_metrics))
+                            except Exception:
+                                # Not a valid metrics dict, ignore
+                                pass
+
+                # Keep the incomplete line in buffer
+                self.buffer = io.StringIO()
+                if lines[-1]:
+                    self.buffer.write(lines[-1])
+
+        def flush(self):
+            self.original.flush()
+
+        def fileno(self):
+            return self.original.fileno()
+
+    # Capture stdout
+    original_stdout = sys.stdout
+
     try:
         session_obj = training_sessions[session_id]
         session_obj.status = 'running'
@@ -180,11 +250,14 @@ def run_training(session_id: str, config: Dict[str, Any]):
 
         q = session_queues[session_id]
 
+        # Set up output capture
+        sys.stdout = OutputCapture(q, original_stdout)
+
         # Send initial status
         q.put(('log', f"Initializing training for session {session_id}"))
 
         # Create GRPO configuration with algorithm support
-        grpo_config = GRPOConfig(
+        grpo_config = GRPOTrainingConfig(
             model_name=config.get('model_name', 'unsloth/Qwen3-0.6B'),
             num_train_epochs=config.get('num_epochs', 3),
             per_device_train_batch_size=config.get('batch_size', 4),
@@ -208,11 +281,11 @@ def run_training(session_id: str, config: Dict[str, Any]):
             fp16=config.get('mixed_precision', True) and not config.get('bf16', False),
             bf16=config.get('bf16', False),
             output_dir=f"./outputs/{session_id}",
-            checkpoint_dir=f"./checkpoints/{session_id}"
+            checkpoint_dir=f"./outputs/{session_id}/checkpoints"
         )
 
         # Create trainer
-        trainer = GRPOTrainer(grpo_config, system_config)
+        trainer = GRPOModelTrainer(grpo_config, system_config)
         session_obj.trainer = trainer
 
         # Setup callbacks
@@ -222,8 +295,18 @@ def run_training(session_id: str, config: Dict[str, Any]):
         def metrics_callback(metrics):
             q.put(('metrics', metrics))
 
+        def log_callback(log_entry):
+            # Send log to frontend via queue
+            q.put(('log', f"[{log_entry['level']}] {log_entry['message']}"))
+            # Also emit via socketio if session is known
+            socketio.emit('training_log', {
+                'session_id': session_id,
+                'message': f"[{log_entry['level']}] {log_entry['message']}"
+            }, room=session_id)
+
         trainer.progress_callback = progress_callback
         trainer.metrics_callback = metrics_callback
+        trainer.set_log_callback(log_callback)
 
         # Load model
         q.put(('log', "Loading model..."))
@@ -235,6 +318,7 @@ def run_training(session_id: str, config: Dict[str, Any]):
         dataset_config = DatasetConfig(
             source_type=config.get('dataset_source', 'huggingface'),
             source_path=config.get('dataset_path', 'tatsu-lab/alpaca'),
+            subset=config.get('dataset_config', None),  # Config for multi-config datasets
             split=config.get('dataset_split', 'train[:100]'),  # Limit for demo
             instruction_field=config.get('instruction_field', 'instruction'),
             response_field=config.get('response_field', 'output'),
@@ -332,6 +416,29 @@ def run_training(session_id: str, config: Dict[str, Any]):
         # Update final metrics
         session_obj.metrics.update(metrics)
 
+        # Confirm checkpoint was saved (already done in grpo_train)
+        q.put(('log', "Final checkpoint saved successfully"))
+
+        # Add to session registry
+        # Handle infinity values in best_reward
+        final_reward = metrics.get('final_reward')
+        if final_reward is not None and (final_reward == float('-inf') or final_reward == float('inf')):
+            final_reward = None
+
+        session_info = SessionInfo(
+            session_id=session_id,
+            model_name=config.get('model_name', 'Unknown'),
+            status='completed',
+            checkpoint_path=f"outputs/{session_id}/checkpoints/final",
+            created_at=session_obj.created_at.isoformat() if session_obj.created_at else None,
+            completed_at=datetime.now().isoformat(),
+            best_reward=final_reward,
+            epochs_trained=config.get('num_epochs', 0),
+            training_config=config
+        )
+        session_registry.add_session(session_info)
+        q.put(('log', "Session added to registry"))
+
         q.put(('log', "Training completed successfully"))
         q.put(('complete', "Training finished!"))
 
@@ -341,11 +448,17 @@ def run_training(session_id: str, config: Dict[str, Any]):
         if session_id in training_sessions:
             training_sessions[session_id].status = 'error'
     finally:
-        # Cleanup
+        # Restore original stdout
+        sys.stdout = original_stdout
+
+        # Mark session as completed
         if session_id in training_sessions:
             session_obj = training_sessions[session_id]
-            if session_obj.trainer:
-                session_obj.trainer.cleanup()
+            # Note: We don't automatically cleanup the model anymore to allow exports
+            # Users can still manually trigger cleanup if needed to free memory
+            # Uncomment the following line to enable auto-cleanup:
+            # if session_obj.trainer:
+            #     session_obj.trainer.cleanup()
             session_obj.completed_at = datetime.now()
             if session_obj.status == 'running':
                 session_obj.status = 'completed'
@@ -359,6 +472,12 @@ def run_training(session_id: str, config: Dict[str, Any]):
 def index():
     """Serve the main web interface."""
     return render_template('index.html')
+
+
+@app.route('/manifest.json')
+def manifest():
+    """Serve the PWA manifest."""
+    return send_file('static/manifest.json', mimetype='application/manifest+json')
 
 @app.route('/api/system/info', methods=['GET'])
 def get_system_info():
@@ -566,27 +685,382 @@ def list_training_sessions():
 @app.route('/api/export/<session_id>', methods=['POST'])
 def export_model(session_id):
     """Export trained model."""
+    # First check if session exists in memory
+    if session_id in training_sessions:
+        session_obj = training_sessions[session_id]
+        if session_obj.status != 'completed':
+            return jsonify({'error': 'Training not completed'}), 400
+    else:
+        session_obj = None
+
+    try:
+        export_config = request.json or {}
+        export_format = export_config.get('format', 'huggingface')
+        export_name = export_config.get('name', None)
+        quantization = export_config.get('quantization', 'q4_k_m')
+        merge_lora = export_config.get('merge_lora', False)
+
+        # Progress callback for WebSocket updates
+        def progress_callback(message, progress):
+            emit_to_session(session_id, 'export_progress', {
+                'message': message,
+                'progress': progress
+            })
+
+        # Try to use trainer's export method if available and model is loaded
+        if (session_obj and
+            hasattr(session_obj, 'trainer') and
+            session_obj.trainer is not None and
+            hasattr(session_obj.trainer, 'model') and
+            session_obj.trainer.model is not None):
+
+            logger.info(f"Exporting using in-memory model for session {session_id}")
+            success, export_path, metadata = session_obj.trainer.export_model(
+                export_format=export_format,
+                export_name=export_name,
+                quantization=quantization if export_format == 'gguf' else None,
+                merge_lora=merge_lora,
+                progress_callback=progress_callback
+            )
+        else:
+            # Export directly from checkpoint files
+            logger.info(f"Exporting from checkpoint files for session {session_id}")
+
+            # Check if checkpoint exists
+            checkpoint_path = Path("./outputs") / session_id / "checkpoints" / "final"
+            if not checkpoint_path.exists():
+                # Try to find any checkpoint
+                checkpoints_dir = Path("./outputs") / session_id / "checkpoints"
+                if checkpoints_dir.exists():
+                    checkpoints = [d for d in checkpoints_dir.iterdir() if d.is_dir()]
+                    if checkpoints:
+                        # Use the most recent checkpoint
+                        checkpoint_path = max(checkpoints, key=lambda p: p.stat().st_mtime)
+                        logger.info(f"Using checkpoint: {checkpoint_path}")
+                    else:
+                        return jsonify({'error': 'No checkpoint found for this session'}), 404
+                else:
+                    return jsonify({'error': 'No checkpoints directory found for this session'}), 404
+
+            # Use ModelExporter directly
+            exporter = ModelExporter()
+            success, export_path, metadata = exporter.export_model(
+                model_path=str(checkpoint_path),
+                session_id=session_id,
+                export_format=export_format,
+                export_name=export_name,
+                quantization=quantization if export_format == 'gguf' else None,
+                merge_lora=merge_lora,
+                progress_callback=progress_callback
+            )
+
+        if success:
+            return jsonify({
+                'success': True,
+                'path': export_path,
+                'format': export_format,
+                'metadata': metadata
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': metadata.get('error', 'Export failed')
+            }), 500
+
+    except Exception as e:
+        logger.error(f"Export error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/export/formats', methods=['GET'])
+def get_export_formats():
+    """Get available export formats."""
+    return jsonify({
+        'formats': ModelExporter.SUPPORTED_FORMATS,
+        'gguf_quantizations': ModelExporter.GGUF_QUANTIZATIONS
+    })
+
+
+@app.route('/api/export/list/<session_id>', methods=['GET'])
+def list_exports(session_id):
+    """List all exports for a session."""
+    try:
+        exporter = ModelExporter()
+        exports = exporter.list_exports(session_id)
+        return jsonify(exports)
+    except Exception as e:
+        logger.error(f"Error listing exports: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/export/download/<session_id>/<path:export_path>', methods=['GET'])
+def download_export(session_id, export_path):
+    """Download an exported model."""
+    try:
+        # Construct the full path
+        full_path = Path("./exports") / session_id / export_path
+
+        if not full_path.exists():
+            return jsonify({'error': 'Export not found'}), 404
+
+        # If it's a directory, create a zip
+        if full_path.is_dir():
+            exporter = ModelExporter()
+            success, archive_path = exporter.create_archive(str(full_path))
+            if success:
+                return send_file(
+                    archive_path,
+                    as_attachment=True,
+                    download_name=f"{full_path.name}.zip"
+                )
+            else:
+                return jsonify({'error': 'Failed to create archive'}), 500
+        else:
+            # Send single file
+            return send_file(
+                str(full_path),
+                as_attachment=True,
+                download_name=full_path.name
+            )
+
+    except Exception as e:
+        logger.error(f"Download error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/export/checkpoints/<session_id>', methods=['GET'])
+def list_checkpoints(session_id):
+    """List available checkpoints for a session."""
     if session_id not in training_sessions:
         return jsonify({'error': 'Session not found'}), 404
 
     try:
         session_obj = training_sessions[session_id]
-        if session_obj.status != 'completed':
-            return jsonify({'error': 'Training not completed'}), 400
+        if not hasattr(session_obj, 'trainer') or session_obj.trainer is None:
+            return jsonify({'error': 'Trainer not available'}), 400
 
-        export_config = request.json
-        export_format = export_config.get('format', 'safetensors')
-        export_path = f"./exports/{session_id}/model"
+        checkpoints = session_obj.trainer.list_checkpoints()
+        return jsonify({'checkpoints': checkpoints})
+    except Exception as e:
+        logger.error(f"Error listing checkpoints: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
-        # Would call trainer export method here
-        # session_obj.trainer.export_model(export_path, format=export_format)
+
+@app.route('/api/training/cleanup/<session_id>', methods=['POST'])
+def cleanup_session(session_id):
+    """Manually cleanup model resources for a session to free memory."""
+    if session_id not in training_sessions:
+        return jsonify({'error': 'Session not found'}), 404
+
+    try:
+        session_obj = training_sessions[session_id]
+        if hasattr(session_obj, 'trainer') and session_obj.trainer is not None:
+            session_obj.trainer.cleanup()
+            return jsonify({
+                'success': True,
+                'message': 'Model resources cleaned up successfully'
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'message': 'No resources to cleanup'
+            })
+    except Exception as e:
+        logger.error(f"Error during cleanup: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/models/trained', methods=['GET'])
+def list_trained_models():
+    """List all trained models from the session registry."""
+    try:
+        # Get completed sessions from registry (fast O(1) lookup)
+        sessions = session_registry.list_completed_sessions()
+
+        trained_models = []
+        for session in sessions:
+            # Handle infinity values in best_reward
+            best_reward = session.best_reward
+            if best_reward is not None and (best_reward == float('-inf') or best_reward == float('inf')):
+                best_reward = None
+
+            # Convert SessionInfo to API response format
+            model_info = {
+                'session_id': session.session_id,
+                'path': f"./outputs/{session.session_id}",
+                'has_final_checkpoint': True,  # Registry only stores completed sessions
+                'checkpoints': [],
+                'created_at': session.created_at or datetime.now().isoformat(),
+                'modified_at': session.completed_at or datetime.now().isoformat(),
+                'model_name': session.model_name,
+                'epochs': session.epochs_trained or 0,
+                'best_reward': best_reward
+            }
+
+            # Check if checkpoint still exists (in case of manual deletion)
+            if session.checkpoint_path:
+                checkpoint_path = Path(session.checkpoint_path)
+                if checkpoint_path.exists():
+                    # List available checkpoints
+                    checkpoint_dir = checkpoint_path.parent
+                    for checkpoint in checkpoint_dir.iterdir():
+                        if checkpoint.is_dir() and (checkpoint / "training_state.json").exists():
+                            model_info['checkpoints'].append({
+                                'name': checkpoint.name,
+                                'path': str(checkpoint)
+                            })
+
+                    trained_models.append(model_info)
+                else:
+                    # Checkpoint deleted, remove from registry
+                    logger.warning(f"Checkpoint missing for session {session.session_id}, cleaning up")
+                    # Note: cleanup could be done in a background task
 
         return jsonify({
+            'models': trained_models,
+            'total': len(trained_models)
+        })
+
+    except Exception as e:
+        logger.error(f"Error listing trained models: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/registry/rebuild', methods=['POST'])
+def rebuild_registry():
+    """Rebuild the session registry by scanning output directories."""
+    try:
+        sessions_found = session_registry.rebuild_from_directories()
+        return jsonify({
             'success': True,
-            'path': export_path,
-            'format': export_format
+            'message': f'Registry rebuilt with {sessions_found} sessions',
+            'sessions_found': sessions_found
         })
     except Exception as e:
+        logger.error(f"Error rebuilding registry: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/registry/cleanup', methods=['POST'])
+def cleanup_registry():
+    """Remove invalid sessions from the registry."""
+    try:
+        removed = session_registry.cleanup_invalid_sessions()
+        return jsonify({
+            'success': True,
+            'message': f'Removed {removed} invalid sessions',
+            'sessions_removed': removed
+        })
+    except Exception as e:
+        logger.error(f"Error cleaning up registry: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/models/<session_id>/info', methods=['GET'])
+def get_model_info(session_id):
+    """Get detailed information about a specific model."""
+    try:
+        model_path = Path("./outputs") / session_id
+        if not model_path.exists():
+            return jsonify({'error': 'Model not found'}), 404
+
+        info = {
+            'session_id': session_id,
+            'path': str(model_path),
+            'checkpoints': [],
+            'exports': []
+        }
+
+        # Get checkpoint information
+        checkpoint_dir = model_path / "checkpoints"
+        if checkpoint_dir.exists():
+            for checkpoint in checkpoint_dir.iterdir():
+                if checkpoint.is_dir():
+                    checkpoint_info = {
+                        'name': checkpoint.name,
+                        'path': str(checkpoint)
+                    }
+
+                    # Get training state if available
+                    state_file = checkpoint / "training_state.json"
+                    if state_file.exists():
+                        with open(state_file, 'r') as f:
+                            checkpoint_info['training_state'] = json.load(f)
+
+                    # Check for model files
+                    checkpoint_info['has_model'] = (checkpoint / "adapter_model.safetensors").exists() or \
+                                                   (checkpoint / "pytorch_model.bin").exists()
+
+                    info['checkpoints'].append(checkpoint_info)
+
+        # Get export history
+        exporter = ModelExporter()
+        export_data = exporter.list_exports(session_id)
+        info['exports'] = export_data['exports']
+
+        # Get configuration if available
+        config_file = model_path / "config.json"
+        if config_file.exists():
+            with open(config_file, 'r') as f:
+                info['config'] = json.load(f)
+
+        return jsonify(info)
+
+    except Exception as e:
+        logger.error(f"Error getting model info: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/exports/batch', methods=['POST'])
+def batch_export():
+    """Export multiple models in batch."""
+    try:
+        data = request.json
+        session_ids = data.get('session_ids', [])
+        export_format = data.get('format', 'huggingface')
+        quantization = data.get('quantization', 'q4_k_m')
+
+        if not session_ids:
+            return jsonify({'error': 'No session IDs provided'}), 400
+
+        results = []
+        exporter = ModelExporter()
+
+        for session_id in session_ids:
+            # Check if model exists
+            model_path = Path("./outputs") / session_id / "checkpoints" / "final"
+            if not model_path.exists():
+                results.append({
+                    'session_id': session_id,
+                    'success': False,
+                    'error': 'Model checkpoint not found'
+                })
+                continue
+
+            # Export the model
+            success, export_path, metadata = exporter.export_model(
+                model_path=str(model_path),
+                session_id=session_id,
+                export_format=export_format,
+                quantization=quantization if export_format == 'gguf' else None
+            )
+
+            results.append({
+                'session_id': session_id,
+                'success': success,
+                'export_path': export_path if success else None,
+                'metadata': metadata if success else None,
+                'error': metadata.get('error') if not success else None
+            })
+
+        return jsonify({
+            'results': results,
+            'total': len(results),
+            'successful': sum(1 for r in results if r['success'])
+        })
+
+    except Exception as e:
+        logger.error(f"Batch export error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -630,6 +1104,7 @@ def download_dataset():
     try:
         data = request.json
         dataset_name = data.get('dataset_name')
+        dataset_config = data.get('config', None)  # Config for multi-config datasets
         force_download = data.get('force_download', False)
 
         if not dataset_name:
@@ -646,6 +1121,7 @@ def download_dataset():
         config = DatasetConfig(
             source_type='huggingface',
             source_path=dataset_name,
+            subset=dataset_config,  # This maps to 'name' parameter in HF load_dataset
             use_cache=True,
             force_download=force_download
         )
@@ -690,6 +1166,7 @@ def sample_dataset():
     try:
         data = request.json
         dataset_name = data.get('dataset_name')
+        dataset_config = data.get('config', None)  # Config for multi-config datasets
         sample_size = data.get('sample_size', 5)
 
         if not dataset_name:
@@ -699,6 +1176,7 @@ def sample_dataset():
         config = DatasetConfig(
             source_type='huggingface',
             source_path=dataset_name,
+            subset=dataset_config,  # This maps to 'name' parameter in HF load_dataset
             sample_size=sample_size,
             use_cache=True  # Use cache if available
         )
@@ -1087,8 +1565,16 @@ socketio.start_background_task(periodic_queue_processor)
 
 if __name__ == '__main__':
     # Create necessary directories
-    for dir_name in ['configs', 'logs', 'outputs', 'checkpoints', 'exports', 'cache', 'templates', 'static']:
+    for dir_name in ['configs', 'logs', 'outputs', 'exports', 'cache', 'templates', 'static']:
         Path(dir_name).mkdir(exist_ok=True)
+
+    # Initialize or rebuild registry if needed
+    if not Path("./outputs/sessions.json").exists():
+        print("Session registry not found, rebuilding from directories...")
+        sessions_found = session_registry.rebuild_from_directories()
+        print(f"Found {sessions_found} existing training sessions")
+    else:
+        print(f"Loaded {len(session_registry.sessions)} sessions from registry")
 
     # Run the Flask app with SocketIO
     port = int(os.environ.get('PORT', 5000))
