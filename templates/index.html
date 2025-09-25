@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GRPO Fine-Tuner</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+    <!-- Chart.js for metrics -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.css">
+
+    <!-- Custom Styles -->
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+</head>
+<body>
+    <!-- Professional Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand d-flex align-items-center" href="#">
+                <div class="brand-icon">
+                    <i class="fas fa-brain"></i>
+                </div>
+                <span class="brand-text">GRPO Fine-Tuner</span>
+            </a>
+
+            <div class="navbar-nav ms-auto d-flex align-items-center">
+                <!-- System Status Indicators -->
+                <div class="system-status me-3">
+                    <span class="status-item" data-bs-toggle="tooltip" title="GPU Status">
+                        <i class="fas fa-microchip"></i>
+                        <span id="gpu-status">--</span>
+                    </span>
+                    <span class="status-item" data-bs-toggle="tooltip" title="Memory">
+                        <i class="fas fa-memory"></i>
+                        <span id="memory-status">--</span>
+                    </span>
+                    <span class="status-item" data-bs-toggle="tooltip" title="Connection">
+                        <i class="fas fa-wifi"></i>
+                        <span id="connection-status">Online</span>
+                    </span>
+                </div>
+
+                <!-- Theme Toggle -->
+                <div class="theme-toggle me-3">
+                    <button class="btn btn-sm btn-outline-light" onclick="toggleTheme()">
+                        <i class="fas fa-moon" id="theme-icon"></i>
+                    </button>
+                </div>
+
+                <!-- Help Button -->
+                <button class="btn btn-sm btn-outline-light" onclick="showHelp()">
+                    <i class="fas fa-question-circle"></i> Help
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="container main-container">
+        <div class="row">
+            <!-- Left Sidebar - Sessions & Quick Actions -->
+            <div class="col-lg-3 col-md-4">
+                <div class="sidebar-card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-history"></i> Training Sessions
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="sessions-list" class="sessions-list">
+                            <!-- Sessions will be populated here -->
+                        </div>
+                        <button class="btn btn-sm btn-outline-primary w-100 mt-2" onclick="refreshSessions()">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <div class="sidebar-card mt-3">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-rocket"></i> Quick Actions
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <button class="btn btn-gradient-primary w-100 mb-2" onclick="showQuickStart()">
+                            <i class="fas fa-magic"></i> Quick Start Wizard
+                        </button>
+                        <button class="btn btn-outline-secondary w-100 mb-2" onclick="loadConfig()">
+                            <i class="fas fa-folder-open"></i> Load Config
+                        </button>
+                        <button class="btn btn-outline-secondary w-100" onclick="saveConfig()">
+                            <i class="fas fa-save"></i> Save Config
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content - Workflow Steps -->
+            <div class="col-lg-9 col-md-8">
+                <!-- Progress Indicator -->
+                <div class="workflow-progress mb-4">
+                    <div class="progress-steps">
+                        <div class="step active" id="step-1-indicator">
+                            <div class="step-icon">
+                                <i class="fas fa-brain"></i>
+                            </div>
+                            <div class="step-label">Model</div>
+                        </div>
+                        <div class="step-line"></div>
+                        <div class="step" id="step-2-indicator">
+                            <div class="step-icon">
+                                <i class="fas fa-database"></i>
+                            </div>
+                            <div class="step-label">Dataset</div>
+                        </div>
+                        <div class="step-line"></div>
+                        <div class="step" id="step-3-indicator">
+                            <div class="step-icon">
+                                <i class="fas fa-sliders-h"></i>
+                            </div>
+                            <div class="step-label">Training</div>
+                        </div>
+                        <div class="step-line"></div>
+                        <div class="step" id="step-4-indicator">
+                            <div class="step-icon">
+                                <i class="fas fa-rocket"></i>
+                            </div>
+                            <div class="step-label">Launch</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 1: Model Configuration -->
+                <div class="workflow-step" id="step-1">
+                    <div class="step-card">
+                        <div class="step-header" onclick="toggleStep(1)">
+                            <div class="d-flex align-items-center">
+                                <span class="step-number">1</span>
+                                <h4 class="step-title">Model Configuration</h4>
+                                <span class="step-status ms-auto">
+                                    <i class="fas fa-chevron-up" id="step-1-chevron"></i>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="step-content show" id="step-1-content">
+                            <!-- Quick Setup Options -->
+                            <div class="quick-setup mb-4">
+                                <label class="form-label fw-bold">Quick Setup</label>
+                                <div class="selection-cards cols-3">
+                                    <input type="radio" class="selection-input" name="setup-mode" id="setup-recommended" checked>
+                                    <label class="selection-card" for="setup-recommended">
+                                        <i class="fas fa-star"></i>
+                                        <span>Recommended</span>
+                                        <small>Best defaults</small>
+                                    </label>
+                                    <input type="radio" class="selection-input" name="setup-mode" id="setup-custom">
+                                    <label class="selection-card" for="setup-custom">
+                                        <i class="fas fa-cog"></i>
+                                        <span>Custom</span>
+                                        <small>Configure LoRA</small>
+                                    </label>
+                                    <input type="radio" class="selection-input" name="setup-mode" id="setup-advanced">
+                                    <label class="selection-card" for="setup-advanced">
+                                        <i class="fas fa-code"></i>
+                                        <span>Advanced</span>
+                                        <small>Full control</small>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Model Selection -->
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label">Model Family</label>
+                                        <select class="form-select" id="model-family" onchange="updateModelList()">
+                                            <option value="qwen">Qwen3</option>
+                                            <option value="llama">LLaMA 3.2</option>
+                                            <option value="phi">Phi-4</option>
+                                        </select>
+                                        <small class="text-muted">Choose the base model architecture</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label">Model Size</label>
+                                        <select class="form-select" id="model-name">
+                                            <!-- Populated dynamically -->
+                                        </select>
+                                        <small class="text-muted">Smaller models train faster</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- LoRA Configuration (Hidden for Recommended mode) -->
+                            <div class="config-section mt-4" id="lora-config-section" style="display: none;">
+                                <h5 class="section-title">
+                                    <i class="fas fa-layer-group"></i> LoRA Configuration
+                                </h5>
+
+                                <!-- LoRA Presets (for Custom mode) -->
+                                <div id="lora-presets" class="mb-3" style="display: none;">
+                                    <div class="btn-group" role="group">
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="applyLoRAPreset('low')">
+                                            <i class="fas fa-memory"></i> Low VRAM
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="applyLoRAPreset('balanced')">
+                                            <i class="fas fa-balance-scale"></i> Balanced
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="applyLoRAPreset('quality')">
+                                            <i class="fas fa-gem"></i> High Quality
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="form-group">
+                                            <label class="form-label">Rank (r) <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Higher rank = more parameters to train"></i></label>
+                                            <input type="range" class="form-range" id="lora-rank-slider" min="4" max="128" value="16" onchange="updateValue('lora-rank', this.value)">
+                                            <input type="number" class="form-control" id="lora-rank" value="16" min="4" max="128">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-group">
+                                            <label class="form-label">Alpha <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Scaling factor, typically 2x rank"></i></label>
+                                            <input type="range" class="form-range" id="lora-alpha-slider" min="8" max="256" value="32" onchange="updateValue('lora-alpha', this.value)">
+                                            <input type="number" class="form-control" id="lora-alpha" value="32" min="8" max="256">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-group">
+                                            <label class="form-label">Dropout <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Regularization to prevent overfitting"></i></label>
+                                            <input type="range" class="form-range" id="lora-dropout-slider" min="0" max="0.5" step="0.05" value="0.05" onchange="updateValue('lora-dropout', this.value)">
+                                            <input type="number" class="form-control" id="lora-dropout" value="0.05" min="0" max="0.5" step="0.05">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Advanced Configuration (Hidden by default) -->
+                            <div class="config-section mt-4" id="advanced-config-section" style="display: none;">
+                                <h5 class="section-title">
+                                    <i class="fas fa-code-branch"></i> Advanced Configuration
+                                </h5>
+
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <div class="form-group mb-3">
+                                            <label class="form-label">Custom Model Path</label>
+                                            <input type="text" class="form-control" id="custom-model-path" placeholder="e.g., username/model-name or local path">
+                                            <small class="text-muted">Leave empty to use selected model above</small>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label class="form-label">Target Modules</label>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="target-q-proj" checked>
+                                                <label class="form-check-label" for="target-q-proj">q_proj</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="target-v-proj" checked>
+                                                <label class="form-check-label" for="target-v-proj">v_proj</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="target-k-proj">
+                                                <label class="form-check-label" for="target-k-proj">k_proj</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="target-o-proj">
+                                                <label class="form-check-label" for="target-o-proj">o_proj</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label class="form-label">Quantization</label>
+                                            <select class="form-select" id="quantization">
+                                                <option value="none">None (Full Precision)</option>
+                                                <option value="4bit" selected>4-bit Quantization</option>
+                                                <option value="8bit">8-bit Quantization</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group mt-3">
+                                            <label class="form-label">LoRA Bias</label>
+                                            <select class="form-select" id="lora-bias">
+                                                <option value="none" selected>None</option>
+                                                <option value="all">All</option>
+                                                <option value="lora_only">LoRA Only</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step Navigation -->
+                            <div class="step-navigation mt-4">
+                                <button class="btn btn-primary ms-auto" onclick="validateAndProceed(1)">
+                                    Continue <i class="fas fa-arrow-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Dataset & Prompts -->
+                <div class="workflow-step" id="step-2">
+                    <div class="step-card">
+                        <div class="step-header" onclick="toggleStep(2)">
+                            <div class="d-flex align-items-center">
+                                <span class="step-number">2</span>
+                                <h4 class="step-title">Dataset & Prompts</h4>
+                                <span class="step-status ms-auto">
+                                    <i class="fas fa-chevron-down" id="step-2-chevron"></i>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="step-content collapse" id="step-2-content">
+                            <!-- Dataset Source -->
+                            <div class="dataset-selection mb-4">
+                                <label class="form-label fw-bold">Dataset Source</label>
+                                <div class="selection-cards cols-2">
+                                    <div class="selection-card" onclick="selectDatasetType('popular')" id="dataset-popular">
+                                        <i class="fas fa-star"></i>
+                                        <span>Popular Datasets</span>
+                                        <small>Pre-configured datasets</small>
+                                    </div>
+                                    <div class="selection-card" onclick="selectDatasetType('upload')" id="dataset-upload">
+                                        <i class="fas fa-upload"></i>
+                                        <span>Upload File</span>
+                                        <small>Use your own data</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Dataset Configuration -->
+                            <div id="dataset-config" style="display: none;">
+                                <!-- Popular Datasets Catalog -->
+                                <div id="dataset-catalog" style="display: none;">
+                                    <!-- Category Filter -->
+                                    <div class="dataset-filters mb-3">
+                                        <div class="btn-group" role="group">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm active" onclick="filterDatasets('all')">All</button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="filterDatasets('math')">Math</button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="filterDatasets('coding')">Coding</button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="filterDatasets('general')">General</button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="filterDatasets('qa')">Q&A</button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Dataset Grid -->
+                                    <div id="dataset-grid" class="dataset-grid">
+                                        <!-- Populated by JavaScript -->
+                                    </div>
+                                </div>
+
+                                <!-- Upload Dataset -->
+                                <div id="dataset-upload" style="display: none;">
+                                    <div class="upload-area">
+                                        <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
+                                        <h5>Drop your dataset file here</h5>
+                                        <p class="text-muted">or click to browse</p>
+                                        <input type="file" id="dataset-file" accept=".json,.csv,.parquet" style="display: none;">
+                                        <button class="btn btn-outline-primary" onclick="document.getElementById('dataset-file').click()">
+                                            Browse Files
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Selected Dataset Configuration -->
+                                <div id="dataset-selected" class="mt-3">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label class="form-label">Selected Dataset</label>
+                                                <input type="text" class="form-control" id="dataset-path" value="tatsu-lab/alpaca" readonly>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label class="form-label">Split</label>
+                                                <input type="text" class="form-control" id="dataset-split" value="train[:100]">
+                                                <small class="text-muted">Limit samples for testing</small>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Field Mapping (auto-configured) -->
+                                    <div class="field-mapping mt-3" id="field-mapping" style="display: none;">
+                                        <label class="form-label">Field Mapping</label>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <small class="text-muted">Instruction Field</small>
+                                                <input type="text" class="form-control form-control-sm" id="instruction-field-visible" value="instruction">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <small class="text-muted">Response Field</small>
+                                                <input type="text" class="form-control form-control-sm" id="response-field-visible" value="output">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- GRPO Template -->
+                            <div class="config-section mt-4">
+                                <h5 class="section-title">
+                                    <i class="fas fa-file-code"></i> GRPO Template
+                                </h5>
+                                <div class="template-selector mb-3">
+                                    <div class="btn-group w-100" role="group">
+                                        <input type="radio" class="btn-check" name="template-type" id="template-grpo" checked>
+                                        <label class="btn btn-outline-primary" for="template-grpo">
+                                            GRPO Default
+                                        </label>
+                                        <input type="radio" class="btn-check" name="template-type" id="template-custom">
+                                        <label class="btn btn-outline-primary" for="template-custom">
+                                            Custom
+                                        </label>
+                                        <input type="radio" class="btn-check" name="template-type" id="template-import">
+                                        <label class="btn btn-outline-primary" for="template-import">
+                                            Import
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Template Editor (for Custom mode) -->
+                                <div id="template-editor" style="display: none;">
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label">Reasoning Start Marker</label>
+                                            <input type="text" class="form-control" id="custom-reasoning-start" value="&lt;start_working_out&gt;" oninput="updateTemplatePreview()">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Reasoning End Marker</label>
+                                            <input type="text" class="form-control" id="custom-reasoning-end" value="&lt;end_working_out&gt;" oninput="updateTemplatePreview()">
+                                        </div>
+                                    </div>
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label">Solution Start Marker</label>
+                                            <input type="text" class="form-control" id="custom-solution-start" value="&lt;SOLUTION&gt;" oninput="updateTemplatePreview()">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Solution End Marker</label>
+                                            <input type="text" class="form-control" id="custom-solution-end" value="&lt;/SOLUTION&gt;" oninput="updateTemplatePreview()">
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">System Prompt</label>
+                                        <textarea class="form-control" id="custom-system-prompt" rows="3" oninput="updateTemplatePreview()">You are given a problem.
+Think about the problem and provide your working out.
+Place it between &lt;start_working_out&gt; and &lt;end_working_out&gt;.
+Then, provide your solution between &lt;SOLUTION&gt;&lt;/SOLUTION&gt;</textarea>
+                                    </div>
+
+                                    <div class="btn-group mb-3">
+                                        <button class="btn btn-sm btn-outline-primary" onclick="testTemplate()">
+                                            <i class="fas fa-vial"></i> Test Template
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-success" onclick="saveCustomTemplate()">
+                                            <i class="fas fa-save"></i> Save Template
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Template Import (for Import mode) -->
+                                <div id="template-import" style="display: none;" class="mb-3">
+                                    <div class="row">
+                                        <div class="col-md-8">
+                                            <select class="form-select" id="saved-templates-list">
+                                                <option value="">Select a saved template...</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <button class="btn btn-primary w-100" onclick="loadSelectedTemplate()">
+                                                <i class="fas fa-folder-open"></i> Load
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="text-center mt-2">
+                                        <small>or</small>
+                                        <button class="btn btn-sm btn-link" onclick="importTemplateFile()">
+                                            Import from file
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Template Preview -->
+                                <div class="template-preview-box">
+                                    <div class="preview-header">
+                                        <span>Template Preview</span>
+                                        <div id="preview-actions" style="display: inline;">
+                                            <button class="btn btn-sm btn-outline-light" id="edit-template-btn" onclick="editTemplate()" style="display: none;">
+                                                <i class="fas fa-edit"></i> Edit
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <pre id="template-preview" class="preview-content"></pre>
+                                </div>
+                            </div>
+
+                            <!-- Hidden template fields (keep existing functionality) -->
+                            <input type="hidden" id="dataset-source" value="huggingface">
+                            <input type="hidden" id="instruction-field" value="instruction">
+                            <input type="hidden" id="response-field" value="output">
+                            <input type="hidden" id="reasoning-start" value="<start_working_out>">
+                            <input type="hidden" id="reasoning-end" value="<end_working_out>">
+                            <input type="hidden" id="solution-start" value="<SOLUTION>">
+                            <input type="hidden" id="solution-end" value="</SOLUTION>">
+                            <textarea id="system-prompt" style="display:none;">You are given a problem.
+Think about the problem and provide your working out.
+Place it between <start_working_out> and <end_working_out>.
+Then, provide your solution between <SOLUTION></SOLUTION></textarea>
+
+                            <!-- Step Navigation -->
+                            <div class="step-navigation mt-4">
+                                <button class="btn btn-outline-secondary" onclick="goToStep(1)">
+                                    <i class="fas fa-arrow-left"></i> Back
+                                </button>
+                                <button class="btn btn-primary ms-auto" onclick="validateAndProceed(2)">
+                                    Continue <i class="fas fa-arrow-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 3: Training Configuration -->
+                <div class="workflow-step" id="step-3">
+                    <div class="step-card">
+                        <div class="step-header" onclick="toggleStep(3)">
+                            <div class="d-flex align-items-center">
+                                <span class="step-number">3</span>
+                                <h4 class="step-title">Training Configuration</h4>
+                                <span class="step-status ms-auto">
+                                    <i class="fas fa-chevron-down" id="step-3-chevron"></i>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="step-content collapse" id="step-3-content">
+                            <!-- Training Presets -->
+                            <div class="training-presets mb-4">
+                                <label class="form-label fw-bold">Training Presets</label>
+                                <div class="selection-cards cols-4">
+                                    <div class="selection-card active" onclick="applyPreset('recommended')" id="preset-recommended">
+                                        <i class="fas fa-magic"></i>
+                                        <span>Recommended</span>
+                                        <small>Auto-optimized</small>
+                                    </div>
+                                    <div class="selection-card" onclick="applyPreset('fast')" id="preset-fast">
+                                        <i class="fas fa-bolt"></i>
+                                        <span>Fast</span>
+                                        <small>Quick testing</small>
+                                    </div>
+                                    <div class="selection-card" onclick="applyPreset('balanced')" id="preset-balanced">
+                                        <i class="fas fa-balance-scale"></i>
+                                        <span>Balanced</span>
+                                        <small>General purpose</small>
+                                    </div>
+                                    <div class="selection-card" onclick="applyPreset('quality')" id="preset-quality">
+                                        <i class="fas fa-gem"></i>
+                                        <span>Quality</span>
+                                        <small>Best results</small>
+                                    </div>
+                                </div>
+                                <div id="preset-indicator" class="mt-2" style="display: none;">
+                                    <small class="text-muted">
+                                        <i class="fas fa-info-circle"></i> <span id="preset-message">Custom configuration applied</span>
+                                    </small>
+                                </div>
+                                <div id="recommended-explanation" class="alert alert-info mt-2" style="display: none;">
+                                    <i class="fas fa-lightbulb"></i>
+                                    <small id="recommendation-details">Settings optimized based on your configuration</small>
+                                </div>
+                            </div>
+
+                            <!-- Algorithm Type Selection -->
+                            <div class="algorithm-selection mb-4">
+                                <label class="form-label fw-bold">Algorithm Type</label>
+                                <div class="selection-cards cols-3">
+                                    <div class="selection-card active" onclick="selectAlgorithm('grpo')" id="algo-grpo">
+                                        <i class="fas fa-chart-line"></i>
+                                        <span>GRPO</span>
+                                        <small>Token-level optimization</small>
+                                    </div>
+                                    <div class="selection-card" onclick="selectAlgorithm('gspo')" id="algo-gspo">
+                                        <i class="fas fa-layer-group"></i>
+                                        <span>GSPO</span>
+                                        <small>Sequence-level optimization</small>
+                                    </div>
+                                    <div class="selection-card" onclick="selectAlgorithm('dr_grpo')" id="algo-dr_grpo">
+                                        <i class="fas fa-shield-alt"></i>
+                                        <span>DR-GRPO</span>
+                                        <small>Doubly robust variant</small>
+                                    </div>
+                                </div>
+                                <div class="alert alert-info mt-2" id="algorithm-info">
+                                    <i class="fas fa-info-circle"></i>
+                                    <strong>GRPO:</strong> Standard Group Relative Policy Optimization applies importance weights at the token level.
+                                </div>
+                            </div>
+
+                            <!-- GSPO Parameters (hidden by default) -->
+                            <div class="config-section mb-4" id="gspo-params" style="display: none;">
+                                <h5 class="section-title">
+                                    <i class="fas fa-cog"></i> GSPO Parameters
+                                </h5>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label class="form-label">Epsilon <small class="text-muted">(Lower bound)</small></label>
+                                            <input type="number" class="form-control" id="epsilon" value="0.0003" step="0.0001">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label class="form-label">Epsilon High <small class="text-muted">(Upper bound)</small></label>
+                                            <input type="number" class="form-control" id="epsilon-high" value="0.0004" step="0.0001">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Reward Function Configuration -->
+                            <div class="reward-configuration mb-4">
+                                <label class="form-label fw-bold">Reward Function</label>
+                                <div class="selection-cards cols-2">
+                                    <div class="selection-card active" onclick="selectRewardType('preset')" id="reward-preset">
+                                        <i class="fas fa-list-ul"></i>
+                                        <span>Preset Rewards</span>
+                                        <small>Pre-configured functions</small>
+                                    </div>
+                                    <div class="selection-card" onclick="selectRewardType('custom')" id="reward-custom">
+                                        <i class="fas fa-code"></i>
+                                        <span>Custom Reward</span>
+                                        <small>Build your own</small>
+                                    </div>
+                                </div>
+
+                                <!-- Preset Rewards -->
+                                <div id="preset-rewards" class="mt-3">
+                                    <select class="form-select" id="reward-preset-select">
+                                        <option value="binary">Binary Match - Exact or pattern matching</option>
+                                        <option value="numerical">Numerical - Compare numerical answers</option>
+                                        <option value="length">Length-Based - Optimize response length</option>
+                                        <option value="format">Format Compliance - Match specific formats</option>
+                                        <option value="math" selected>Math Problems - Numerical + format rewards</option>
+                                        <option value="code">Code Generation - Code blocks + comments</option>
+                                    </select>
+                                </div>
+
+                                <!-- Custom Reward Builder -->
+                                <div id="custom-reward-builder" class="mt-3" style="display: none;">
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <h6>Custom Reward Components</h6>
+                                            <div id="reward-components">
+                                                <!-- Components will be added here dynamically -->
+                                            </div>
+                                            <button class="btn btn-sm btn-outline-primary mt-2" onclick="addRewardComponent()">
+                                                <i class="fas fa-plus"></i> Add Component
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Basic Settings -->
+                            <div class="config-section">
+                                <h5 class="section-title">
+                                    <i class="fas fa-tachometer-alt"></i> Basic Settings
+                                </h5>
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="form-group">
+                                            <label class="form-label">Epochs</label>
+                                            <input type="number" class="form-control" id="num-epochs" value="3" min="1" max="100">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-group">
+                                            <label class="form-label">Batch Size</label>
+                                            <input type="number" class="form-control" id="batch-size" value="4" min="1" max="32">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-group">
+                                            <label class="form-label">Learning Rate</label>
+                                            <input type="number" class="form-control" id="learning-rate" value="0.0002" step="0.00001">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- GRPO Settings -->
+                            <div class="config-section mt-4 collapsible">
+                                <h5 class="section-title" onclick="toggleSection('grpo-settings')">
+                                    <i class="fas fa-brain"></i> GRPO Settings
+                                    <i class="fas fa-chevron-down float-end"></i>
+                                </h5>
+                                <div id="grpo-settings" class="section-content">
+                                    <div class="row">
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="form-label">Temperature</label>
+                                                <input type="number" class="form-control" id="temperature" value="0.7" min="0.1" max="2.0" step="0.1">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="form-label">Top P</label>
+                                                <input type="number" class="form-control" id="top-p" value="0.95" min="0" max="1" step="0.05">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="form-label">KL Penalty</label>
+                                                <input type="number" class="form-control" id="kl-penalty" value="0.01" min="0" max="1" step="0.01">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="form-label">Generations</label>
+                                                <input type="number" class="form-control" id="num-generations" value="4" min="1" max="10">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Optimizations -->
+                            <div class="config-section mt-4">
+                                <h5 class="section-title">
+                                    <i class="fas fa-rocket"></i> Optimizations
+                                </h5>
+                                <div class="optimization-toggles">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="use-flash-attention">
+                                        <label class="form-check-label" for="use-flash-attention">
+                                            Flash Attention <small class="text-muted">(Faster training)</small>
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="gradient-checkpointing">
+                                        <label class="form-check-label" for="gradient-checkpointing">
+                                            Gradient Checkpointing <small class="text-muted">(Less VRAM)</small>
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="mixed-precision" checked>
+                                        <label class="form-check-label" for="mixed-precision">
+                                            Mixed Precision (FP16) <small class="text-muted">(Recommended)</small>
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="pre-finetune">
+                                        <label class="form-check-label" for="pre-finetune">
+                                            Pre-Fine-Tuning Phase <small class="text-muted">(Better convergence)</small>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step Navigation -->
+                            <div class="step-navigation mt-4">
+                                <button class="btn btn-outline-secondary" onclick="goToStep(2)">
+                                    <i class="fas fa-arrow-left"></i> Back
+                                </button>
+                                <button class="btn btn-primary ms-auto" onclick="validateAndProceed(3)">
+                                    Continue <i class="fas fa-arrow-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 4: Review & Launch -->
+                <div class="workflow-step" id="step-4">
+                    <div class="step-card">
+                        <div class="step-header" onclick="toggleStep(4)">
+                            <div class="d-flex align-items-center">
+                                <span class="step-number">4</span>
+                                <h4 class="step-title">Review & Launch</h4>
+                                <span class="step-status ms-auto">
+                                    <i class="fas fa-chevron-down" id="step-4-chevron"></i>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="step-content collapse" id="step-4-content">
+                            <!-- Configuration Summary -->
+                            <div class="config-summary">
+                                <h5 class="section-title">
+                                    <i class="fas fa-clipboard-check"></i> Configuration Summary
+                                </h5>
+                                <div class="summary-grid">
+                                    <div class="summary-item">
+                                        <span class="summary-label">Model:</span>
+                                        <span class="summary-value" id="summary-model">--</span>
+                                    </div>
+                                    <div class="summary-item">
+                                        <span class="summary-label">Dataset:</span>
+                                        <span class="summary-value" id="summary-dataset">--</span>
+                                    </div>
+                                    <div class="summary-item">
+                                        <span class="summary-label">Training Time:</span>
+                                        <span class="summary-value" id="summary-time">~15 minutes</span>
+                                    </div>
+                                    <div class="summary-item">
+                                        <span class="summary-label">VRAM Required:</span>
+                                        <span class="summary-value" id="summary-vram">~4GB</span>
+                                    </div>
+                                    <div class="summary-item">
+                                        <span class="summary-label">Epochs:</span>
+                                        <span class="summary-value" id="summary-epochs">--</span>
+                                    </div>
+                                    <div class="summary-item">
+                                        <span class="summary-label">Batch Size:</span>
+                                        <span class="summary-value" id="summary-batch">--</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Config Actions -->
+                            <div class="config-actions mt-4">
+                                <button class="btn btn-outline-secondary" onclick="saveCurrentConfig()">
+                                    <i class="fas fa-save"></i> Save Config
+                                </button>
+                                <button class="btn btn-outline-secondary" onclick="exportConfig()">
+                                    <i class="fas fa-download"></i> Export
+                                </button>
+                            </div>
+
+                            <!-- Launch Button -->
+                            <div class="launch-section mt-4">
+                                <button class="btn btn-launch" onclick="startTraining()" id="launch-btn">
+                                    <i class="fas fa-rocket"></i> Start Training
+                                </button>
+                            </div>
+
+                            <!-- Training Monitor (Hidden initially) -->
+                            <div id="training-monitor" class="training-monitor" style="display: none;">
+                                <h5 class="section-title">
+                                    <i class="fas fa-chart-line"></i> Training Progress
+                                </h5>
+
+                                <!-- Progress Bar -->
+                                <div class="progress mb-3">
+                                    <div id="training-progress" class="progress-bar progress-bar-striped progress-bar-animated"
+                                         role="progressbar" style="width: 0%">0%</div>
+                                </div>
+
+                                <!-- Metrics -->
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <canvas id="loss-chart"></canvas>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <canvas id="lr-chart"></canvas>
+                                    </div>
+                                </div>
+
+                                <!-- Training Logs -->
+                                <div class="training-logs mt-3">
+                                    <div class="logs-header">
+                                        <span>Training Logs</span>
+                                        <button class="btn btn-sm btn-outline-secondary" onclick="clearLogs()">
+                                            Clear
+                                        </button>
+                                    </div>
+                                    <div id="training-logs" class="logs-content"></div>
+                                </div>
+
+                                <!-- Training Controls -->
+                                <div class="training-controls mt-3">
+                                    <button class="btn btn-warning" onclick="pauseTraining()" id="pause-btn">
+                                        <i class="fas fa-pause"></i> Pause
+                                    </button>
+                                    <button class="btn btn-danger" onclick="stopTraining()" id="stop-btn">
+                                        <i class="fas fa-stop"></i> Stop
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Step Navigation -->
+                            <div class="step-navigation mt-4" id="step-4-nav">
+                                <button class="btn btn-outline-secondary" onclick="goToStep(3)">
+                                    <i class="fas fa-arrow-left"></i> Back
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <!-- System Info Modal -->
+    <div class="modal fade" id="systemInfoModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">System Information</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="system-info-content">Loading...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save Template Modal -->
+    <div class="modal fade" id="saveTemplateModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Save Prompt Template</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Template Name</label>
+                        <input type="text" class="form-control" id="template-name-input" placeholder="Enter template name">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description (optional)</label>
+                        <textarea class="form-control" id="template-description-input" rows="2" placeholder="Enter template description"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveTemplateFromModal()">Save Template</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

@@ -74,7 +74,9 @@ class GRPOConfig:
     lr_scheduler_type: str = "constant"
     seed: int = 42
 
-    # GRPO specific
+    # GRPO/GSPO specific
+    loss_type: str = "grpo"  # Options: "grpo", "gspo", "dr_grpo"
+    importance_sampling_level: str = "token"  # Options: "token", "sequence" (for GSPO)
     max_sequence_length: int = 2048
     num_generations_per_prompt: int = 4
     temperature: float = 0.7
@@ -84,6 +86,10 @@ class GRPOConfig:
     kl_penalty: float = 0.01
     clip_range: float = 0.2
     value_coefficient: float = 1.0
+
+    # GSPO specific parameters
+    epsilon: float = 3e-4
+    epsilon_high: float = 4e-4
 
     # Paths
     output_dir: str = "./outputs"
