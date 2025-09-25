@@ -137,7 +137,9 @@ class ModelExporter:
                 if progress_callback:
                     progress_callback(f"Export completed successfully!", 100)
 
-                return True, str(path), metadata
+                # Return relative path instead of absolute for cross-platform compatibility
+                relative_path = str(path).replace(str(self.export_dir) + os.sep, "").replace("\\", "/")
+                return True, relative_path, metadata
             else:
                 return False, "", {"error": "Export failed"}
 

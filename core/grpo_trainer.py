@@ -681,10 +681,11 @@ class GRPOModelTrainer:
             self.save_checkpoint("final")
 
         # Use ModelExporter to handle the export
-        exporter = ModelExporter(export_dir=self.config.output_dir)
+        exporter = ModelExporter(export_dir="./exports")
 
         # Generate session ID from checkpoint path
-        session_id = Path(self.config.checkpoint_dir).name
+        # checkpoint_dir is in format ./outputs/{session_id}/checkpoints
+        session_id = Path(self.config.checkpoint_dir).parent.name
 
         return exporter.export_model(
             model_path=str(checkpoint_path),

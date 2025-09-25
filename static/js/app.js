@@ -2757,10 +2757,18 @@ function downloadExport() {
         return;
     }
 
-    // Extract relative path from full path
+    // The path is already relative in format: session_id/format/export_name
+    // We just need the format/export_name part
     const pathParts = currentExportPath.split('/');
-    const exportIndex = pathParts.indexOf('exports');
-    const relativePath = pathParts.slice(exportIndex + 2).join('/');
+
+    // If path starts with session_id, skip it
+    let relativePath;
+    if (pathParts[0] === currentExportSession) {
+        relativePath = pathParts.slice(1).join('/');
+    } else {
+        // Path is already in the correct format
+        relativePath = currentExportPath;
+    }
 
     const downloadUrl = `/api/export/download/${currentExportSession}/${relativePath}`;
     window.open(downloadUrl, '_blank');
