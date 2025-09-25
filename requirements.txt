@@ -29,6 +29,7 @@ py-cpuinfo>=9.0.0  # Optional: Detailed CPU information
 llama-cpp-python>=0.3.16
 mistral-common>=1.8.3
 gguf>=0.1.0
+huggingface_hub[hf_xet]
 
 # Configuration and Logging
 pyyaml>=6.0
