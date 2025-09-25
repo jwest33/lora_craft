@@ -344,10 +344,17 @@ class GRPOTrainer:
         logger.info("Starting GRPO training")
 
         # Setup accelerator
+        # Determine mixed precision setting
+        if self.config.fp16:
+            mixed_precision = "fp16"
+        elif self.config.bf16:
+            mixed_precision = "bf16"
+        else:
+            mixed_precision = None
+
         self.accelerator = Accelerator(
             gradient_accumulation_steps=self.config.gradient_accumulation_steps,
-            fp16=self.config.fp16,
-            mixed_precision="fp16" if self.config.fp16 else None,
+            mixed_precision=mixed_precision,
         )
 
         # Prepare model and optimizer

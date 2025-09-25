@@ -3,6 +3,7 @@
 // Global variables
 let socket = null;
 let currentSessionId = null;
+let currentDatasetSession = null;
 let availableModels = {};
 let currentStep = 1;
 let stepValidation = {
@@ -13,6 +14,7 @@ let stepValidation = {
 };
 let lossChart = null;
 let lrChart = null;
+let datasetStatusCache = {};
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
@@ -86,6 +88,19 @@ function initializeSocketIO() {
     
     socket.on('training_error', function(data) {
         handleTrainingError(data);
+    });
+
+    // Dataset download events
+    socket.on('dataset_progress', function(data) {
+        updateDatasetProgress(data);
+    });
+
+    socket.on('dataset_complete', function(data) {
+        handleDatasetComplete(data);
+    });
+
+    socket.on('dataset_error', function(data) {
+        handleDatasetError(data);
     });
 }
 
@@ -474,9 +489,16 @@ function selectDatasetType(type) {
     }
 }
 
-function loadDatasetCatalog() {
+async function loadDatasetCatalog() {
     const grid = document.getElementById('dataset-grid');
     grid.innerHTML = '';
+
+    // First load status for all datasets
+    await updateDatasetStatuses();
+
+    // Show cache management bar
+    document.getElementById('cache-management-bar').style.display = 'block';
+    await refreshCacheInfo();
 
     Object.entries(datasetCatalog).forEach(([key, dataset]) => {
         const card = createDatasetCard(key, dataset);
@@ -484,18 +506,81 @@ function loadDatasetCatalog() {
     });
 }
 
+async function updateDatasetStatuses() {
+    // Get status for all popular datasets
+    try {
+        const response = await fetch('/api/datasets/list');
+        const data = await response.json();
+
+        if (data.datasets) {
+            data.datasets.forEach(dataset => {
+                datasetStatusCache[dataset.path] = {
+                    is_cached: dataset.is_cached,
+                    cache_info: dataset.cache_info
+                };
+            });
+        }
+    } catch (error) {
+        console.error('Failed to get dataset statuses:', error);
+    }
+}
+
 function createDatasetCard(key, dataset) {
     const card = document.createElement('div');
     card.className = 'dataset-catalog-card';
     card.dataset.category = dataset.category;
+    card.dataset.key = key;
+
+    // Check cache status
+    const status = datasetStatusCache[dataset.path] || { is_cached: false };
+
+    let statusIcon = '';
+    let statusClass = '';
+    let actionButtons = '';
+
+    if (status.is_cached) {
+        statusIcon = '<i class="fas fa-check-circle text-success"></i>';
+        statusClass = 'cached';
+        actionButtons = `
+            <button class="btn btn-sm btn-success mt-2" onclick="selectDataset('${key}')">
+                <i class="fas fa-check"></i> Use Dataset
+            </button>
+            <button class="btn btn-sm btn-outline-secondary mt-2" onclick="previewDataset('${key}')">
+                <i class="fas fa-eye"></i> Preview
+            </button>
+            <div class="mt-1">
+                <small class="text-muted">
+                    Cached: ${status.cache_info ? status.cache_info.size_mb + ' MB' : ''}
+                </small>
+                <button class="btn btn-sm btn-link text-danger p-0 ms-2" onclick="clearDatasetCache('${key}')">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        `;
+    } else {
+        statusIcon = '<i class="fas fa-cloud-download-alt text-muted"></i>';
+        statusClass = 'not-cached';
+        actionButtons = `
+            <button class="btn btn-sm btn-primary mt-2" onclick="downloadDataset('${key}')">
+                <i class="fas fa-download"></i> Download
+            </button>
+            <button class="btn btn-sm btn-outline-secondary mt-2" onclick="previewDataset('${key}')">
+                <i class="fas fa-eye"></i> Sample
+            </button>
+        `;
+    }
+
     card.innerHTML = `
+        <div class="dataset-status ${statusClass}">
+            ${statusIcon}
+        </div>
         <div class="dataset-icon">${dataset.icon}</div>
         <h6>${dataset.name}</h6>
         <p class="dataset-description">${dataset.description}</p>
         <small class="dataset-meta">${dataset.size} • ${dataset.language}</small>
-        <button class="btn btn-sm btn-primary mt-2" onclick="selectDataset('${key}')">
-            Select
-        </button>
+        <div class="dataset-actions">
+            ${actionButtons}
+        </div>
     `;
     return card;
 }
@@ -1856,11 +1941,263 @@ function setupEventListeners() {
 function estimateTrainingRequirements() {
     const epochs = parseInt(document.getElementById('num-epochs').value);
     const batchSize = parseInt(document.getElementById('batch-size').value);
-    
+
     // Simple estimation (would be more complex in real implementation)
     const estimatedMinutes = epochs * 5 * (4 / batchSize);
     document.getElementById('summary-time').textContent = `~${Math.round(estimatedMinutes)} minutes`;
-    
+
     const estimatedVRAM = 2 + (batchSize * 0.5);
     document.getElementById('summary-vram').textContent = `~${estimatedVRAM.toFixed(1)}GB`;
+}
+
+// ============================================================================
+// Dataset Management Functions
+// ============================================================================
+
+async function downloadDataset(key) {
+    const dataset = datasetCatalog[key];
+    if (!dataset) return;
+
+    try {
+        // Show download progress modal
+        const modal = new bootstrap.Modal(document.getElementById('downloadProgressModal'));
+        modal.show();
+
+        document.getElementById('downloading-dataset-name').textContent = dataset.name;
+        document.getElementById('download-progress-bar').style.width = '0%';
+        document.getElementById('download-status-message').textContent = 'Initializing download...';
+
+        // Start download
+        const response = await fetch('/api/datasets/download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                dataset_name: dataset.path,
+                force_download: false
+            })
+        });
+
+        const result = await response.json();
+        if (result.session_id) {
+            currentDatasetSession = result.session_id;
+
+            // Join WebSocket session for progress updates
+            socket.emit('join_dataset_session', { session_id: result.session_id });
+        }
+    } catch (error) {
+        console.error('Failed to start download:', error);
+        showAlert('Failed to start dataset download', 'danger');
+    }
+}
+
+function updateDatasetProgress(data) {
+    const progressBar = document.getElementById('download-progress-bar');
+    const statusMessage = document.getElementById('download-status-message');
+
+    if (data.progress !== undefined && data.progress !== null) {
+        const percentage = Math.round(data.progress * 100);
+        progressBar.style.width = percentage + '%';
+        progressBar.textContent = percentage + '%';
+    }
+
+    if (data.message) {
+        statusMessage.textContent = data.message;
+    }
+
+    // Update status based on data.status
+    if (data.status === 'cached') {
+        statusMessage.innerHTML = '<i class="fas fa-check text-success"></i> Loaded from cache';
+    } else if (data.status === 'downloading') {
+        statusMessage.innerHTML = '<i class="fas fa-download text-primary"></i> Downloading...';
+    } else if (data.status === 'processing') {
+        statusMessage.innerHTML = '<i class="fas fa-cog fa-spin text-info"></i> Processing dataset...';
+    }
+}
+
+function handleDatasetComplete(data) {
+    // Hide modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('downloadProgressModal'));
+    if (modal) modal.hide();
+
+    showAlert(`Dataset "${data.dataset_name}" downloaded successfully!`, 'success');
+
+    // Refresh dataset catalog to show updated status
+    loadDatasetCatalog();
+}
+
+function handleDatasetError(data) {
+    // Hide modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('downloadProgressModal'));
+    if (modal) modal.hide();
+
+    showAlert(`Failed to download dataset: ${data.error}`, 'danger');
+}
+
+function cancelDownload() {
+    // TODO: Implement download cancellation
+    const modal = bootstrap.Modal.getInstance(document.getElementById('downloadProgressModal'));
+    if (modal) modal.hide();
+}
+
+async function previewDataset(key) {
+    const dataset = datasetCatalog[key];
+    if (!dataset) return;
+
+    try {
+        // Show preview modal
+        const modal = new bootstrap.Modal(document.getElementById('datasetPreviewModal'));
+        modal.show();
+
+        // Reset modal content
+        document.getElementById('preview-dataset-name').textContent = dataset.name;
+        document.getElementById('dataset-preview-loading').style.display = 'block';
+        document.getElementById('dataset-preview-content').style.display = 'none';
+
+        // Fetch dataset samples
+        const response = await fetch('/api/datasets/sample', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                dataset_name: dataset.path,
+                sample_size: 5
+            })
+        });
+
+        const result = await response.json();
+
+        // Hide loading, show content
+        document.getElementById('dataset-preview-loading').style.display = 'none';
+        document.getElementById('dataset-preview-content').style.display = 'block';
+
+        // Display statistics
+        if (result.statistics) {
+            const statsDiv = document.getElementById('dataset-stats');
+            statsDiv.innerHTML = `
+                <strong>Total Samples:</strong> ${result.statistics.total_samples}<br>
+                <strong>Avg Instruction Length:</strong> ${Math.round(result.statistics.avg_instruction_length)} chars<br>
+                <strong>Avg Response Length:</strong> ${Math.round(result.statistics.avg_response_length)} chars
+            `;
+        }
+
+        // Display samples
+        const samplesDiv = document.getElementById('dataset-samples');
+        samplesDiv.innerHTML = '';
+
+        if (result.samples && result.samples.length > 0) {
+            result.samples.forEach((sample, idx) => {
+                const sampleCard = document.createElement('div');
+                sampleCard.className = 'card mb-2';
+                sampleCard.innerHTML = `
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 text-muted">Sample ${idx + 1}</h6>
+                        <div class="mb-2">
+                            <strong>Instruction:</strong>
+                            <pre class="bg-light p-2 rounded" style="white-space: pre-wrap;">${escapeHtml(sample[dataset.fields.instruction] || sample.instruction || '')}</pre>
+                        </div>
+                        <div>
+                            <strong>Response:</strong>
+                            <pre class="bg-light p-2 rounded" style="white-space: pre-wrap;">${escapeHtml(sample[dataset.fields.response] || sample.response || sample.output || '')}</pre>
+                        </div>
+                    </div>
+                `;
+                samplesDiv.appendChild(sampleCard);
+            });
+        } else {
+            samplesDiv.innerHTML = '<p>No samples available</p>';
+        }
+
+        // Store dataset key for "Use This Dataset" button
+        document.getElementById('use-dataset-btn').dataset.key = key;
+
+    } catch (error) {
+        console.error('Failed to preview dataset:', error);
+        showAlert('Failed to load dataset preview', 'danger');
+
+        // Hide modal on error
+        const modal = bootstrap.Modal.getInstance(document.getElementById('datasetPreviewModal'));
+        if (modal) modal.hide();
+    }
+}
+
+function useDatasetFromPreview() {
+    const key = document.getElementById('use-dataset-btn').dataset.key;
+    if (key) {
+        selectDataset(key);
+
+        // Close preview modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('datasetPreviewModal'));
+        if (modal) modal.hide();
+    }
+}
+
+async function clearDatasetCache(key) {
+    const dataset = datasetCatalog[key];
+    if (!dataset) return;
+
+    if (!confirm(`Are you sure you want to clear the cache for "${dataset.name}"?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/datasets/cache/clear', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                dataset_name: dataset.path
+            })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            showAlert(`Cache cleared for ${dataset.name}`, 'success');
+            // Refresh catalog
+            loadDatasetCatalog();
+        }
+    } catch (error) {
+        console.error('Failed to clear cache:', error);
+        showAlert('Failed to clear dataset cache', 'danger');
+    }
+}
+
+async function clearAllCache() {
+    if (!confirm('Are you sure you want to clear ALL cached datasets? This cannot be undone.')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/datasets/cache/clear', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            showAlert('All dataset cache cleared', 'success');
+            // Refresh catalog
+            loadDatasetCatalog();
+        }
+    } catch (error) {
+        console.error('Failed to clear cache:', error);
+        showAlert('Failed to clear cache', 'danger');
+    }
+}
+
+async function refreshCacheInfo() {
+    try {
+        const response = await fetch('/api/datasets/cache/info');
+        const data = await response.json();
+
+        document.getElementById('cache-size').textContent = `${data.total_size_mb} MB`;
+        document.getElementById('cached-datasets-count').textContent = data.cache_items.length;
+
+    } catch (error) {
+        console.error('Failed to get cache info:', error);
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }

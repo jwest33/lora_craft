@@ -591,6 +591,267 @@ def export_model(session_id):
 
 
 # ============================================================================
+# Dataset Management Routes
+# ============================================================================
+
+@app.route('/api/datasets/status/<dataset_name>', methods=['GET'])
+def get_dataset_status(dataset_name):
+    """Check if a dataset is cached and get its info."""
+    try:
+        # Replace forward slash with safe separator
+        safe_name = dataset_name.replace('/', '__')
+
+        # Create temporary handler to check cache
+        config = DatasetConfig(
+            source_type='huggingface',
+            source_path=dataset_name.replace('__', '/'),
+            use_cache=True
+        )
+        handler = DatasetHandler(config)
+
+        is_cached = handler.is_cached(dataset_name.replace('__', '/'))
+        cache_info = handler.get_cache_info(dataset_name.replace('__', '/'))
+
+        response = {
+            'dataset_name': dataset_name.replace('__', '/'),
+            'is_cached': is_cached,
+            'cache_info': cache_info.to_dict() if cache_info else None
+        }
+
+        return jsonify(response)
+    except Exception as e:
+        logger.error(f"Failed to get dataset status: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/datasets/download', methods=['POST'])
+def download_dataset():
+    """Download a dataset with progress tracking."""
+    try:
+        data = request.json
+        dataset_name = data.get('dataset_name')
+        force_download = data.get('force_download', False)
+
+        if not dataset_name:
+            return jsonify({'error': 'Dataset name required'}), 400
+
+        # Create session for progress tracking
+        session_id = create_session_id()
+
+        def progress_callback(info):
+            # Emit progress via SocketIO
+            emit_to_session(session_id, 'dataset_progress', info)
+
+        # Create dataset config
+        config = DatasetConfig(
+            source_type='huggingface',
+            source_path=dataset_name,
+            use_cache=True,
+            force_download=force_download
+        )
+
+        # Start download in background
+        def download_task():
+            try:
+                handler = DatasetHandler(config, progress_callback=progress_callback)
+                dataset = handler.load()
+
+                # Get cache info
+                cache_info = handler.get_cache_info(dataset_name)
+
+                emit_to_session(session_id, 'dataset_complete', {
+                    'dataset_name': dataset_name,
+                    'samples': len(dataset) if dataset else 0,
+                    'cache_info': cache_info.to_dict() if cache_info else None
+                })
+            except Exception as e:
+                logger.error(f"Dataset download failed: {e}")
+                emit_to_session(session_id, 'dataset_error', {
+                    'error': str(e)
+                })
+
+        # Start download thread
+        thread = threading.Thread(target=download_task, daemon=True)
+        thread.start()
+
+        return jsonify({
+            'session_id': session_id,
+            'message': 'Download started'
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to start dataset download: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/datasets/sample', methods=['POST'])
+def sample_dataset():
+    """Get a sample of a dataset for preview."""
+    try:
+        data = request.json
+        dataset_name = data.get('dataset_name')
+        sample_size = data.get('sample_size', 5)
+
+        if not dataset_name:
+            return jsonify({'error': 'Dataset name required'}), 400
+
+        # Create config for sampling
+        config = DatasetConfig(
+            source_type='huggingface',
+            source_path=dataset_name,
+            sample_size=sample_size,
+            use_cache=True  # Use cache if available
+        )
+
+        handler = DatasetHandler(config)
+        dataset = handler.load()
+
+        # Get sample data
+        samples = handler.get_preview(sample_size)
+
+        # Get statistics if available
+        stats = None
+        if handler.statistics:
+            stats = {
+                'total_samples': handler.statistics.total_samples,
+                'avg_instruction_length': handler.statistics.avg_instruction_length,
+                'avg_response_length': handler.statistics.avg_response_length
+            }
+
+        return jsonify({
+            'dataset_name': dataset_name,
+            'samples': samples,
+            'statistics': stats
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to sample dataset: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/datasets/cache/info', methods=['GET'])
+def get_cache_info():
+    """Get information about all cached datasets."""
+    try:
+        # Create handler to access cache
+        handler = DatasetHandler()
+
+        # Get all cache info
+        cache_items = []
+        total_size = 0
+
+        for cache_key, info in handler.cache_info.items():
+            cache_items.append(info.to_dict())
+            total_size += info.size_bytes
+
+        return jsonify({
+            'cache_items': cache_items,
+            'total_size_mb': round(total_size / (1024 * 1024), 2),
+            'cache_dir': str(handler._cache_dir)
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to get cache info: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/datasets/cache/clear', methods=['POST'])
+def clear_dataset_cache():
+    """Clear cache for specific dataset or all datasets."""
+    try:
+        data = request.json
+        dataset_name = data.get('dataset_name')  # Optional, if not provided clears all
+
+        handler = DatasetHandler()
+        handler.clear_cache(dataset_name)
+
+        message = f"Cleared cache for {dataset_name}" if dataset_name else "Cleared all dataset cache"
+
+        return jsonify({
+            'success': True,
+            'message': message
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to clear cache: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/datasets/list', methods=['GET'])
+def list_popular_datasets():
+    """Get list of popular datasets with their status."""
+    try:
+        # Define popular datasets (matching the frontend catalog)
+        popular_datasets = {
+            'tatsu-lab/alpaca': {
+                'name': 'Alpaca',
+                'size': '52K samples',
+                'category': 'general'
+            },
+            'openai/gsm8k': {
+                'name': 'GSM8K',
+                'size': '8.5K problems',
+                'category': 'math'
+            },
+            'open-r1/DAPO-Math-17k-Processed': {
+                'name': 'DAPO Math 17k',
+                'size': '17K problems',
+                'category': 'math'
+            },
+            'nvidia/OpenMathReasoning': {
+                'name': 'OpenMath Reasoning',
+                'size': '100K+ problems',
+                'category': 'math'
+            },
+            'sahil2801/CodeAlpaca-20k': {
+                'name': 'Code Alpaca',
+                'size': '20K examples',
+                'category': 'coding'
+            },
+            'databricks/databricks-dolly-15k': {
+                'name': 'Dolly 15k',
+                'size': '15K samples',
+                'category': 'general'
+            },
+            'microsoft/orca-math-word-problems-200k': {
+                'name': 'Orca Math',
+                'size': '200K problems',
+                'category': 'math'
+            },
+            'squad_v2': {
+                'name': 'SQuAD v2',
+                'size': '150K questions',
+                'category': 'qa'
+            }
+        }
+
+        # Check cache status for each dataset
+        handler = DatasetHandler()
+
+        datasets_with_status = []
+        for dataset_path, info in popular_datasets.items():
+            is_cached = handler.is_cached(dataset_path)
+            cache_info = handler.get_cache_info(dataset_path) if is_cached else None
+
+            datasets_with_status.append({
+                'path': dataset_path,
+                'name': info['name'],
+                'size': info['size'],
+                'category': info['category'],
+                'is_cached': is_cached,
+                'cache_info': cache_info.to_dict() if cache_info else None
+            })
+
+        return jsonify({
+            'datasets': datasets_with_status
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to list datasets: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ============================================================================
 # Template Management Routes
 # ============================================================================
 
@@ -788,6 +1049,16 @@ def handle_request_update(data):
     session_id = data.get('session_id')
     if session_id in training_sessions:
         process_training_queue(session_id)
+
+
+@socketio.on('join_dataset_session')
+def handle_join_dataset_session(data):
+    """Join a dataset download session for updates."""
+    session_id = data.get('session_id')
+    if session_id:
+        join_room(session_id)
+        emit('joined_dataset_session', {'session_id': session_id})
+        logger.info(f"Client {request.sid} joined dataset session {session_id}")
 
 
 # ============================================================================
