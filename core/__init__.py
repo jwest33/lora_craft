@@ -8,6 +8,7 @@ from .system_config import SystemConfig
 from .gguf_converter import GGUFConverter
 from .model_exporter import ModelExporter
 from .session_registry import SessionRegistry, SessionInfo
+from .model_tester import ModelTester, TestConfig
 
 __all__ = [
     'GRPOModelTrainer',
@@ -21,5 +22,7 @@ __all__ = [
     'GGUFConverter',
     'ModelExporter',
     'SessionRegistry',
-    'SessionInfo'
+    'SessionInfo',
+    'ModelTester',
+    'TestConfig'
 ]

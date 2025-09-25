@@ -110,6 +110,19 @@ function initializeSocketIO() {
     socket.on('dataset_error', function(data) {
         handleDatasetError(data);
     });
+
+    // Export progress updates
+    socket.on('export_progress', function(data) {
+        const progressBar = document.getElementById('export-progress-bar');
+        const statusText = document.getElementById('export-status');
+
+        if (progressBar) {
+            progressBar.style.width = `${data.progress}%`;
+        }
+        if (statusText) {
+            statusText.textContent = data.message || 'Exporting...';
+        }
+    });
 }
 
 function updateConnectionStatus(status) {
@@ -126,6 +139,11 @@ function toggleStep(stepNum) {
     const content = document.getElementById(`step-${stepNum}-content`);
     const chevron = document.getElementById(`step-${stepNum}-chevron`);
 
+    if (!content || !chevron) {
+        console.error(`Step ${stepNum} elements not found`);
+        return;
+    }
+
     // Use Bootstrap's collapse functionality
     const bsCollapse = new bootstrap.Collapse(content, {
         toggle: false
@@ -138,11 +156,11 @@ function toggleStep(stepNum) {
         chevron.classList.add('fa-chevron-down');
     } else {
         // Collapse all other steps first
-        for (let i = 1; i <= 5; i++) {
+        for (let i = 1; i <= 6; i++) {
             if (i !== stepNum) {
                 const otherContent = document.getElementById(`step-${i}-content`);
                 const otherChevron = document.getElementById(`step-${i}-chevron`);
-                if (otherContent.classList.contains('show')) {
+                if (otherContent && otherChevron && otherContent.classList.contains('show')) {
                     const otherCollapse = new bootstrap.Collapse(otherContent, {
                         toggle: false
                     });
@@ -164,6 +182,12 @@ function toggleStep(stepNum) {
                 refreshTrainedModels();
             }, 100);
         }
+        // If opening test section (step 6), load testable models
+        if (stepNum === 6) {
+            setTimeout(() => {
+                loadTestableModels();
+            }, 100);
+        }
     }
 
     currentStep = stepNum;
@@ -175,7 +199,7 @@ function goToStep(stepNum) {
     const currentContent = document.getElementById(`step-${currentStep}-content`);
     const currentChevron = document.getElementById(`step-${currentStep}-chevron`);
 
-    if (currentContent && currentContent.classList.contains('show')) {
+    if (currentContent && currentChevron && currentContent.classList.contains('show')) {
         const currentCollapse = new bootstrap.Collapse(currentContent, {
             toggle: false
         });
@@ -188,12 +212,14 @@ function goToStep(stepNum) {
     const targetContent = document.getElementById(`step-${stepNum}-content`);
     const targetChevron = document.getElementById(`step-${stepNum}-chevron`);
 
-    const targetCollapse = new bootstrap.Collapse(targetContent, {
-        toggle: false
-    });
-    targetCollapse.show();
-    targetChevron.classList.remove('fa-chevron-down');
-    targetChevron.classList.add('fa-chevron-up');
+    if (targetContent && targetChevron) {
+        const targetCollapse = new bootstrap.Collapse(targetContent, {
+            toggle: false
+        });
+        targetCollapse.show();
+        targetChevron.classList.remove('fa-chevron-down');
+        targetChevron.classList.add('fa-chevron-up');
+    }
 
     currentStep = stepNum;
     updateStepIndicators();
@@ -202,6 +228,12 @@ function goToStep(stepNum) {
     if (stepNum === 5) {
         setTimeout(() => {
             refreshTrainedModels();
+        }, 100);
+    }
+    // If navigating to test section (step 6), load testable models
+    if (stepNum === 6) {
+        setTimeout(() => {
+            loadTestableModels();
         }, 100);
     }
 
@@ -282,14 +314,16 @@ function validateStep(stepNum) {
 }
 
 function updateStepIndicators() {
-    for (let i = 1; i <= 4; i++) {
+    for (let i = 1; i <= 6; i++) {
         const indicator = document.getElementById(`step-${i}-indicator`);
-        indicator.classList.remove('active', 'completed');
-        
-        if (i < currentStep && stepValidation[i]) {
-            indicator.classList.add('completed');
-        } else if (i === currentStep) {
-            indicator.classList.add('active');
+        if (indicator) {
+            indicator.classList.remove('active', 'completed');
+
+            if (i < currentStep && stepValidation[i]) {
+                indicator.classList.add('completed');
+            } else if (i === currentStep) {
+                indicator.classList.add('active');
+            }
         }
     }
 }
@@ -2792,24 +2826,14 @@ function showExportButton(sessionId) {
     }
 }
 
-// Listen for export progress updates
-socket.on('export_progress', (data) => {
-    const progressBar = document.getElementById('export-progress-bar');
-    const statusText = document.getElementById('export-status');
-
-    if (progressBar) {
-        progressBar.style.width = `${data.progress}%`;
-    }
-    if (statusText) {
-        statusText.textContent = data.message;
-    }
-});
+// Export progress updates will be handled in initializeSocketIO
 
 // ============================================================================
 // Exports Management Functions
 // ============================================================================
 
 function goToExportsTab() {
+    console.log('Navigating to Exports tab');
     // Navigate to the exports section (step 5)
     goToStep(5);
     // Refresh the trained models list after a short delay to ensure DOM is ready
@@ -2817,6 +2841,20 @@ function goToExportsTab() {
         refreshTrainedModels();
     }, 100);
 }
+
+function goToTestTab() {
+    console.log('Navigating to Test tab');
+    // Navigate to the test model section (step 6)
+    goToStep(6);
+    // Load testable models after a short delay to ensure DOM is ready
+    setTimeout(() => {
+        loadTestableModels();
+    }, 100);
+}
+
+// Make functions globally accessible
+window.goToExportsTab = goToExportsTab;
+window.goToTestTab = goToTestTab;
 
 async function refreshTrainedModels() {
     const modelsList = document.getElementById('trained-models-list');
@@ -3192,3 +3230,405 @@ document.addEventListener('DOMContentLoaded', () => {
     // Auto-refresh sessions on page load
     refreshSessions();
 });
+
+// ============================================================================
+// Model Testing Functions
+// ============================================================================
+
+let testableModels = [];
+let selectedTestModel = null;
+let testHistory = [];
+
+async function loadTestableModels() {
+    try {
+        const response = await fetch('/api/test/models');
+        const data = await response.json();
+        testableModels = data.models || [];
+
+        const select = document.getElementById('test-model-select');
+        if (select) {
+            select.innerHTML = '<option value="">Select a model...</option>';
+
+            testableModels.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model.session_id;
+                option.dataset.baseModel = model.base_model;
+                option.dataset.checkpointPath = model.checkpoint_path;
+                option.textContent = `${model.model_name || model.session_id} (${model.epochs || 0} epochs)`;
+                select.appendChild(option);
+            });
+        }
+
+        // Update loaded models indicator
+        if (data.loaded && data.loaded.length > 0) {
+            const loadedInfo = data.loaded.map(m => `${m.type}: ${m.id}`).join(', ');
+            console.log('Loaded models:', loadedInfo);
+        }
+
+    } catch (error) {
+        console.error('Failed to load testable models:', error);
+        showAlert('Failed to load models', 'danger');
+    }
+}
+
+function updateModelInfo() {
+    const select = document.getElementById('test-model-select');
+    const infoDiv = document.getElementById('model-info');
+
+    if (select && infoDiv) {
+        const selectedOption = select.selectedOptions[0];
+        if (selectedOption && selectedOption.value) {
+            const model = testableModels.find(m => m.session_id === selectedOption.value);
+            if (model) {
+                infoDiv.innerHTML = `
+                    <i class="fas fa-check-circle text-success"></i>
+                    <strong>${model.model_name}</strong> -
+                    Base: ${model.base_model} |
+                    Epochs: ${model.epochs || 0}
+                `;
+            }
+        } else {
+            infoDiv.innerHTML = '<i class="fas fa-info-circle"></i> No model selected';
+        }
+    }
+}
+
+async function loadFromPath() {
+    const pathInput = document.getElementById('custom-model-path');
+    if (!pathInput || !pathInput.value) {
+        showAlert('Please enter a model path', 'warning');
+        return;
+    }
+
+    const checkpointPath = pathInput.value.trim();
+
+    // Try to extract session ID from path
+    const pathParts = checkpointPath.split('/');
+    let sessionId = 'custom_' + Date.now();
+
+    // Look for outputs/session_id pattern
+    const outputsIndex = pathParts.indexOf('outputs');
+    if (outputsIndex !== -1 && outputsIndex < pathParts.length - 1) {
+        sessionId = pathParts[outputsIndex + 1];
+    }
+
+    // Prompt for base model name
+    const baseModel = prompt('Enter the base model name (e.g., meta-llama/Llama-2-7b-hf):');
+    if (!baseModel) {
+        showAlert('Base model name is required', 'warning');
+        return;
+    }
+
+    const loadBtn = document.getElementById('load-models-btn');
+    if (loadBtn) {
+        loadBtn.disabled = true;
+        loadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+    }
+
+    try {
+        // Add to registry first if needed
+        const response = await fetch('/api/test/load', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: sessionId,
+                base_model: baseModel,
+                checkpoint_path: checkpointPath
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.results && result.results.trained.success && result.results.base.success) {
+            showAlert('Models loaded successfully from path!', 'success');
+            selectedTestModel = { sessionId, baseModel };
+
+            const compareBtn = document.getElementById('compare-btn');
+            if (compareBtn) compareBtn.disabled = false;
+
+            // Update model info
+            const infoDiv = document.getElementById('model-info');
+            if (infoDiv) {
+                infoDiv.innerHTML = `
+                    <i class="fas fa-check-circle text-success"></i>
+                    <strong>Custom Model</strong> -
+                    Base: ${baseModel} |
+                    Path: ${checkpointPath}
+                `;
+            }
+        } else {
+            const errors = [];
+            if (result.results && !result.results.trained.success) {
+                errors.push(`Trained model: ${result.results.trained.error}`);
+            }
+            if (result.results && !result.results.base.success) {
+                errors.push(`Base model: ${result.results.base.error}`);
+            }
+            showAlert('Failed to load models: ' + errors.join(', '), 'danger');
+        }
+
+    } catch (error) {
+        console.error('Failed to load models from path:', error);
+        showAlert('Failed to load models: ' + error.message, 'danger');
+    } finally {
+        if (loadBtn) {
+            loadBtn.disabled = false;
+            loadBtn.innerHTML = '<i class="fas fa-download"></i> Load Selected';
+        }
+    }
+}
+
+async function loadModelsForTesting() {
+    const select = document.getElementById('test-model-select');
+    const sessionId = select.value;
+
+    if (!sessionId) {
+        showAlert('Please select a model first', 'warning');
+        return;
+    }
+
+    const selectedOption = select.selectedOptions[0];
+    const baseModel = selectedOption.dataset.baseModel;
+
+    const loadBtn = document.getElementById('load-models-btn');
+    loadBtn.disabled = true;
+    loadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+
+    try {
+        const response = await fetch('/api/test/load', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: sessionId,
+                base_model: baseModel
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.results.trained.success && result.results.base.success) {
+            showAlert('Models loaded successfully!', 'success');
+            selectedTestModel = { sessionId, baseModel };
+            document.getElementById('compare-btn').disabled = false;
+        } else {
+            const errors = [];
+            if (!result.results.trained.success) {
+                errors.push(`Trained model: ${result.results.trained.error}`);
+            }
+            if (!result.results.base.success) {
+                errors.push(`Base model: ${result.results.base.error}`);
+            }
+            showAlert('Failed to load models: ' + errors.join(', '), 'danger');
+        }
+
+    } catch (error) {
+        console.error('Failed to load models:', error);
+        showAlert('Failed to load models: ' + error.message, 'danger');
+    } finally {
+        loadBtn.disabled = false;
+        loadBtn.innerHTML = '<i class="fas fa-download"></i> Load Models';
+    }
+}
+
+async function compareModels() {
+    if (!selectedTestModel) {
+        showAlert('Please load models first', 'warning');
+        return;
+    }
+
+    const prompt = document.getElementById('test-prompt').value;
+    if (!prompt) {
+        showAlert('Please enter a test prompt', 'warning');
+        return;
+    }
+
+    const compareBtn = document.getElementById('compare-btn');
+    compareBtn.disabled = true;
+    compareBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+
+    // Show results section
+    document.getElementById('comparison-results').style.display = 'block';
+
+    // Reset results
+    document.getElementById('trained-response').innerHTML = '<div class="text-center text-muted p-3"><i class="fas fa-spinner fa-spin"></i> Generating...</div>';
+    document.getElementById('base-response').innerHTML = '<div class="text-center text-muted p-3"><i class="fas fa-spinner fa-spin"></i> Generating...</div>';
+
+    try {
+        const config = {
+            temperature: parseFloat(document.getElementById('test-temperature').value),
+            max_new_tokens: parseInt(document.getElementById('test-max-tokens').value),
+            top_p: parseFloat(document.getElementById('test-top-p').value),
+            repetition_penalty: parseFloat(document.getElementById('test-rep-penalty').value),
+            do_sample: true
+        };
+
+        const response = await fetch('/api/test/compare', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                prompt: prompt,
+                session_id: selectedTestModel.sessionId,
+                base_model: selectedTestModel.baseModel,
+                config: config,
+                use_chat_template: document.getElementById('use-chat-template').checked
+            })
+        });
+
+        const results = await response.json();
+
+        // Display trained model response
+        if (results.trained && results.trained.success) {
+            document.getElementById('trained-response').textContent = results.trained.response;
+            document.getElementById('trained-time').textContent = `${results.trained.metadata.generation_time.toFixed(2)}s`;
+            document.getElementById('trained-tokens').textContent = `${results.trained.metadata.output_tokens} tokens`;
+        } else {
+            document.getElementById('trained-response').innerHTML = `<div class="text-danger">Error: ${results.trained.error}</div>`;
+        }
+
+        // Display base model response
+        if (results.base && results.base.success) {
+            document.getElementById('base-response').textContent = results.base.response;
+            document.getElementById('base-time').textContent = `${results.base.metadata.generation_time.toFixed(2)}s`;
+            document.getElementById('base-tokens').textContent = `${results.base.metadata.output_tokens} tokens`;
+        } else {
+            document.getElementById('base-response').innerHTML = `<div class="text-danger">Error: ${results.base.error}</div>`;
+        }
+
+        // Display comparison metrics
+        if (results.comparison) {
+            document.getElementById('length-diff').textContent = results.comparison.length_diff > 0 ? `+${results.comparison.length_diff}` : results.comparison.length_diff;
+            document.getElementById('time-diff').textContent = `${results.comparison.time_diff.toFixed(2)}s`;
+
+            // Simple quality assessment (can be enhanced)
+            document.getElementById('trained-quality').textContent = '★★★★☆';
+            document.getElementById('base-quality').textContent = '★★★☆☆';
+        }
+
+        // Add to history
+        addToTestHistory(prompt, results);
+
+    } catch (error) {
+        console.error('Comparison failed:', error);
+        showAlert('Comparison failed: ' + error.message, 'danger');
+    } finally {
+        compareBtn.disabled = false;
+        compareBtn.innerHTML = '<i class="fas fa-play"></i> Compare Models';
+    }
+}
+
+function addToTestHistory(prompt, results) {
+    const historyItem = {
+        timestamp: new Date().toISOString(),
+        prompt: prompt,
+        results: results
+    };
+
+    testHistory.unshift(historyItem);
+    if (testHistory.length > 10) {
+        testHistory = testHistory.slice(0, 10);
+    }
+
+    updateTestHistoryDisplay();
+}
+
+function updateTestHistoryDisplay() {
+    const historyList = document.getElementById('test-history-list');
+
+    if (testHistory.length === 0) {
+        historyList.innerHTML = '<div class="text-muted text-center p-3">No test history yet</div>';
+        return;
+    }
+
+    historyList.innerHTML = testHistory.map((item, index) => `
+        <div class="list-group-item">
+            <div class="d-flex justify-content-between align-items-start">
+                <div class="flex-grow-1">
+                    <strong>Test ${testHistory.length - index}</strong>
+                    <small class="text-muted ms-2">${new Date(item.timestamp).toLocaleTimeString()}</small>
+                    <div class="text-truncate small text-muted mt-1">${item.prompt}</div>
+                </div>
+                <button class="btn btn-sm btn-outline-primary" onclick="viewTestResult(${index})">
+                    <i class="fas fa-eye"></i>
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function viewTestResult(index) {
+    const item = testHistory[index];
+    if (!item) return;
+
+    // Update the prompt
+    document.getElementById('test-prompt').value = item.prompt;
+
+    // Update the results
+    if (item.results.trained && item.results.trained.success) {
+        document.getElementById('trained-response').textContent = item.results.trained.response;
+        document.getElementById('trained-time').textContent = `${item.results.trained.metadata.generation_time.toFixed(2)}s`;
+        document.getElementById('trained-tokens').textContent = `${item.results.trained.metadata.output_tokens} tokens`;
+    }
+
+    if (item.results.base && item.results.base.success) {
+        document.getElementById('base-response').textContent = item.results.base.response;
+        document.getElementById('base-time').textContent = `${item.results.base.metadata.generation_time.toFixed(2)}s`;
+        document.getElementById('base-tokens').textContent = `${item.results.base.metadata.output_tokens} tokens`;
+    }
+
+    // Show results section
+    document.getElementById('comparison-results').style.display = 'block';
+}
+
+async function clearModelCache() {
+    if (!confirm('Clear all loaded models from memory?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/test/clear-cache', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            showAlert('Model cache cleared', 'success');
+            selectedTestModel = null;
+            document.getElementById('compare-btn').disabled = true;
+        }
+
+    } catch (error) {
+        console.error('Failed to clear cache:', error);
+        showAlert('Failed to clear cache', 'danger');
+    }
+}
+
+// Update range sliders
+document.addEventListener('DOMContentLoaded', function() {
+    const tempSlider = document.getElementById('test-temperature');
+    const topPSlider = document.getElementById('test-top-p');
+    const repSlider = document.getElementById('test-rep-penalty');
+
+    if (tempSlider) {
+        tempSlider.addEventListener('input', function() {
+            const tempValue = document.getElementById('test-temp-value');
+            if (tempValue) tempValue.textContent = this.value;
+        });
+    }
+
+    if (topPSlider) {
+        topPSlider.addEventListener('input', function() {
+            const topPValue = document.getElementById('test-top-p-value');
+            if (topPValue) topPValue.textContent = this.value;
+        });
+    }
+
+    if (repSlider) {
+        repSlider.addEventListener('input', function() {
+            const repValue = document.getElementById('test-rep-value');
+            if (repValue) repValue.textContent = this.value;
+        });
+    }
+});
+

@@ -38,7 +38,9 @@ from core import (
     CustomRewardBuilder,
     ModelExporter,
     SessionRegistry,
-    SessionInfo
+    SessionInfo,
+    ModelTester,
+    TestConfig
 )
 from utils.logging_config import setup_logging, get_logger
 from utils.validators import validate_training_config
@@ -1479,6 +1481,244 @@ def test_template():
             'formatted': preview
         })
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ============================================================================
+# Model Testing Routes
+# ============================================================================
+
+# Initialize model tester
+model_tester = ModelTester()
+
+
+@app.route('/api/test/models', methods=['GET'])
+def get_testable_models():
+    """Get list of trained models available for testing."""
+    try:
+        # Get completed sessions from registry
+        sessions = session_registry.list_completed_sessions()
+
+        testable_models = []
+        for session in sessions:
+            # Get base model name from training config
+            base_model = session.training_config.get('model_name', 'Unknown')
+
+            model_info = {
+                'session_id': session.session_id,
+                'model_name': session.model_name,
+                'base_model': base_model,
+                'checkpoint_path': session.checkpoint_path,
+                'created_at': session.created_at,
+                'epochs': session.epochs_trained or 0,
+                'best_reward': session.best_reward if session.best_reward != float('-inf') else None
+            }
+
+            # Check if checkpoint exists
+            if session.checkpoint_path:
+                checkpoint_path = Path(session.checkpoint_path)
+                if checkpoint_path.exists():
+                    testable_models.append(model_info)
+
+        return jsonify({
+            'models': testable_models,
+            'loaded': model_tester.get_loaded_models()
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to get testable models: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/test/load', methods=['POST'])
+def load_test_models():
+    """Load models for testing."""
+    try:
+        data = request.json
+        session_id = data.get('session_id')
+        base_model = data.get('base_model')
+
+        if not session_id or not base_model:
+            return jsonify({'error': 'session_id and base_model required'}), 400
+
+        # Get checkpoint path from registry
+        session_info = session_registry.get_session(session_id)
+        if not session_info:
+            return jsonify({'error': 'Session not found'}), 404
+
+        checkpoint_path = session_info.checkpoint_path
+        if not checkpoint_path or not Path(checkpoint_path).exists():
+            return jsonify({'error': 'Checkpoint not found'}), 404
+
+        results = {}
+
+        # Load trained model
+        success, error = model_tester.load_trained_model(checkpoint_path, session_id)
+        results['trained'] = {'success': success, 'error': error}
+
+        # Load base model
+        success, error = model_tester.load_base_model(base_model)
+        results['base'] = {'success': success, 'error': error}
+
+        return jsonify({
+            'results': results,
+            'loaded_models': model_tester.get_loaded_models()
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to load models: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/test/generate', methods=['POST'])
+def generate_test_response():
+    """Generate response from a model."""
+    try:
+        data = request.json
+        prompt = data.get('prompt')
+        model_type = data.get('model_type', 'trained')  # 'trained' or 'base'
+        model_key = data.get('model_key')  # session_id or base_model_name
+
+        # Generation config
+        config_data = data.get('config', {})
+        config = TestConfig(
+            temperature=config_data.get('temperature', 0.7),
+            max_new_tokens=config_data.get('max_new_tokens', 512),
+            top_p=config_data.get('top_p', 0.95),
+            top_k=config_data.get('top_k', 50),
+            repetition_penalty=config_data.get('repetition_penalty', 1.0),
+            do_sample=config_data.get('do_sample', True)
+        )
+
+        use_chat_template = data.get('use_chat_template', True)
+
+        if not prompt or not model_key:
+            return jsonify({'error': 'prompt and model_key required'}), 400
+
+        # Generate response
+        result = model_tester.generate_response(
+            prompt=prompt,
+            model_type=model_type,
+            model_key=model_key,
+            config=config,
+            use_chat_template=use_chat_template
+        )
+
+        return jsonify(result)
+
+    except Exception as e:
+        logger.error(f"Failed to generate response: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/test/compare', methods=['POST'])
+def compare_models():
+    """Compare responses from trained and base models."""
+    try:
+        data = request.json
+        prompt = data.get('prompt')
+        session_id = data.get('session_id')
+        base_model = data.get('base_model')
+
+        # Generation config
+        config_data = data.get('config', {})
+        config = TestConfig(
+            temperature=config_data.get('temperature', 0.7),
+            max_new_tokens=config_data.get('max_new_tokens', 512),
+            top_p=config_data.get('top_p', 0.95),
+            top_k=config_data.get('top_k', 50),
+            repetition_penalty=config_data.get('repetition_penalty', 1.0),
+            do_sample=config_data.get('do_sample', True)
+        )
+
+        use_chat_template = data.get('use_chat_template', True)
+
+        if not prompt or not session_id or not base_model:
+            return jsonify({'error': 'prompt, session_id, and base_model required'}), 400
+
+        # First ensure models are loaded
+        session_info = session_registry.get_session(session_id)
+        if not session_info:
+            return jsonify({'error': 'Session not found'}), 404
+
+        checkpoint_path = session_info.checkpoint_path
+        if not checkpoint_path or not Path(checkpoint_path).exists():
+            return jsonify({'error': 'Checkpoint not found'}), 404
+
+        # Load models if not already loaded
+        trained_cache_key = f"trained_{session_id}"
+        base_cache_key = f"base_{base_model.replace('/', '_')}"
+
+        if trained_cache_key not in model_tester.loaded_models:
+            success, error = model_tester.load_trained_model(checkpoint_path, session_id)
+            if not success:
+                return jsonify({'error': f'Failed to load trained model: {error}'}), 500
+
+        if base_cache_key not in model_tester.loaded_models:
+            success, error = model_tester.load_base_model(base_model)
+            if not success:
+                return jsonify({'error': f'Failed to load base model: {error}'}), 500
+
+        # Compare models
+        results = model_tester.compare_models(
+            prompt=prompt,
+            trained_session_id=session_id,
+            base_model_name=base_model,
+            config=config,
+            use_chat_template=use_chat_template
+        )
+
+        return jsonify(results)
+
+    except Exception as e:
+        logger.error(f"Failed to compare models: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/test/chat-template', methods=['GET', 'POST'])
+def manage_chat_template():
+    """Get or set the chat template for base model."""
+    try:
+        if request.method == 'GET':
+            return jsonify({
+                'template': model_tester.base_chat_template
+            })
+        else:
+            data = request.json
+            template = data.get('template')
+
+            if not template or '{prompt}' not in template:
+                return jsonify({'error': 'Invalid template, must contain {prompt} placeholder'}), 400
+
+            model_tester.set_chat_template(template)
+
+            return jsonify({
+                'success': True,
+                'message': 'Chat template updated'
+            })
+
+    except Exception as e:
+        logger.error(f"Failed to manage chat template: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/test/clear-cache', methods=['POST'])
+def clear_model_cache():
+    """Clear loaded models from memory."""
+    try:
+        data = request.json or {}
+        model_key = data.get('model_key')
+
+        model_tester.clear_model_cache(model_key)
+
+        return jsonify({
+            'success': True,
+            'message': f'Cleared cache for {model_key}' if model_key else 'Cleared all model cache',
+            'loaded_models': model_tester.get_loaded_models()
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to clear cache: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 

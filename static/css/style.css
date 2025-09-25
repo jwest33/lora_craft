@@ -14,7 +14,7 @@
 
     --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     --gradient-secondary: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    --gradient-success: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);    
+    --gradient-success: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
 
     /* Primary Colors */
     --primary: #6366f1;
@@ -39,6 +39,11 @@
     --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
     --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+    /* Additional variables for compatibility */
+    --card-bg: #ffffff;
+    --dark-bg: #f3f4f6;
+    --hover-bg: #f9fafb;
 }
 
 /* Dark Theme */
@@ -55,6 +60,11 @@
     --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
     --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
     --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+
+    /* Additional variables for compatibility */
+    --card-bg: #1e293b;
+    --dark-bg: #0f172a;
+    --hover-bg: #334155;
 }
 
 /* Dataset Card Styles */
@@ -232,9 +242,11 @@ body {
 .sidebar-card {
     background: var(--bg-card);
     border-radius: 16px;
-    overflow: visible; /* Changed from hidden to visible to prevent button clipping */
+    overflow: visible !important; /* Changed from hidden to visible to prevent button clipping */
     box-shadow: var(--shadow-md);
     transition: transform 0.3s ease, box-shadow 0.3s ease;
+    position: relative;
+    z-index: 10;
 }
 
 .sidebar-card:hover {
@@ -264,8 +276,10 @@ body {
 /* Fix button styling in sidebar */
 .sidebar-card .btn {
     white-space: nowrap;
-    overflow: hidden;
+    overflow: visible !important; /* Fix button clicks being blocked */
     text-overflow: ellipsis;
+    position: relative;
+    z-index: 1;
 }
 
 .sessions-list {
@@ -309,6 +323,11 @@ body {
     z-index: 2;
     cursor: pointer;
     transition: all 0.3s ease;
+}
+
+.step:hover .step-icon {
+    transform: scale(1.1);
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
 }
 
 .step-icon {
@@ -1180,14 +1199,45 @@ body {
 }
 
 .model-card {
-    border: 1px solid var(--border-color);
+    background-color: var(--bg-card) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border-color) !important;
     border-radius: 8px;
     transition: all 0.3s ease;
+    margin-bottom: 10px;
+    padding: 15px;
 }
 
 .model-card:hover {
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    background-color: var(--hover-bg) !important;
+    box-shadow: var(--shadow-md);
     transform: translateY(-2px);
+}
+
+/* Ensure all text in model cards is visible */
+.model-card h6,
+.model-card .card-title {
+    color: var(--text-primary) !important;
+}
+
+.model-card p,
+.model-card .card-text {
+    color: var(--text-secondary) !important;
+}
+
+.model-card small {
+    color: var(--text-muted) !important;
+}
+
+.model-card .btn {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+
+.model-card .btn:hover {
+    background-color: var(--primary-dark);
+    border-color: var(--primary-dark);
 }
 
 .export-history {
@@ -1197,13 +1247,33 @@ body {
 }
 
 .export-item {
-    border: 1px solid var(--border-color);
+    background-color: var(--bg-card) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border-color) !important;
     border-radius: 6px;
     transition: all 0.2s ease;
+    padding: 10px;
+    margin-bottom: 8px;
 }
 
 .export-item:hover {
-    background-color: var(--hover-bg);
+    background-color: var(--hover-bg) !important;
+    box-shadow: var(--shadow-sm);
+}
+
+/* Fix export item text colors */
+.export-item h6,
+.export-item .fw-semibold {
+    color: var(--text-primary) !important;
+}
+
+.export-item .text-muted {
+    color: var(--text-muted) !important;
+}
+
+.export-item .badge {
+    background-color: var(--primary);
+    color: white;
 }
 
 .model-details {
@@ -1218,7 +1288,250 @@ body {
 .models-section,
 .exports-section {
     background-color: var(--card-bg);
+    color: var(--text-primary);
     padding: 15px;
     border-radius: 10px;
     border: 1px solid var(--border-color);
+}
+
+/* Fix text colors in models and exports sections */
+.models-section .text-muted,
+.exports-section .text-muted {
+    color: var(--text-muted) !important;
+}
+
+.models-section h6,
+.exports-section h6 {
+    color: var(--text-primary) !important;
+}
+
+.models-section small,
+.exports-section small {
+    color: var(--text-secondary) !important;
+}
+
+/* Model Testing Section Styles */
+.model-testing-section {
+    padding: 20px;
+    background-color: var(--bg-card);
+    color: var(--text-primary);
+}
+
+/* Override Bootstrap card styles for step containers */
+#step-6 > .card,
+#step-6 .card,
+.model-testing-section .card {
+    background-color: var(--bg-card) !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-primary) !important;
+}
+
+/* Ensure the main step card matches other steps */
+.step-container .card {
+    background-color: var(--bg-card) !important;
+    border: 1px solid var(--border-color) !important;
+}
+
+#step-6 .card-body,
+.model-testing-section .card-body {
+    background-color: var(--bg-card) !important;
+    color: var(--text-primary) !important;
+}
+
+#step-6 .step-header,
+#step-6 .card-header,
+.model-testing-section .card-header {
+    background: var(--bg-tertiary) !important;
+    color: var(--text-primary) !important;
+    border-bottom: 1px solid var(--border-color) !important;
+}
+
+/* Ensure step header hover effect */
+#step-6 .step-header:hover {
+    background: var(--bg-secondary) !important;
+}
+
+/* Fix label colors */
+.model-testing-section .form-label,
+.model-testing-section label {
+    color: var(--text-primary) !important;
+    font-weight: 500;
+}
+
+.model-testing-section .text-muted {
+    color: var(--text-muted) !important;
+}
+
+.model-testing-section small {
+    color: var(--text-secondary) !important;
+}
+
+.generation-config {
+    background-color: var(--hover-bg);
+    padding: 20px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+}
+
+/* Ensure form controls use proper colors */
+.model-testing-section .form-control,
+.model-testing-section .form-select {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+.model-testing-section .form-control:focus,
+.model-testing-section .form-select:focus {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
+}
+
+.test-prompt {
+    margin-top: 20px;
+}
+
+.test-prompt textarea {
+    font-family: 'Fira Code', 'Courier New', monospace;
+    background-color: var(--dark-bg);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    padding: 15px;
+    border-radius: 8px;
+}
+
+.comparison-results {
+    margin-top: 30px;
+    animation: fadeIn 0.5s ease-in;
+}
+
+.response-content {
+    background-color: var(--dark-bg);
+    padding: 15px;
+    border-radius: 8px;
+    min-height: 150px;
+    max-height: 400px;
+    overflow-y: auto;
+    font-family: 'Inter', sans-serif;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.response-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.response-content::-webkit-scrollbar-track {
+    background: var(--dark-bg);
+    border-radius: 4px;
+}
+
+.response-content::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+.response-content::-webkit-scrollbar-thumb:hover {
+    background: var(--primary);
+}
+
+.comparison-metrics {
+    background-color: var(--hover-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 20px;
+}
+
+.comparison-metrics .metric {
+    text-align: center;
+    padding: 15px;
+}
+
+.comparison-metrics .metric-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--primary);
+    margin-bottom: 5px;
+    font-family: 'Fira Code', monospace;
+}
+
+.comparison-metrics .metric-label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.test-history {
+    background-color: var(--card-bg);
+    padding: 20px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+}
+
+.test-history .list-group-item {
+    background-color: var(--hover-bg);
+    border: 1px solid var(--border-color);
+    margin-bottom: 10px;
+    border-radius: 8px;
+    padding: 15px;
+    transition: all 0.3s ease;
+}
+
+.test-history .list-group-item:hover {
+    background-color: var(--dark-bg);
+    border-color: var(--primary);
+    transform: translateX(5px);
+}
+
+/* Model Testing Card Styles */
+.model-testing-section .card {
+    box-shadow: var(--shadow-sm);
+    transition: all 0.3s ease;
+}
+
+.model-testing-section .card:hover {
+    box-shadow: var(--shadow-lg);
+}
+
+.model-testing-section .border-success {
+    border-color: var(--success) !important;
+    border-width: 2px !important;
+}
+
+.model-testing-section .border-primary {
+    border-color: var(--primary) !important;
+    border-width: 2px !important;
+}
+
+.model-testing-section .bg-success {
+    background: linear-gradient(135deg, var(--success), #0f9460);
+}
+
+.model-testing-section .bg-primary {
+    background: linear-gradient(135deg, var(--primary), #1e40af);
+}
+
+/* Loading States */
+.model-testing-section .fa-spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }

@@ -102,6 +102,9 @@
                         <button class="btn btn-success w-100 mb-2" onclick="goToExportsTab()">
                             <i class="fas fa-file-export"></i> Manage Exports
                         </button>
+                        <button class="btn btn-info w-100 mb-2" onclick="goToTestTab()">
+                            <i class="fas fa-vial"></i> Test Model
+                        </button>
                         <button class="btn btn-outline-secondary w-100 mb-2" onclick="loadConfig()">
                             <i class="fas fa-folder-open"></i> Load Config
                         </button>
@@ -117,39 +120,46 @@
                 <!-- Progress Indicator -->
                 <div class="workflow-progress mb-4">
                     <div class="progress-steps">
-                        <div class="step active" id="step-1-indicator">
+                        <div class="step active" id="step-1-indicator" onclick="goToStep(1)" style="cursor: pointer;">
                             <div class="step-icon">
                                 <i class="fas fa-brain"></i>
                             </div>
                             <div class="step-label">Model</div>
                         </div>
                         <div class="step-line"></div>
-                        <div class="step" id="step-2-indicator">
+                        <div class="step" id="step-2-indicator" onclick="goToStep(2)" style="cursor: pointer;">
                             <div class="step-icon">
                                 <i class="fas fa-database"></i>
                             </div>
                             <div class="step-label">Dataset</div>
                         </div>
                         <div class="step-line"></div>
-                        <div class="step" id="step-3-indicator">
+                        <div class="step" id="step-3-indicator" onclick="goToStep(3)" style="cursor: pointer;">
                             <div class="step-icon">
                                 <i class="fas fa-sliders-h"></i>
                             </div>
                             <div class="step-label">Training</div>
                         </div>
                         <div class="step-line"></div>
-                        <div class="step" id="step-4-indicator">
+                        <div class="step" id="step-4-indicator" onclick="goToStep(4)" style="cursor: pointer;">
                             <div class="step-icon">
                                 <i class="fas fa-rocket"></i>
                             </div>
                             <div class="step-label">Train</div>
                         </div>
                         <div class="step-line"></div>
-                        <div class="step" id="step-5-indicator">
+                        <div class="step" id="step-5-indicator" onclick="goToStep(5); setTimeout(() => refreshTrainedModels(), 100);" style="cursor: pointer;">
                             <div class="step-icon">
                                 <i class="fas fa-file-export"></i>
                             </div>
                             <div class="step-label">Exports</div>
+                        </div>
+                        <div class="step-line"></div>
+                        <div class="step" id="step-6-indicator" onclick="goToStep(6); setTimeout(() => loadTestableModels(), 100);" style="cursor: pointer;">
+                            <div class="step-icon">
+                                <i class="fas fa-vial"></i>
+                            </div>
+                            <div class="step-label">Test</div>
                         </div>
                     </div>
                 </div>
@@ -1016,7 +1026,7 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
 
                             <div class="row">
                                 <!-- Left Column: Trained Models -->
-                                <div class="col-lg-7">
+                                <div class="col-lg-8">
                                     <div class="models-section">
                                         <h6 class="fw-bold mb-3">
                                             <i class="fas fa-brain"></i> Available Models
@@ -1031,7 +1041,7 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                 </div>
 
                                 <!-- Right Column: Export History -->
-                                <div class="col-lg-5">
+                                <div class="col-lg-4">
                                     <div class="exports-section">
                                         <h6 class="fw-bold mb-3">
                                             <i class="fas fa-file-export"></i> Recent Exports
@@ -1070,13 +1080,221 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                 <button class="btn btn-primary ms-2" onclick="goToStep(1)">
                                     <i class="fas fa-plus"></i> Train New Model
                                 </button>
+                                <button class="btn btn-success ms-2" onclick="goToStep(6)">
+                                    <i class="fas fa-vial"></i> Test Model
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 6: Test Model -->
+                <div class="step-container mt-4" id="step-6">
+                <div class="card">
+                    <div class="step-header card-header" onclick="toggleStep(6)">
+                        <h4>
+                            <span class="step-number">6</span>
+                            Test Model
+                            <i class="fas fa-chevron-down float-end" id="step-6-chevron"></i>
+                        </h4>
+                    </div>
+                    <div class="step-content collapse" id="step-6-content">
+                        <!-- Model Testing Section -->
+                        <div class="model-testing-section p-4">
+                            <h5 class="section-title mb-4">
+                                <i class="fas fa-balance-scale"></i> Model Comparison
+                            </h5>
+
+                            <!-- Model Selection -->
+                            <div class="card mb-4">
+                                <div class="card-body">
+                                    <h6 class="card-title fw-bold mb-3">
+                                        <i class="fas fa-robot"></i> Model Selection
+                                    </h6>
+                                    <div class="row">
+                                        <div class="col-lg-6 mb-3">
+                                            <label class="form-label">Select Trained Model</label>
+                                            <select class="form-select" id="test-model-select" onchange="updateModelInfo()">
+                                                <option value="">Loading models...</option>
+                                            </select>
+                                            <small class="text-muted">Choose from your trained models</small>
+                                        </div>
+                                        <div class="col-lg-6 mb-3">
+                                            <label class="form-label">Or Load from Path</label>
+                                            <div class="input-group">
+                                                <input type="text" class="form-control" id="custom-model-path"
+                                                       placeholder="./outputs/session_id/checkpoints/final">
+                                                <button class="btn btn-outline-secondary" type="button" onclick="loadFromPath()">
+                                                    <i class="fas fa-folder-open"></i> Load
+                                                </button>
+                                            </div>
+                                            <small class="text-muted">Enter path to model checkpoint</small>
+                                        </div>
+                                    </div>
+                                    <div class="mt-3 d-flex justify-content-between align-items-center">
+                                        <div id="model-info" class="text-muted small">
+                                            <i class="fas fa-info-circle"></i> No model selected
+                                        </div>
+                                        <div>
+                                            <button class="btn btn-primary me-2" onclick="loadModelsForTesting()" id="load-models-btn">
+                                                <i class="fas fa-download"></i> Load Selected
+                                            </button>
+                                            <button class="btn btn-outline-secondary" onclick="clearModelCache()">
+                                                <i class="fas fa-broom"></i> Clear Cache
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Test Configuration -->
+                            <div class="generation-config mb-4">
+                                <h6 class="fw-bold mb-3">
+                                    <i class="fas fa-cog"></i> Generation Settings
+                                </h6>
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <label class="form-label">Temperature</label>
+                                        <input type="range" class="form-range" id="test-temperature" min="0" max="2" step="0.1" value="0.7">
+                                        <small class="text-muted">Value: <span id="test-temp-value">0.7</span></small>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Max Tokens</label>
+                                        <input type="number" class="form-control" id="test-max-tokens" value="512" min="32" max="2048">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Top P</label>
+                                        <input type="range" class="form-range" id="test-top-p" min="0" max="1" step="0.05" value="0.95">
+                                        <small class="text-muted">Value: <span id="test-top-p-value">0.95</span></small>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Repetition Penalty</label>
+                                        <input type="range" class="form-range" id="test-rep-penalty" min="0.5" max="2" step="0.1" value="1.0">
+                                        <small class="text-muted">Value: <span id="test-rep-value">1.0</span></small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Test Prompt -->
+                            <div class="test-prompt mb-4">
+                                <h6 class="fw-bold mb-3">
+                                    <i class="fas fa-edit"></i> Test Prompt
+                                </h6>
+                                <textarea class="form-control" id="test-prompt" rows="4" placeholder="Enter your test prompt here...">What is 25 * 47?</textarea>
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="checkbox" id="use-chat-template" checked>
+                                    <label class="form-check-label" for="use-chat-template">
+                                        Use chat template
+                                    </label>
+                                </div>
+                                <div class="mt-3">
+                                    <button class="btn btn-success btn-lg w-100" onclick="compareModels()" id="compare-btn">
+                                        <i class="fas fa-play"></i> Compare Models
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Comparison Results -->
+                            <div class="comparison-results" id="comparison-results" style="display: none;">
+                                <h6 class="fw-bold mb-3">
+                                    <i class="fas fa-chart-bar"></i> Results
+                                </h6>
+                                <div class="row">
+                                    <!-- Trained Model Response -->
+                                    <div class="col-lg-6 mb-3">
+                                        <div class="card border-success">
+                                            <div class="card-header bg-success text-white">
+                                                <i class="fas fa-graduation-cap"></i> Trained Model
+                                                <span class="badge bg-white text-success float-end" id="trained-time">-</span>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="response-content" id="trained-response">
+                                                    <div class="text-center text-muted p-3">
+                                                        <i class="fas fa-hourglass"></i> Waiting for response...
+                                                    </div>
+                                                </div>
+                                                <div class="mt-2 small text-muted">
+                                                    Tokens: <span id="trained-tokens">-</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Base Model Response -->
+                                    <div class="col-lg-6 mb-3">
+                                        <div class="card border-primary">
+                                            <div class="card-header bg-primary text-white">
+                                                <i class="fas fa-cube"></i> Base Model
+                                                <span class="badge bg-white text-primary float-end" id="base-time">-</span>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="response-content" id="base-response">
+                                                    <div class="text-center text-muted p-3">
+                                                        <i class="fas fa-hourglass"></i> Waiting for response...
+                                                    </div>
+                                                </div>
+                                                <div class="mt-2 small text-muted">
+                                                    Tokens: <span id="base-tokens">-</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Comparison Metrics -->
+                                <div class="comparison-metrics card mt-3">
+                                    <div class="card-body">
+                                        <h6 class="fw-bold">Comparison Metrics</h6>
+                                        <div class="row text-center">
+                                            <div class="col-md-3">
+                                                <div class="metric">
+                                                    <div class="metric-value" id="length-diff">-</div>
+                                                    <div class="metric-label">Length Difference</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="metric">
+                                                    <div class="metric-value" id="time-diff">-</div>
+                                                    <div class="metric-label">Time Difference</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="metric">
+                                                    <div class="metric-value" id="trained-quality">-</div>
+                                                    <div class="metric-label">Trained Quality</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="metric">
+                                                    <div class="metric-value" id="base-quality">-</div>
+                                                    <div class="metric-label">Base Quality</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Test History -->
+                                <div class="test-history mt-4">
+                                    <h6 class="fw-bold mb-3">
+                                        <i class="fas fa-history"></i> Test History
+                                    </h6>
+                                    <div id="test-history-list" class="list-group">
+                                        <!-- Test history will be populated here -->
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+            <!-- End of Step 6 -->
         </div>
+        <!-- End of col-lg-9 main content -->
     </div>
+    <!-- End of row -->
+</div>
+<!-- End of container-fluid -->
 
     <!-- Modals -->
     <!-- System Info Modal -->
