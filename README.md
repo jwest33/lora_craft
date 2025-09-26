@@ -2,7 +2,7 @@
 
 A web-based application for fine-tuning large language models using Low-Rank Adaptation (LoRA) and Group Relative Policy Optimization (GRPO). Built for researchers and developers who need powerful, accessible LLM training on consumer hardware.
 
-![App](docs\example_model_select.jpg)
+![App](docs//example_model_select.jpg)
 
 ## Features
 
