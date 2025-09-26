@@ -1,5 +1,5 @@
 {
-  "name": "GRPO Fine-Tuner",
+  "name": "LoRA Craft",
   "short_name": "GRPO",
   "description": "Advanced GRPO/GSPO fine-tuning interface for language models",
   "start_url": "/",
@@ -8,7 +8,7 @@
   "background_color": "#ffffff",
   "icons": [
     {
-      "src": "/static/images/icon.png",
+      "src": "/static/images/lora_craft.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

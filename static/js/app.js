@@ -1,4 +1,4 @@
-// GRPO Fine-Tuner Unified Interface JavaScript
+// LoRA Craft Unified Interface JavaScript
 
 // Global variables
 let socket = null;
@@ -27,33 +27,42 @@ document.addEventListener('DOMContentLoaded', function() {
 function initializeApp() {
     // Initialize Socket.IO
     initializeSocketIO();
-    
+
     // Load models
     loadAvailableModels();
-    
+
     // Load templates
     loadAvailableTemplates();
-    
+
     // Refresh sessions
     refreshSessions();
-    
+
+    // Load saved configurations
+    loadConfigList();
+
     // Setup event listeners
     setupEventListeners();
-    
+
     // Initialize tooltips
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
-    
+
+    // Add scroll effect for floating icon
+    setupIconScrollEffect();
+
     // Load saved state from localStorage
     loadSavedState();
-    
+
     // Update system status
     updateSystemStatus();
-    
+
     // Set initial template preview
     updateTemplatePreview();
+
+    // Initialize chat template preview
+    setTimeout(initializeChatTemplate, 100); // Small delay to ensure DOM is ready
 }
 
 // ============================================================================
@@ -126,9 +135,16 @@ function initializeSocketIO() {
 }
 
 function updateConnectionStatus(status) {
-    const statusEl = document.getElementById('connection-status');
-    statusEl.textContent = status;
-    statusEl.className = status === 'Online' ? 'text-success' : 'text-danger';
+    const connectionIndicator = document.getElementById('connection-indicator');
+    if (connectionIndicator) {
+        if (status === 'Online') {
+            connectionIndicator.classList.add('online');
+            connectionIndicator.classList.remove('offline');
+        } else {
+            connectionIndicator.classList.add('offline');
+            connectionIndicator.classList.remove('online');
+        }
+    }
 }
 
 // ============================================================================
@@ -269,13 +285,31 @@ function validateStep(stepNum) {
     switch (stepNum) {
         case 1:
             // Validate model selection
+            const customModelPath = document.getElementById('custom-model-path')?.value?.trim();
             const modelName = document.getElementById('model-name').value;
-            if (!modelName) {
-                showAlert('Please select a model', 'warning');
+
+            if (!customModelPath && !modelName) {
+                showAlert('Please select a model or provide a custom model path', 'warning');
                 return false;
             }
+
+            // Validate quantization settings
+            const use4bit = document.getElementById('use-4bit')?.checked;
+            const use8bit = document.getElementById('use-8bit')?.checked;
+            if (use4bit && use8bit) {
+                showAlert('Cannot use both 4-bit and 8-bit quantization simultaneously', 'warning');
+                return false;
+            }
+
+            // Check LoRA configuration has at least one target module
+            const targetModules = document.querySelectorAll('[id^="target-"]:checked');
+            if (targetModules.length === 0 && document.getElementById('setup-mode')?.value !== 'setup-recommended') {
+                // Only warn if not in recommended mode
+                console.log('Warning: No LoRA target modules selected, will use defaults');
+            }
+
             return true;
-            
+
         case 2:
             // Validate dataset
             const datasetPath = document.getElementById('dataset-path').value;
@@ -284,13 +318,13 @@ function validateStep(stepNum) {
                 return false;
             }
             return true;
-            
+
         case 3:
             // Validate training parameters
             const epochs = document.getElementById('num-epochs').value;
             const batchSize = document.getElementById('batch-size').value;
             const lr = document.getElementById('learning-rate').value;
-            
+
             if (!epochs || epochs < 1) {
                 showAlert('Please enter valid number of epochs', 'warning');
                 return false;
@@ -303,11 +337,38 @@ function validateStep(stepNum) {
                 showAlert('Please enter valid learning rate', 'warning');
                 return false;
             }
+
+            // Validate max sequence length vs max new tokens
+            const maxSeqLen = parseInt(document.getElementById('max-sequence-length')?.value || 2048);
+            const maxNewTokens = parseInt(document.getElementById('max-new-tokens')?.value || 256);
+            if (maxNewTokens >= maxSeqLen) {
+                showAlert('Max new tokens must be less than max sequence length', 'warning');
+                return false;
+            }
+
+            // Validate gradient accumulation
+            const gradAccum = parseInt(document.getElementById('gradient-accumulation')?.value || 1);
+            if (gradAccum < 1) {
+                showAlert('Gradient accumulation steps must be at least 1', 'warning');
+                return false;
+            }
+
+            // Validate batch size and num_generations compatibility
+            const numGenerations = parseInt(document.getElementById('num-generations')?.value || 4);
+            if (batchSize % numGenerations !== 0) {
+                console.log(`Note: Batch size (${batchSize}) is not divisible by num_generations (${numGenerations}). This will be adjusted automatically during training.`);
+                // Show a non-blocking info message
+                const adjustedBatchSize = numGenerations <= batchSize ?
+                    Math.floor(batchSize / numGenerations) * numGenerations :
+                    numGenerations;
+                console.log(`Batch size will be adjusted to ${adjustedBatchSize} for GRPO compatibility.`);
+            }
+
             return true;
-            
+
         case 4:
             return true;
-            
+
         default:
             return false;
     }
@@ -336,7 +397,7 @@ async function loadAvailableModels() {
     try {
         const response = await fetch('/api/models');
         availableModels = await response.json();
-        updateModelList();
+        updateModelList(); // This will call updateConfigSummary
     } catch (error) {
         console.error('Failed to load models:', error);
         showAlert('Failed to load models', 'danger');
@@ -353,13 +414,21 @@ function updateModelList() {
     updateRecommendedIfActive();
 
     if (availableModels[family]) {
-        availableModels[family].forEach(model => {
+        availableModels[family].forEach((model, index) => {
             const option = document.createElement('option');
             option.value = model.id;
             option.textContent = `${model.name} (${model.vram})`;
             modelSelect.appendChild(option);
         });
+
+        // Ensure first option is selected
+        if (modelSelect.options.length > 0) {
+            modelSelect.selectedIndex = 0;
+        }
     }
+
+    // Update config summary whenever model list changes
+    updateConfigSummary();
 }
 
 // Model configuration modes
@@ -420,6 +489,9 @@ function applyLoRAPreset(preset) {
 
         // Visual feedback
         showAlert(`Applied ${preset} VRAM preset`, 'success');
+
+        // Update configuration summary
+        updateConfigSummary();
     }
 }
 
@@ -553,18 +625,33 @@ async function loadDatasetCatalog() {
     // First load status for all datasets
     await updateDatasetStatuses();
 
-    // Show cache management bar
-    document.getElementById('cache-management-bar').style.display = 'block';
-    await refreshCacheInfo();
+    // Get currently selected dataset path
+    const currentDatasetPath = document.getElementById('dataset-path').value;
 
     Object.entries(datasetCatalog).forEach(([key, dataset]) => {
         const card = createDatasetCard(key, dataset);
         grid.appendChild(card);
     });
+
+    // After all cards are created, set the selected state
+    setTimeout(() => {
+        const path = document.getElementById('dataset-path').value;
+        if (path) {
+            Object.entries(datasetCatalog).forEach(([key, dataset]) => {
+                if (dataset.path === path) {
+                    const card = document.querySelector(`.dataset-catalog-card[data-key="${key}"]`);
+                    if (card) {
+                        document.querySelectorAll('.dataset-catalog-card').forEach(c => c.classList.remove('selected'));
+                        card.classList.add('selected');
+                    }
+                }
+            });
+        }
+    }, 100);
 }
 
 async function updateDatasetStatuses() {
-    // Get status for all popular datasets
+    // Get status for all Public Datasets
     try {
         const response = await fetch('/api/datasets/list');
         const data = await response.json();
@@ -599,33 +686,35 @@ function createDatasetCard(key, dataset) {
         statusIcon = '<i class="fas fa-check-circle text-success"></i>';
         statusClass = 'cached';
         actionButtons = `
-            <button class="btn btn-sm btn-success mt-2" onclick="selectDataset('${key}')">
+            <button class="btn btn-sm btn-success mt-2" onclick="event.stopPropagation(); selectDataset('${key}')">
                 <i class="fas fa-check"></i> Use Dataset
             </button>
-            <button class="btn btn-sm btn-info mt-2" onclick="previewDataset('${key}')">
+            <button class="btn btn-sm btn-info mt-2" onclick="event.stopPropagation(); previewDataset('${key}')">
                 <i class="fas fa-eye"></i> Preview
             </button>
-            <div class="mt-1">
-                <small class="text-muted">
-                    Cached: ${status.cache_info ? status.cache_info.size_mb + ' MB' : ''}
-                </small>
-                <button class="btn btn-sm btn-link text-danger p-0 ms-2" onclick="clearDatasetCache('${key}')">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </div>
         `;
     } else {
         statusIcon = '<i class="fas fa-cloud-download-alt text-muted"></i>';
         statusClass = 'not-cached';
         actionButtons = `
-            <button class="btn btn-sm btn-primary mt-2" onclick="downloadDataset('${key}')">
+            <button class="btn btn-sm btn-primary mt-2" onclick="event.stopPropagation(); downloadDataset('${key}')">
                 <i class="fas fa-download"></i> Download
             </button>
-            <button class="btn btn-sm btn-outline-secondary mt-2" onclick="previewDataset('${key}')">
+            <button class="btn btn-sm btn-outline-secondary mt-2" onclick="event.stopPropagation(); previewDataset('${key}')">
                 <i class="fas fa-eye"></i> Sample
             </button>
         `;
     }
+
+    // Make entire card clickable
+    card.style.cursor = 'pointer';
+    card.onclick = function(e) {
+        // Don't select if clicking on action buttons
+        if (!e.target.closest('.dataset-actions button')) {
+            e.stopPropagation();
+            selectDataset(key);
+        }
+    };
 
     card.innerHTML = `
         <div class="dataset-status ${statusClass}">
@@ -648,6 +737,20 @@ function selectDataset(key) {
         // Update the dataset path
         document.getElementById('dataset-path').value = dataset.path;
 
+        // Update visual selection - remove selected class from all cards
+        document.querySelectorAll('.dataset-catalog-card').forEach(card => {
+            card.classList.remove('selected');
+        });
+
+        // Add selected class to the chosen card
+        const selectedCard = document.querySelector(`.dataset-catalog-card[data-key="${key}"]`);
+        if (selectedCard) {
+            selectedCard.classList.add('selected');
+        }
+
+        // Update configuration summary
+        updateConfigSummary();
+
         // Store the config if available (for multi-config datasets)
         if (dataset.config) {
             // Store config in a data attribute or hidden field
@@ -666,12 +769,6 @@ function selectDataset(key) {
 
         // Visual feedback
         showAlert(`Selected ${dataset.name} dataset`, 'success');
-
-        // Highlight selected card
-        document.querySelectorAll('.dataset-catalog-card').forEach(card => {
-            card.classList.remove('selected');
-        });
-        event.currentTarget.parentElement.classList.add('selected');
     }
 }
 
@@ -750,23 +847,17 @@ function setupTemplateHandlers() {
     document.getElementById('template-custom').addEventListener('change', function() {
         if (this.checked) handleTemplateMode('custom');
     });
-
-    document.getElementById('template-import').addEventListener('change', function() {
-        if (this.checked) handleTemplateMode('import');
-    });
 }
 
 function handleTemplateMode(mode) {
     const templateEditor = document.getElementById('template-editor');
-    const templateImport = document.getElementById('template-import');
     const editBtn = document.getElementById('edit-template-btn');
 
     switch(mode) {
         case 'grpo-default':
-            // Hide editor and import
+            // Hide editor
             templateEditor.style.display = 'none';
-            templateImport.style.display = 'none';
-            editBtn.style.display = 'none';
+            if (editBtn) editBtn.style.display = 'none';
             // Load default GRPO template
             loadDefaultGRPOTemplate();
             break;
@@ -774,19 +865,9 @@ function handleTemplateMode(mode) {
         case 'custom':
             // Show editor
             templateEditor.style.display = 'block';
-            templateImport.style.display = 'none';
-            editBtn.style.display = 'inline';
+            if (editBtn) editBtn.style.display = 'inline';
             // Enable template editing
             enableTemplateEditing();
-            break;
-
-        case 'import':
-            // Show import options
-            templateEditor.style.display = 'none';
-            templateImport.style.display = 'block';
-            editBtn.style.display = 'none';
-            // Load saved templates list
-            loadSavedTemplatesList();
             break;
     }
 
@@ -979,6 +1060,216 @@ function importTemplateFile() {
 }
 
 // ============================================================================
+// Chat Template Management
+// ============================================================================
+
+const chatTemplatePresets = {
+    grpo: {
+        template: "{% if messages[0]['role'] == 'system' %}{{ messages[0]['content'] + eos_token }}{% set loop_messages = messages[1:] %}{% else %}{{ system_prompt + eos_token }}{% set loop_messages = messages %}{% endif %}{% for message in loop_messages %}{% if message['role'] == 'user' %}{{ message['content'] }}{% elif message['role'] == 'assistant' %}{{ message['content'] + eos_token }}{% endif %}{% endfor %}{% if add_generation_prompt %}{{ reasoning_start }}{% endif %}",
+        description: "GRPO template optimized for reasoning tasks"
+    }
+};
+
+function initializeChatTemplate() {
+    // Set initial chat template value if not already set
+    const chatTemplateField = document.getElementById('chat-template');
+    const chatTemplateType = document.getElementById('chat-template-type');
+
+    if (chatTemplateField && chatTemplateType) {
+        // Clean up any raw tags from the field value
+        const currentValue = chatTemplateField.value.replace(/\{%\s*raw\s*%\}/g, '').replace(/\{%\s*endraw\s*%\}/g, '').trim();
+
+        // Set default to GRPO template if empty or has raw tags
+        if (!currentValue || currentValue.length < 10) {
+            // Use the default GRPO template
+            const defaultTemplate = chatTemplatePresets.grpo.template;
+            chatTemplateField.value = defaultTemplate;
+        } else {
+            chatTemplateField.value = currentValue;
+        }
+
+        // Initialize the preview
+        updateChatTemplatePreview();
+    }
+}
+
+function onChatTemplateTypeChange() {
+    const templateType = document.getElementById('chat-template-type').value;
+    const editor = document.getElementById('chat-template-editor');
+    const customTemplate = document.getElementById('custom-chat-template');
+
+    if (templateType === 'custom') {
+        editor.style.display = 'block';
+    } else {
+        editor.style.display = 'none';
+        if (chatTemplatePresets[templateType]) {
+            // Update hidden chat template field
+            document.getElementById('chat-template').value = chatTemplatePresets[templateType].template;
+            // Update custom template editor for reference
+            customTemplate.value = chatTemplatePresets[templateType].template;
+        }
+    }
+
+    updateChatTemplatePreview();
+}
+
+function validateChatTemplate() {
+    const template = document.getElementById('custom-chat-template').value;
+    const validationDiv = document.getElementById('chat-template-validation');
+
+    fetch('/api/templates/chat-template/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template: template })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.valid) {
+            validationDiv.innerHTML = '<div class="alert alert-success py-1"><i class="fas fa-check"></i> Template is valid</div>';
+            // Update hidden field
+            document.getElementById('chat-template').value = template;
+        } else {
+            validationDiv.innerHTML = `<div class="alert alert-danger py-1"><i class="fas fa-times"></i> ${data.error}</div>`;
+        }
+    })
+    .catch(error => {
+        validationDiv.innerHTML = '<div class="alert alert-warning py-1">Unable to validate template</div>';
+    });
+}
+
+function updateChatTemplatePreview() {
+    const templateTypeElem = document.getElementById('chat-template-type');
+    const preview = document.getElementById('chat-template-preview');
+
+    // Check if elements exist
+    if (!templateTypeElem || !preview) {
+        console.warn('Chat template elements not found');
+        return;
+    }
+
+    const templateType = templateTypeElem.value || 'grpo';
+    const systemPromptElem = document.getElementById('system-prompt');
+    const customSystemPromptElem = document.getElementById('custom-system-prompt');
+    const reasoningStartElem = document.getElementById('reasoning-start');
+    const customReasoningStartElem = document.getElementById('custom-reasoning-start');
+
+    const systemPrompt = (systemPromptElem && systemPromptElem.value) ||
+                         (customSystemPromptElem && customSystemPromptElem.value) ||
+                         'You are given a problem.\nThink about the problem and provide your working out.\nPlace it between <start_working_out> and <end_working_out>.\nThen, provide your solution between <SOLUTION></SOLUTION>';
+
+    const reasoningStart = (reasoningStartElem && reasoningStartElem.value) ||
+                          (customReasoningStartElem && customReasoningStartElem.value) ||
+                          '<start_working_out>';
+
+    // Create sample messages for preview
+    const sampleMessages = [
+        { role: 'user', content: 'What is 2 + 2?' }
+    ];
+
+    // Get template
+    let template = '';
+    if (templateType === 'custom') {
+        const customTemplateElem = document.getElementById('custom-chat-template');
+        template = customTemplateElem ? customTemplateElem.value : chatTemplatePresets.grpo.template;
+    } else if (chatTemplatePresets[templateType]) {
+        template = chatTemplatePresets[templateType].template;
+    } else {
+        template = chatTemplatePresets.grpo.template; // Default to GRPO
+    }
+
+    // Clean up template (remove any raw tags)
+    template = template.replace(/\{%\s*raw\s*%\}/g, '').replace(/\{%\s*endraw\s*%\}/g, '').trim();
+
+    // Set a simple preview first
+    preview.textContent = 'Generating preview...';
+
+    // Request preview from server
+    fetch('/api/templates/chat-template/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            template: template,
+            messages: sampleMessages,
+            system_prompt: systemPrompt,
+            reasoning_start: reasoningStart,
+            eos_token: '</s>',
+            add_generation_prompt: true
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.preview) {
+            preview.textContent = data.preview;
+        } else if (data.error) {
+            preview.textContent = `Error: ${data.error}`;
+        } else {
+            preview.textContent = 'Unable to generate preview';
+        }
+    })
+    .catch(error => {
+        console.error('Error generating preview:', error);
+        // Provide a fallback preview
+        preview.textContent = `System: ${systemPrompt}\n\nUser: What is 2 + 2?\n\nAssistant: ${reasoningStart}\n[Model reasoning would appear here]\n<end_working_out>\n<SOLUTION>\n4\n</SOLUTION>`;
+    });
+}
+
+function saveChatTemplate() {
+    const template = document.getElementById('custom-chat-template').value;
+    const name = prompt('Enter a name for this chat template:');
+
+    if (!name) return;
+
+    fetch('/api/templates/chat-template/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            name: name,
+            template: template,
+            description: 'Custom chat template'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('Chat template saved successfully', 'success');
+        } else {
+            showAlert('Failed to save chat template', 'error');
+        }
+    })
+    .catch(error => {
+        showAlert('Error saving chat template', 'error');
+    });
+}
+
+function loadChatTemplate() {
+    fetch('/api/templates/chat-templates')
+        .then(response => response.json())
+        .then(data => {
+            // Create a selection dialog
+            const templates = data.custom || {};
+            const options = Object.entries(templates).map(([id, tmpl]) =>
+                `<option value="${id}">${tmpl.name}</option>`
+            ).join('');
+
+            // For now, use prompt - could be replaced with a modal
+            const selected = prompt('Select a template to load:\n' + Object.keys(templates).join('\n'));
+            if (selected && templates[selected]) {
+                document.getElementById('custom-chat-template').value = templates[selected].template;
+                document.getElementById('chat-template').value = templates[selected].template;
+                updateChatTemplatePreview();
+            }
+        })
+        .catch(error => {
+            showAlert('Error loading templates', 'error');
+        });
+}
+
+// ============================================================================
 // Algorithm Selection
 // ============================================================================
 
@@ -994,15 +1285,15 @@ function selectAlgorithm(algorithm) {
     // Update info text
     const infoDiv = document.getElementById('algorithm-info');
     const infoTexts = {
-        'grpo': '<i class="fas fa-info-circle"></i> <strong>GRPO:</strong> Standard Group Relative Policy Optimization applies importance weights at the token level.',
-        'gspo': '<i class="fas fa-info-circle"></i> <strong>GSPO:</strong> Group Sequence Policy Optimization applies importance weights at the sequence level, often resulting in more stable training.',
-        'dr_grpo': '<i class="fas fa-info-circle"></i> <strong>DR-GRPO:</strong> Doubly Robust GRPO uses control variates to reduce variance in gradient estimates.'
+        'grpo': '<i class="fas fa-info-circle"></i> <strong>GRPO:</strong> Standard Group Relative Policy Optimization applies importance weights at the token level. Each token gets the same advantage scaling.',
+        'gspo': '<i class="fas fa-info-circle"></i> <strong>GSPO (Qwen/Alibaba):</strong> Group Sequence Policy Optimization applies importance weights at the sequence level rather than token level, addressing the observation that advantages should not scale with individual tokens. Often results in more stable training.',
+        'dr_grpo': '<i class="fas fa-info-circle"></i> <strong>DR-GRPO:</strong> Doubly Robust GRPO uses control variates to reduce variance in gradient estimates for improved stability.'
     };
     infoDiv.innerHTML = infoTexts[algorithm];
 
-    // Show/hide GSPO parameters
+    // Show/hide GSPO parameters (epsilon values are used by both GSPO and DR-GRPO)
     const gspoParams = document.getElementById('gspo-params');
-    if (algorithm === 'gspo') {
+    if (algorithm === 'gspo' || algorithm === 'dr_grpo') {
         gspoParams.style.display = 'block';
     } else {
         gspoParams.style.display = 'none';
@@ -1156,6 +1447,9 @@ function applyPreset(presetName) {
 
             // Hide custom indicator
             indicatorDiv.style.display = 'none';
+
+            // Update configuration summary
+            updateConfigSummary();
         }
     }
 }
@@ -1379,17 +1673,32 @@ function toggleSection(sectionId) {
 // ============================================================================
 
 function updateConfigSummary() {
-    // Update summary values
+    // Update summary values with defaults if not set
     const modelSelect = document.getElementById('model-name');
-    const modelText = modelSelect.options[modelSelect.selectedIndex]?.text || '--';
+    let modelText = '--';
+
+    if (modelSelect && modelSelect.options.length > 0) {
+        if (modelSelect.selectedIndex >= 0) {
+            modelText = modelSelect.options[modelSelect.selectedIndex].text;
+        } else if (modelSelect.options[0]) {
+            modelText = modelSelect.options[0].text;
+        }
+    } else {
+        // Default fallback
+        modelText = 'Qwen3-0.6B (1.2GB)';
+    }
+
     document.getElementById('summary-model').textContent = modelText;
-    
+
     const datasetSelect = document.getElementById('dataset-path');
-    document.getElementById('summary-dataset').textContent = datasetSelect.value || '--';
-    
-    document.getElementById('summary-epochs').textContent = document.getElementById('num-epochs').value;
-    document.getElementById('summary-batch').textContent = document.getElementById('batch-size').value;
-    
+    document.getElementById('summary-dataset').textContent = datasetSelect.value || 'tatsu-lab/alpaca';
+
+    const epochsValue = document.getElementById('num-epochs').value || '3';
+    document.getElementById('summary-epochs').textContent = epochsValue;
+
+    const batchValue = document.getElementById('batch-size').value || '4';
+    document.getElementById('summary-batch').textContent = batchValue;
+
     // Estimate training time and VRAM
     estimateTrainingRequirements();
 }
@@ -1399,12 +1708,26 @@ function updateConfigSummary() {
 // ============================================================================
 
 function gatherConfig() {
+    // Check if custom model path is provided
+    const customModelPath = document.getElementById('custom-model-path')?.value?.trim();
+    const modelName = customModelPath || document.getElementById('model-name').value;
+
+    // Gather LoRA target modules
+    const targetModules = [];
+    if (document.getElementById('target-q-proj')?.checked) targetModules.push('q_proj');
+    if (document.getElementById('target-v-proj')?.checked) targetModules.push('v_proj');
+    if (document.getElementById('target-k-proj')?.checked) targetModules.push('k_proj');
+    if (document.getElementById('target-o-proj')?.checked) targetModules.push('o_proj');
+
     return {
         // Model configuration
-        model_name: document.getElementById('model-name').value,
+        model_name: modelName,
+        display_name: document.getElementById('model-display-name')?.value?.trim() || null,
         lora_rank: parseInt(document.getElementById('lora-rank').value),
         lora_alpha: parseInt(document.getElementById('lora-alpha').value),
         lora_dropout: parseFloat(document.getElementById('lora-dropout').value),
+        lora_target_modules: targetModules.length > 0 ? targetModules : null,
+        lora_bias: document.getElementById('lora-bias')?.value || 'none',
 
         // Dataset configuration
         dataset_source: document.getElementById('dataset-source').value,
@@ -1421,21 +1744,57 @@ function gatherConfig() {
         solution_end: document.getElementById('solution-end').value,
         system_prompt: document.getElementById('system-prompt').value,
 
-        // Training configuration
+        // Chat template configuration
+        chat_template_type: document.getElementById('chat-template-type').value,
+        chat_template: document.getElementById('chat-template').value,
+
+        // Pre-training configuration
+        enable_pre_training: document.getElementById('enable-pre-training').checked,
+        pre_training_epochs: parseInt(document.getElementById('pre-training-epochs').value),
+        pre_training_samples: parseInt(document.getElementById('pre-training-samples').value),
+        validate_format: document.getElementById('validate-format').checked,
+
+        // Basic Training configuration
         learning_rate: parseFloat(document.getElementById('learning-rate').value),
         batch_size: parseInt(document.getElementById('batch-size').value),
         num_epochs: parseInt(document.getElementById('num-epochs').value),
+        gradient_accumulation_steps: parseInt(document.getElementById('gradient-accumulation')?.value || 1),
+        max_sequence_length: parseInt(document.getElementById('max-sequence-length')?.value || 2048),
+        max_new_tokens: parseInt(document.getElementById('max-new-tokens')?.value || 256),
+        warmup_steps: parseInt(document.getElementById('warmup-steps')?.value || 10),
+        weight_decay: parseFloat(document.getElementById('weight-decay')?.value || 0.001),
 
         // GRPO configuration
         temperature: parseFloat(document.getElementById('temperature').value),
         top_p: parseFloat(document.getElementById('top-p').value),
+        top_k: parseInt(document.getElementById('top-k')?.value || 50),
+        repetition_penalty: parseFloat(document.getElementById('repetition-penalty')?.value || 1.0),
         kl_penalty: parseFloat(document.getElementById('kl-penalty').value),
+        clip_range: parseFloat(document.getElementById('clip-range')?.value || 0.2),
         num_generations: parseInt(document.getElementById('num-generations').value),
+        value_coefficient: parseFloat(document.getElementById('value-coefficient')?.value || 1.0),
 
-        // Algorithm selection
-        loss_type: getSelectedAlgorithm(),
+        // Algorithm selection (always use 'grpo' as loss_type, differentiate via importance_sampling_level)
+        loss_type: 'grpo',
+        importance_sampling_level: getSelectedAlgorithm() === 'gspo' ? 'sequence' : 'token',
         epsilon: document.getElementById('epsilon') ? parseFloat(document.getElementById('epsilon').value) : 0.0003,
         epsilon_high: document.getElementById('epsilon-high') ? parseFloat(document.getElementById('epsilon-high').value) : 0.0004,
+
+        // Advanced training settings
+        lr_scheduler_type: document.getElementById('lr-scheduler-type')?.value || 'constant',
+        optim: document.getElementById('optimizer')?.value || 'paged_adamw_32bit',
+        max_grad_norm: parseFloat(document.getElementById('max-grad-norm')?.value || 0.3),
+        logging_steps: parseInt(document.getElementById('logging-steps')?.value || 10),
+        save_steps: parseInt(document.getElementById('save-steps')?.value || 100),
+        eval_steps: parseInt(document.getElementById('eval-steps')?.value || 100),
+        seed: parseInt(document.getElementById('seed')?.value || 42),
+
+        // Quantization configuration
+        use_4bit: document.getElementById('use-4bit')?.checked || false,
+        use_8bit: document.getElementById('use-8bit')?.checked || false,
+        bnb_4bit_compute_dtype: document.getElementById('bnb-4bit-compute-dtype')?.value || 'float16',
+        bnb_4bit_quant_type: document.getElementById('bnb-4bit-quant-type')?.value || 'nf4',
+        use_nested_quant: document.getElementById('use-nested-quant')?.checked || false,
 
         // Reward configuration
         reward_config: gatherRewardConfig(),
@@ -1443,8 +1802,8 @@ function gatherConfig() {
         // Optimization flags
         use_flash_attention: document.getElementById('use-flash-attention').checked,
         gradient_checkpointing: document.getElementById('gradient-checkpointing').checked,
-        mixed_precision: document.getElementById('mixed-precision').checked,
-        pre_finetune: document.getElementById('pre-finetune').checked
+        fp16: document.getElementById('mixed-precision').checked && !document.getElementById('use-bf16')?.checked,
+        bf16: document.getElementById('use-bf16')?.checked || false
     };
 }
 
@@ -1520,8 +1879,12 @@ async function startTraining() {
 
     const config = gatherConfig();
 
-    // Show training monitor
+    // Show training monitor and sticky progress bar
     document.getElementById('training-monitor').style.display = 'block';
+    const navbarProgress = document.getElementById('navbar-progress');
+    if (navbarProgress) navbarProgress.style.display = 'block';
+    const stickyContainer = document.getElementById('sticky-progress-container');
+    if (stickyContainer) stickyContainer.style.display = 'block';
     document.getElementById('step-4-nav').style.display = 'none';
 
     // Disable train button
@@ -1565,7 +1928,7 @@ async function startTraining() {
         }
     } catch (error) {
         trainBtn.disabled = false;
-        trainBtn.innerHTML = '<i class="fas fa-rocket"></i> Start Training';
+        trainBtn.innerHTML = '<i class="fas fa-dumbbell"></i> Start Training';
         showAlert('Failed to start training: ' + error.message, 'danger');
     }
 }
@@ -1578,6 +1941,11 @@ function stopTraining() {
     }).then(response => {
         if (response.ok) {
             showAlert('Training stopped', 'warning');
+            // Hide sticky progress bar
+            const navbarProgress = document.getElementById('navbar-progress');
+            if (navbarProgress) navbarProgress.style.display = 'none';
+            const stickyContainer = document.getElementById('sticky-progress-container');
+            if (stickyContainer) stickyContainer.style.display = 'none';
         }
     });
 }
@@ -1722,12 +2090,25 @@ function resetCharts() {
 }
 
 function updateTrainingProgress(progress) {
+    // Update main progress bar (if exists)
     const progressBar = document.getElementById('training-progress');
-    progressBar.style.width = progress + '%';
-    progressBar.textContent = progress + '%';
+    if (progressBar) {
+        progressBar.style.width = progress + '%';
+        progressBar.textContent = progress + '%';
 
-    if (progress >= 100) {
-        progressBar.classList.remove('progress-bar-animated');
+        if (progress >= 100) {
+            progressBar.classList.remove('progress-bar-animated');
+        }
+    }
+
+    // Update navbar thin progress bar
+    const progressBarThin = document.getElementById('training-progress-thin');
+    const progressText = document.getElementById('progress-text');
+    if (progressBarThin) {
+        progressBarThin.style.width = progress + '%';
+        if (progressText) {
+            progressText.textContent = progress + '%';
+        }
     }
 }
 
@@ -1820,6 +2201,12 @@ function handleTrainingComplete(data) {
     trainBtn.innerHTML = '<i class="fas fa-check"></i> Training Complete';
     trainBtn.classList.add('btn-success');
 
+    // Hide sticky progress bar
+    const navbarProgress = document.getElementById('navbar-progress');
+    if (navbarProgress) navbarProgress.style.display = 'none';
+    const stickyContainer = document.getElementById('sticky-progress-container');
+    if (stickyContainer) stickyContainer.style.display = 'none';
+
     showAlert('Training completed successfully!', 'success');
 
     // Store as last completed session
@@ -1835,7 +2222,13 @@ function handleTrainingComplete(data) {
 function handleTrainingError(data) {
     const trainBtn = document.getElementById('train-btn');
     trainBtn.disabled = false;
-    trainBtn.innerHTML = '<i class="fas fa-rocket"></i> Start Training';
+    trainBtn.innerHTML = '<i class="fas fa-dumbbell"></i> Start Training';
+
+    // Hide sticky progress bar
+    const navbarProgress = document.getElementById('navbar-progress');
+    if (navbarProgress) navbarProgress.style.display = 'none';
+    const stickyContainer = document.getElementById('sticky-progress-container');
+    if (stickyContainer) stickyContainer.style.display = 'none';
 
     showAlert('Training error: ' + data.error, 'danger');
 }
@@ -1863,11 +2256,13 @@ async function refreshSessions() {
                    </button>`
                 : '';
 
+            const displayName = session.display_name || session.model.split('/').pop();
             sessionItem.innerHTML = `
                 <div class="d-flex justify-content-between align-items-center">
                     <div class="flex-grow-1" style="cursor: pointer;" onclick="loadSession('${session.session_id}')">
-                        <div class="fw-bold">${session.model.split('/').pop()}</div>
+                        <div class="fw-bold">${displayName}</div>
                         <small class="text-muted">${new Date(session.created_at).toLocaleString()}</small>
+                        <small class="text-muted d-block" style="font-size: 0.75rem;">ID: ${session.session_id.substring(0, 8)}</small>
                     </div>
                     <div class="d-flex align-items-center">
                         <span class="badge bg-${getStatusColor(session.status)}">${session.status}</span>
@@ -1972,35 +2367,308 @@ function reconnectToSession(sessionId) {
 // Configuration Management
 // ============================================================================
 
-function saveCurrentConfig() {
-    const config = gatherConfig();
-    const configName = prompt('Enter a name for this configuration:');
+async function loadConfigList() {
+    try {
+        const response = await fetch('/api/configs/list');
+        const configs = await response.json();
 
-    if (configName) {
-        localStorage.setItem(`grpo_config_${configName}`, JSON.stringify(config));
-        showAlert(`Configuration "${configName}" saved successfully!`, 'success');
+        const select = document.getElementById('saved-configs-list');
+        select.innerHTML = '<option value="">Select a config...</option>';
+
+        configs.forEach(config => {
+            const option = document.createElement('option');
+            option.value = config.filename;
+            option.textContent = config.name;
+            option.dataset.modified = config.modified;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Failed to load config list:', error);
     }
 }
 
-function loadConfig() {
-    // TODO: Implement config loading UI
-    showAlert('Config loading UI coming soon!', 'info');
+function showLoadConfigModal() {
+    const select = document.getElementById('saved-configs-list');
+    const filename = select.value;
+
+    //if (!filename) {
+    //    showAlert('Please select a configuration to load', 'warning');
+    //    return;
+    //}
+
+    const configName = select.options[select.selectedIndex].text;
+
+    // Remove any existing load config modal
+    const existingModal = document.getElementById('loadConfigModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // Create modal
+    const modalDiv = document.createElement('div');
+    modalDiv.className = 'modal fade';
+    modalDiv.id = 'loadConfigModal';
+    modalDiv.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-folder-open"></i> Load Configuration
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>You are about to load the configuration:</p>
+                    <div class="alert alert-info">
+                        <strong>${configName}</strong>
+                    </div>
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Warning:</strong> This will replace all current settings with the saved configuration.
+                        Any unsaved changes will be lost.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="performConfigLoad('${filename}')">
+                        <i class="fas fa-folder-open"></i> Load Configuration
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modalDiv);
+    const loadModal = new bootstrap.Modal(modalDiv);
+    loadModal.show();
+}
+
+async function performConfigLoad(filename) {
+    // Close the modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('loadConfigModal'));
+    if (modal) {
+        modal.hide();
+    }
+
+    try {
+        const response = await fetch(`/api/config/load/${filename}`);
+
+        if (!response.ok) {
+            throw new Error('Failed to load configuration');
+        }
+
+        const config = await response.json();
+
+        // Apply the loaded configuration to the UI
+        applyConfigToUI(config);
+
+        showAlert(`Configuration loaded successfully!`, 'success');
+    } catch (error) {
+        showAlert('Failed to load configuration: ' + error.message, 'danger');
+    }
+}
+
+function loadSelectedConfig() {
+    showLoadConfigModal();
+}
+
+function showSaveConfigModal() {
+    // Remove any existing save config modal
+    const existingModal = document.getElementById('saveConfigModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // Create modal
+    const modalDiv = document.createElement('div');
+    modalDiv.className = 'modal fade';
+    modalDiv.id = 'saveConfigModal';
+    modalDiv.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-save"></i> Save Configuration
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="config-name-input" class="form-label">Configuration Name</label>
+                        <input type="text" class="form-control" id="config-name-input"
+                               placeholder="Enter configuration name..." autofocus>
+                        <small class="text-muted">This name will be used to identify your configuration</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="performConfigSave()">
+                        <i class="fas fa-save"></i> Save Configuration
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modalDiv);
+    const saveModal = new bootstrap.Modal(modalDiv);
+
+    // Add event listener for Enter key
+    const input = modalDiv.querySelector('#config-name-input');
+    input.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            performConfigSave();
+        }
+    });
+
+    // Focus input when modal is shown
+    modalDiv.addEventListener('shown.bs.modal', () => {
+        input.focus();
+    });
+
+    saveModal.show();
+}
+
+async function performConfigSave() {
+    const input = document.getElementById('config-name-input');
+    const configName = input?.value?.trim();
+
+    if (!configName) {
+        showAlert('Please enter a configuration name', 'warning');
+        return;
+    }
+
+    // Close the modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('saveConfigModal'));
+    if (modal) {
+        modal.hide();
+    }
+
+    const config = gatherConfig();
+    config.filename = `${configName}.json`;
+
+    try {
+        const response = await fetch('/api/config/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to save configuration');
+        }
+
+        const result = await response.json();
+        showAlert(result.message, 'success');
+
+        // Reload the config list
+        await loadConfigList();
+    } catch (error) {
+        showAlert('Failed to save configuration: ' + error.message, 'danger');
+    }
 }
 
 function saveConfig() {
-    saveCurrentConfig();
+    showSaveConfigModal();
 }
 
-function exportConfig() {
-    const config = gatherConfig();
-    const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `grpo_config_${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showAlert('Configuration exported successfully!', 'success');
+function showConfirmModal(title, message, onConfirm, confirmBtnClass = 'btn-danger') {
+    // Remove any existing confirm modal
+    const existingModal = document.getElementById('confirmModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // Create modal
+    const modalDiv = document.createElement('div');
+    modalDiv.className = 'modal fade';
+    modalDiv.id = 'confirmModal';
+    modalDiv.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-exclamation-triangle"></i> ${title}
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>${message}</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn ${confirmBtnClass}" id="confirm-action-btn">
+                        Confirm
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modalDiv);
+    const confirmModal = new bootstrap.Modal(modalDiv);
+
+    // Add event listener for confirm button
+    const confirmBtn = modalDiv.querySelector('#confirm-action-btn');
+    confirmBtn.addEventListener('click', () => {
+        confirmModal.hide();
+        if (onConfirm) {
+            onConfirm();
+        }
+    });
+
+    // Clean up modal after it's hidden
+    modalDiv.addEventListener('hidden.bs.modal', () => {
+        modalDiv.remove();
+    });
+
+    confirmModal.show();
+}
+
+async function deleteSelectedConfig() {
+    const select = document.getElementById('saved-configs-list');
+    const filename = select.value;
+
+    if (!filename) {
+        showAlert('Please select a configuration to delete', 'warning');
+        return;
+    }
+
+    const configName = select.options[select.selectedIndex].text;
+
+    showConfirmModal(
+        'Delete Configuration',
+        `Are you sure you want to delete the configuration "${configName}"? This action cannot be undone.`,
+        async () => {
+            try {
+                const response = await fetch(`/api/configs/delete/${filename}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to delete configuration');
+                }
+
+                const result = await response.json();
+                showAlert(result.message, 'success');
+
+                // Reload the config list
+                await loadConfigList();
+            } catch (error) {
+                showAlert('Failed to delete configuration: ' + error.message, 'danger');
+            }
+        }
+    );
+}
+
+function onConfigSelect() {
+    const select = document.getElementById('saved-configs-list');
+    const deleteBtn = document.querySelector('button[onclick="deleteSelectedConfig()"]');
+    const loadBtn = document.querySelector('button[onclick="loadSelectedConfig()"]');
+
+    const hasSelection = select.value !== '';
+    if (deleteBtn) deleteBtn.disabled = !hasSelection;
+    if (loadBtn) loadBtn.disabled = !hasSelection;
 }
 
 // ============================================================================
@@ -2018,6 +2686,73 @@ function toggleTheme() {
     // Update icon
     const icon = document.getElementById('theme-icon');
     icon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+}
+
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar-column');
+    if (sidebar) {
+        sidebar.classList.toggle('hidden');
+
+        // Adjust main content width
+        const mainContent = sidebar.nextElementSibling;
+        if (mainContent) {
+            if (sidebar.classList.contains('hidden')) {
+                mainContent.classList.remove('col-lg-9', 'col-md-8');
+                mainContent.classList.add('col-lg-12', 'col-md-12');
+            } else {
+                mainContent.classList.remove('col-lg-12', 'col-md-12');
+                mainContent.classList.add('col-lg-9', 'col-md-8');
+            }
+        }
+    }
+}
+
+function setupIconScrollEffect() {
+    const floatingIcon = document.querySelector('.floating-icon-dock');
+    if (!floatingIcon) return;
+
+    let ticking = false;
+
+    function updateIconPosition() {
+        const scrollY = window.scrollY;
+        const sidebarCard = document.querySelector('.sidebar-card');
+
+        // Calculate the position of the Training Sessions header
+        // Navbar (32px) + margin-top (45px) + padding-top (95px) = ~172px
+        const sidebarHeaderTop = 172;
+        const iconHeight = 88; // Icon container height
+        const minTopPosition = sidebarHeaderTop - iconHeight - 20; // Keep 20px gap
+
+        // After scrolling 100px, make icon scroll with content
+        if (scrollY > 100) {
+            // Calculate desired position
+            let desiredTop = scrollY + 20;
+
+            // But don't let it go below where it would overlap sidebar header
+            if (desiredTop > minTopPosition) {
+                desiredTop = minTopPosition;
+            }
+
+            floatingIcon.style.position = 'absolute';
+            floatingIcon.style.top = desiredTop + 'px';
+        } else {
+            // Reset to fixed position when near top
+            floatingIcon.style.position = 'fixed';
+            floatingIcon.style.top = '20px';
+        }
+
+        ticking = false;
+    }
+
+    function requestTick() {
+        if (!ticking) {
+            window.requestAnimationFrame(updateIconPosition);
+            ticking = true;
+        }
+    }
+
+    // Listen for scroll events
+    window.addEventListener('scroll', requestTick);
 }
 
 // Load saved theme
@@ -2038,15 +2773,73 @@ async function updateSystemStatus() {
         const response = await fetch('/api/system/info');
         const info = await response.json();
 
+        // Update GPU status
         if (info.gpu_available) {
-            document.getElementById('gpu-status').textContent = info.gpu_name || 'Available';
-            document.getElementById('memory-status').textContent = `${info.gpu_memory_allocated?.toFixed(1) || 0}GB`;
+            // Show GPU name - allow maximum space for visibility
+            let gpuName = info.gpu_name || 'Available';
+            // Only shorten if absolutely necessary (very long names)
+            if (gpuName.length > 35) {
+                gpuName = gpuName.substring(0, 32) + '...';
+            }
+            document.getElementById('gpu-status').textContent = gpuName;
+
+            // Show VRAM (available/total)
+            const vramTotal = info.gpu_memory_total || 0;
+            const vramAllocated = info.gpu_memory_allocated || 0;
+            const vramReserved = info.gpu_memory_reserved || 0;
+            const vramAvailable = vramTotal - vramReserved;  // Available = Total - Reserved
+            document.getElementById('vram-status').textContent = `${vramAvailable.toFixed(1)}/${vramTotal.toFixed(1)}GB`;
         } else {
             document.getElementById('gpu-status').textContent = 'CPU Only';
-            document.getElementById('memory-status').textContent = '--';
+            document.getElementById('vram-status').textContent = '--';
+        }
+
+        // Update RAM status (always available)
+        const ramAvailable = info.ram_available || 0;
+        const ramTotal = info.ram_total || 0;
+        document.getElementById('ram-status').textContent = `${ramAvailable.toFixed(1)}/${ramTotal.toFixed(1)}GB`;
+
+        // Update tooltips with more detail (if they exist)
+        try {
+            const gpuElement = document.querySelector('[data-bs-toggle="tooltip"][title="GPU Status"]');
+            if (gpuElement) {
+                const gpuTooltip = bootstrap.Tooltip.getInstance(gpuElement);
+                if (gpuTooltip && info.gpu_available) {
+                    gpuTooltip.setContent({ '.tooltip-inner': `GPU: ${info.gpu_name}` });
+                }
+            }
+
+            const vramElement = document.querySelector('[data-bs-toggle="tooltip"][title="VRAM Available"]');
+            if (vramElement && info.gpu_available) {
+                const vramTooltip = bootstrap.Tooltip.getInstance(vramElement);
+                if (vramTooltip) {
+                    const vramTotal = info.gpu_memory_total || 0;
+                    const vramAllocated = info.gpu_memory_allocated || 0;
+                    const vramReserved = info.gpu_memory_reserved || 0;
+                    const vramAvailable = vramTotal - vramReserved;
+                    vramTooltip.setContent({ '.tooltip-inner': `VRAM: ${vramAvailable.toFixed(2)}GB available / ${vramTotal.toFixed(2)}GB total (${vramAllocated.toFixed(2)}GB allocated, ${vramReserved.toFixed(2)}GB reserved)` });
+                }
+            }
+
+            const ramElement = document.querySelector('[data-bs-toggle="tooltip"][title="RAM Available"]');
+            if (ramElement) {
+                const ramTooltip = bootstrap.Tooltip.getInstance(ramElement);
+                if (ramTooltip) {
+                    const ramAvailable = info.ram_available || 0;
+                    const ramTotal = info.ram_total || 0;
+                    const ramUsed = info.ram_used || 0;
+                    ramTooltip.setContent({ '.tooltip-inner': `RAM: ${ramAvailable.toFixed(2)}GB available / ${ramTotal.toFixed(2)}GB total (${ramUsed.toFixed(2)}GB used)` });
+                }
+            }
+        } catch (tooltipError) {
+            // Silently ignore tooltip errors - they're not critical
+            console.debug('Tooltip update skipped:', tooltipError.message);
         }
     } catch (error) {
         console.error('Failed to update system status:', error);
+        document.getElementById('gpu-status').textContent = 'Error';
+        document.getElementById('vram-status').textContent = '--';
+        document.getElementById('ram-status').textContent = '--';
     }
 }
 
@@ -2090,12 +2883,77 @@ function loadSavedState() {
 }
 
 function showHelp() {
-    window.open('https://github.com/your-repo/grpo-finetuner/wiki', '_blank');
+    window.open('https://github.com/jwest33/gpro_lora', '_blank');
 }
 
-function showQuickStart() {
-    // TODO: Implement quick start wizard
-    showAlert('Quick Start Wizard coming soon!', 'info');
+function applyConfigToUI(config) {
+    // Apply configuration values to UI elements
+    if (config.model_name) {
+        document.getElementById('model-select').value = config.model_name;
+    }
+    if (config.dataset_source) {
+        document.getElementById('dataset-source').value = config.dataset_source;
+        updateDatasetFields();
+    }
+    if (config.dataset_name) {
+        document.getElementById('dataset-name').value = config.dataset_name;
+    }
+    if (config.instruction_field) {
+        document.getElementById('instruction-field').value = config.instruction_field;
+    }
+    if (config.output_field) {
+        document.getElementById('output-field').value = config.output_field;
+    }
+
+    // Training parameters
+    if (config.num_train_epochs) {
+        document.getElementById('epochs').value = config.num_train_epochs;
+    }
+    if (config.per_device_train_batch_size) {
+        document.getElementById('batch-size').value = config.per_device_train_batch_size;
+    }
+    if (config.learning_rate) {
+        document.getElementById('learning-rate').value = config.learning_rate;
+    }
+    if (config.gradient_accumulation_steps) {
+        document.getElementById('gradient-accumulation').value = config.gradient_accumulation_steps;
+    }
+    if (config.max_sequence_length) {
+        document.getElementById('max-sequence-length').value = config.max_sequence_length;
+    }
+
+    // LoRA parameters
+    if (config.lora_rank) {
+        document.getElementById('lora-rank').value = config.lora_rank;
+    }
+    if (config.lora_alpha) {
+        document.getElementById('lora-alpha').value = config.lora_alpha;
+    }
+    if (config.lora_dropout) {
+        document.getElementById('lora-dropout').value = config.lora_dropout;
+    }
+
+    // GRPO parameters
+    if (config.kl_penalty) {
+        document.getElementById('kl-penalty').value = config.kl_penalty;
+    }
+    if (config.clip_range) {
+        document.getElementById('clip-range').value = config.clip_range;
+    }
+    if (config.num_generations) {
+        document.getElementById('num-generations').value = config.num_generations;
+    }
+
+    // Template selection
+    if (config.template_type) {
+        document.getElementById('template-type').value = config.template_type;
+        updateTemplateFields();
+    }
+
+    // Reward components
+    if (config.reward_components) {
+        // TODO: Apply reward components to UI
+    }
 }
 
 // ============================================================================
@@ -2134,10 +2992,20 @@ function setupEventListeners() {
     });
 
     // Update recommendations when key settings change
-    document.getElementById('model-name')?.addEventListener('change', updateRecommendedIfActive);
+    document.getElementById('model-name')?.addEventListener('change', function() {
+        updateRecommendedIfActive();
+        updateConfigSummary(); // Update summary when model changes
+    });
     document.getElementById('reward-preset-select')?.addEventListener('change', updateRecommendedIfActive);
     document.getElementById('reasoning-start')?.addEventListener('input', debounce(updateRecommendedIfActive, 1000));
     document.getElementById('reasoning-end')?.addEventListener('input', debounce(updateRecommendedIfActive, 1000));
+
+    // Update configuration summary when key fields change
+    document.getElementById('model-family')?.addEventListener('change', updateConfigSummary);
+    document.getElementById('dataset-path')?.addEventListener('input', updateConfigSummary);
+    document.getElementById('num-epochs')?.addEventListener('input', updateConfigSummary);
+    document.getElementById('batch-size')?.addEventListener('input', updateConfigSummary);
+    document.getElementById('learning-rate')?.addEventListener('input', updateConfigSummary);
 
     // Model configuration mode handlers
     document.getElementById('setup-recommended').addEventListener('change', function() {
@@ -2161,14 +3029,17 @@ function setupEventListeners() {
     // Update sliders when input values change
     document.getElementById('lora-rank').addEventListener('input', function() {
         document.getElementById('lora-rank-slider').value = this.value;
+        updateConfigSummary();
     });
 
     document.getElementById('lora-alpha').addEventListener('input', function() {
         document.getElementById('lora-alpha-slider').value = this.value;
+        updateConfigSummary();
     });
 
     document.getElementById('lora-dropout').addEventListener('input', function() {
         document.getElementById('lora-dropout-slider').value = this.value;
+        updateConfigSummary();
     });
 
     // Auto-save state on input changes
@@ -2204,8 +3075,8 @@ function setupEventListeners() {
 }
 
 function estimateTrainingRequirements() {
-    const epochs = parseInt(document.getElementById('num-epochs').value);
-    const batchSize = parseInt(document.getElementById('batch-size').value);
+    const epochs = parseInt(document.getElementById('num-epochs').value) || 3;
+    const batchSize = parseInt(document.getElementById('batch-size').value) || 4;
 
     // Simple estimation (would be more complex in real implementation)
     const estimatedMinutes = epochs * 5 * (4 / batchSize);
@@ -2500,7 +3371,7 @@ async function loadExportFormats() {
     }
 }
 
-function showExportModal(sessionId) {
+async function showExportModal(sessionId) {
     // Remove any existing export modal
     const existingModal = document.getElementById('exportModal');
     if (existingModal) {
@@ -2511,7 +3382,7 @@ function showExportModal(sessionId) {
     lastCompletedSessionId = sessionId;
 
     // Create and show export modal
-    const modal = createExportModal(sessionId);
+    const modal = await createExportModal(sessionId);
     document.body.appendChild(modal);
     const exportModal = new bootstrap.Modal(modal);
     exportModal.show();
@@ -2593,7 +3464,10 @@ function showSessionSelectionModal(sessions) {
     selectModal.show();
 }
 
-function createExportModal(sessionId) {
+async function createExportModal(sessionId) {
+    // Generate auto name based on session info
+    const autoGeneratedName = await generateExportName(sessionId);
+
     const modalDiv = document.createElement('div');
     modalDiv.className = 'modal fade';
     modalDiv.id = 'exportModal';
@@ -2619,9 +3493,11 @@ function createExportModal(sessionId) {
                     </div>
 
                     <div class="mb-3">
-                        <label for="export-name" class="form-label">Export Name (Optional)</label>
+                        <label for="export-name" class="form-label">Export Name</label>
                         <input type="text" class="form-control" id="export-name"
-                               placeholder="Leave empty for auto-generated name">
+                               placeholder="${autoGeneratedName}"
+                               value="">
+                        <small class="text-muted">Leave empty to use: ${autoGeneratedName}</small>
                     </div>
 
                     <div id="gguf-options" style="display: none;">
@@ -2832,29 +3708,55 @@ function showExportButton(sessionId) {
 // Exports Management Functions
 // ============================================================================
 
-function goToExportsTab() {
-    console.log('Navigating to Exports tab');
-    // Navigate to the exports section (step 5)
-    goToStep(5);
-    // Refresh the trained models list after a short delay to ensure DOM is ready
-    setTimeout(() => {
-        refreshTrainedModels();
-    }, 100);
+// Generate a meaningful display name for a model
+function generateModelDisplayName(sessionData) {
+    // If display_name is provided, use it with session ID
+    if (sessionData.display_name) {
+        return `${sessionData.display_name} (${sessionData.session_id.substring(0, 8)})`;
+    }
+
+    // Otherwise, generate a name from available data
+    const modelName = (sessionData.model || sessionData.model_name || 'model').split('/').pop();
+    const datasetName = (sessionData.dataset || sessionData.dataset_path || 'dataset').split('/').pop();
+    const date = new Date(sessionData.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const epochs = sessionData.epochs || sessionData.num_epochs || '?';
+    return `${modelName} - ${datasetName} - ${date} (${epochs} epochs)`;
 }
 
-function goToTestTab() {
-    console.log('Navigating to Test tab');
-    // Navigate to the test model section (step 6)
-    goToStep(6);
-    // Load testable models after a short delay to ensure DOM is ready
-    setTimeout(() => {
-        loadTestableModels();
-    }, 100);
+// Generate an export name for a model
+async function generateExportName(sessionId) {
+    try {
+        // Fetch session data from API
+        const response = await fetch(`/api/training/${sessionId}/status`);
+        if (response.ok) {
+            const session = await response.json();
+
+            // Use display_name if available
+            if (session.display_name) {
+                const cleanName = session.display_name.replace(/[^a-zA-Z0-9]/g, '_');
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+                return `${cleanName}_${timestamp}`;
+            }
+
+            // Otherwise generate from model and dataset names
+            const modelName = (session.model || session.config?.model_name || 'model').split('/').pop().replace(/[^a-zA-Z0-9]/g, '_');
+            const datasetName = (session.dataset || session.config?.dataset_name || 'dataset').split('/').pop().replace(/[^a-zA-Z0-9]/g, '_');
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+            return `${modelName}_${datasetName}_${timestamp}`;
+        }
+    } catch (error) {
+        console.error('Failed to fetch session data for export name:', error);
+    }
+
+    // Fallback name if API call fails
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    return `model_export_${timestamp}`;
 }
+
+
 
 // Make functions globally accessible
-window.goToExportsTab = goToExportsTab;
-window.goToTestTab = goToTestTab;
+// (Removed references to deleted Quick Actions functions)
 
 async function refreshTrainedModels() {
     const modelsList = document.getElementById('trained-models-list');
@@ -2909,7 +3811,7 @@ function displayTrainedModels(models) {
                 <div class="d-flex justify-content-between align-items-start">
                     <div class="flex-grow-1">
                         <h6 class="card-title mb-1">
-                            <i class="fas fa-brain"></i> ${model.model_name || 'Model'}
+                            <i class="fas fa-brain"></i> ${generateModelDisplayName(model)}
                         </h6>
                         <p class="text-muted small mb-2">
                             Session: ${model.session_id.substring(0, 8)}...
@@ -2942,9 +3844,9 @@ function displayTrainedModels(models) {
     `).join('');
 }
 
-function showExportModalForModel(sessionId) {
+async function showExportModalForModel(sessionId) {
     // Use the existing export modal function
-    showExportModal(sessionId);
+    await showExportModal(sessionId);
 }
 
 async function showModelDetails(sessionId) {
@@ -3186,7 +4088,7 @@ async function refreshExportHistory() {
                             ${exp.quantization ? `<span class="badge bg-secondary ms-1">${exp.quantization}</span>` : ''}
                             <br>
                             <small class="text-muted">
-                                ${exp.model_name || 'Model'} - ${new Date(exp.export_timestamp).toLocaleDateString()}
+                                ${exp.display_name || exp.model_name || 'Model'} - ${new Date(exp.export_timestamp).toLocaleDateString()}
                             </small>
                             ${exp.total_size_mb ? `<br><small>Size: ${exp.total_size_mb} MB</small>` : ''}
                         </div>
@@ -3254,7 +4156,7 @@ async function loadTestableModels() {
                 option.value = model.session_id;
                 option.dataset.baseModel = model.base_model;
                 option.dataset.checkpointPath = model.checkpoint_path;
-                option.textContent = `${model.model_name || model.session_id} (${model.epochs || 0} epochs)`;
+                option.textContent = generateModelDisplayName(model);
                 select.appendChild(option);
             });
         }
@@ -3282,9 +4184,9 @@ function updateModelInfo() {
             if (model) {
                 infoDiv.innerHTML = `
                     <i class="fas fa-check-circle text-success"></i>
-                    <strong>${model.model_name}</strong> -
-                    Base: ${model.base_model} |
-                    Epochs: ${model.epochs || 0}
+                    <strong>${generateModelDisplayName(model)}</strong>
+                    <br>
+                    <small>Base: ${model.base_model}</small>
                 `;
             }
         } else {

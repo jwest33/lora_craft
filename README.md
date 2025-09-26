@@ -1,331 +1,287 @@
-# GRPO Fine-Tuner
+# LoRA Craft
 
-GUI application for GRPO (Group Relative Policy Optimization) fine-tuning of language models using Unsloth framework with comprehensive dataset customization, system optimization, and multi-format export capabilities.
+A web-based application for fine-tuning large language models using Low-Rank Adaptation (LoRA) and Group Relative Policy Optimization (GRPO). Built for researchers and developers who need powerful, accessible LLM training on consumer hardware.
+
+![App](docs\example_model_select.jpg)
 
 ## Features
 
 ### Core Capabilities
-- **GRPO Training**: State-of-the-art fine-tuning using Group Relative Policy Optimization via TRL
-- **Unsloth Integration**: Optimized training with Unsloth framework for 2x faster performance
+- **GRPO/GSPO Training**: Advanced reinforcement learning algorithms for LLM fine-tuning
 - **Multi-Model Support**: Compatible with Qwen3, LLaMA 3.2, and Phi-4 model families
-- **LoRA Fine-Tuning**: Efficient parameter-efficient fine-tuning with extensive configuration
-- **Custom Reward System**: Flexible rewards with regex matching, numerical validation, and custom Python functions
-- **Dataset Flexibility**: Support for HuggingFace datasets, local files (JSON, CSV, Parquet), and API endpoints
-- **Prompt Templates**: Customizable templates with reasoning markers and special tokens
+- **Real-Time Monitoring**: Live training metrics with WebSocket streaming
+- **Session Management**: Train multiple models simultaneously with unique display names
+- **Smart Memory Management**: Automatic batch size optimization based on available VRAM
+- **Export Flexibility**: Export to SafeTensors, GGUF, and HuggingFace formats
 
-### GUI Features
-- **Modern Themed Interface**: Light, Dark, and Synthwave themes with custom styling
-- **6 Specialized Tabs**: Dataset, Model & Training, GRPO Settings, System, Monitoring, and Export
-- **Real-time Monitoring**: Live training metrics, loss curves, and reward tracking
-- **System Optimization**: Automatic hardware detection with GPU/CPU/RAM monitoring
-- **Configuration Management**: Save and load training configurations in JSON format
-- **Validation System**: Built-in configuration validation before training
+### User Interface
+- **Modern Web Interface**: Clean, responsive design with dark/light theme support
+- **Visual Training Pipeline**: Step-by-step workflow from model selection to export
+- **Real-Time System Monitoring**: Live GPU, VRAM, and RAM usage indicators
+- **Configuration Manager**: Save, load, and manage training configurations
+- **Interactive Charts**: Visualize loss, rewards, and learning rate during training
 
-## Supported Models
+### Technical Features
+- **Unsloth Optimization**: 2x faster training with 50% less memory usage
+- **Flash Attention Support**: Hardware-accelerated attention mechanisms
+- **Mixed Precision Training**: FP16/BF16 support for efficient computation
+- **Gradient Checkpointing**: Trade compute for memory efficiency
+- **Custom Reward Functions**: Binary, regex, and numerical reward systems
 
-### Qwen3 Family
-- `unsloth/Qwen3-0.6B` - 600M parameters (~1.2GB VRAM)
-- `unsloth/Qwen3-1.7B` - 1.7B parameters (~3.4GB VRAM)
-- `unsloth/Qwen3-4B` - 4B parameters (~8GB VRAM)
-- `unsloth/Qwen3-8B` - 8B parameters (~16GB VRAM)
+## System Requirements
 
-### LLaMA 3.2 Family
-- `unsloth/Llama-3.2-1B-Instruct` - 1B parameters (~2GB VRAM)
-- `unsloth/Llama-3.2-3B-Instruct` - 3B parameters (~6GB VRAM)
+### Minimum Requirements
+- **GPU**: NVIDIA GPU with 6GB+ VRAM (CUDA 11.8+)
+- **RAM**: 16GB system memory
+- **Storage**: 20GB free space for models and checkpoints
+- **OS**: Windows 10/11, Ubuntu 20.04+, or macOS 12+
+- **Python**: 3.11 or higher
 
-### Phi-4 Family
-- `unsloth/phi-4-reasoning` - 15B parameters (~30GB VRAM)
+### Recommended Specifications
+- **GPU**: NVIDIA RTX 3070 or better (8GB+ VRAM)
+- **RAM**: 32GB system memory
+- **Storage**: 50GB+ SSD space
+- **Internet**: Stable connection for downloading models
 
 ## Installation
 
-
-### Install Dependencies
-
-#### Step 1: Install PyTorch with CUDA support
+### 1. Clone the Repository
 ```bash
-# For CUDA 12.8
-pip install torch--index-url https://download.pytorch.org/whl/cu128
+git clone https://github.com/yourusername/grpo_gui.git
+cd grpo_gui
 ```
 
-#### Step 2: Install remaining dependencies
+### 2. Create Virtual Environment
+```bash
+python -m venv .venv
+
+# Windows
+.venv\Scripts\activate
+
+# Linux/macOS
+source .venv/bin/activate
+```
+
+### 3. Install PyTorch with CUDA
+```bash
+# For CUDA 11.8
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+# For CUDA 12.1
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+```
+
+### 4. Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-### Platform-Specific Notes
-
-#### Windows Users
-- vLLM is not supported on Windows; transformers will be used for generation
-- Full Unsloth support with optimized kernels
-- NVIDIA GPU monitoring requires nvidia-ml-py
-
-#### Linux/Mac Users
-- Optional: Install vLLM for faster generation:
-  ```bash
-  pip install vllm>=0.2.0
-  ```
-- Full Unsloth optimization support
+### 5. Setup GGUF Support (Optional)
+```bash
+python setup_llama_cpp.py
+```
 
 ## Quick Start
 
-### GUI Mode (Default)
+### Launch the Application
 ```bash
-python grpo_finetuner.py
+python flask_app.py
 ```
 
-### Headless Mode (No GUI)
+Navigate to `http://localhost:5000` in your web browser.
+
+### Basic Training Workflow
+
+1. **Model Selection**: Choose from Qwen3, LLaMA, or Phi-4 models
+2. **Dataset Configuration**: Select a pre-configured dataset or upload your own
+3. **Training Parameters**: Adjust epochs, batch size, and learning rate
+4. **Start Training**: Monitor real-time progress and metrics
+5. **Export Model**: Download your fine-tuned model in your preferred format
+
+## Usage Guide
+
+### Web Interface Navigation
+
+#### Model Configuration
+- Select base model from dropdown (organized by family)
+- Configure LoRA parameters (rank, alpha, target modules)
+- Choose quantization settings for memory optimization
+
+#### Dataset Setup
+- **Pre-configured Datasets**: Alpaca, Dolly, OpenOrca, and more
+- **Custom Datasets**: Upload JSON, CSV, or Parquet files
+- **Field Mapping**: Map instruction and response fields
+- **Template System**: Apply chat templates with special tokens
+
+#### Training Configuration
+- **Algorithm Selection**: GRPO (token-level) or GSPO (sequence-level)
+- **Hyperparameters**: Learning rate, batch size, epochs
+- **Optimization**: Flash attention, gradient checkpointing
+- **Reward Functions**: Configure custom reward criteria
+
+#### Monitoring & Management
+- **Real-Time Metrics**: Loss, rewards, gradients, learning rate
+- **Training Logs**: Detailed console output
+- **Session Control**: Pause, resume, or stop training
+- **Resource Usage**: Monitor GPU/RAM utilization
+
+### Command Line Options
+
 ```bash
-python grpo_finetuner.py --headless --config configs/example.json
-```
+# Standard launch
+python flask_app.py
 
-### Create Example Configuration
-```bash
-python grpo_finetuner.py --create-example-config
-```
+# Debug mode with verbose logging
+python flask_app.py --debug
 
-### Debug Mode
-```bash
-python grpo_finetuner.py --debug
-```
+# Headless mode with configuration file
+python flask_app.py --headless --config configs/training.json
 
-## GUI Tabs Overview
+# Custom port
+python flask_app.py --port 8080
 
-### 1. Dataset Tab
-- **Data Sources**: HuggingFace Hub, local files, API endpoints, direct input
-- **Format Support**: JSON, JSONL, CSV, Parquet
-- **Field Mapping**: Configure instruction/response fields
-- **Data Preview**: View and validate dataset samples
-- **Template Testing**: Test prompt templates with your data
-
-### 2. Model & Training Tab
-- **Model Selection**: Choose from supported Unsloth models
-- **LoRA Configuration**:
-  - Rank, Alpha, Dropout settings
-  - Target modules (attention + FFN layers)
-  - Automatic optimization recommendations
-- **Training Parameters**:
-  - Learning rate with scheduling
-  - Batch size and gradient accumulation
-  - Epochs and warmup steps
-  - Mixed precision and gradient checkpointing
-
-### 3. GRPO Settings Tab
-- **Generation Parameters**: Temperature, Top-p, Top-k sampling
-- **GRPO Specific**:
-  - KL penalty for policy regularization
-  - Clip range for stable training
-  - Number of generations per prompt
-- **Reward Configuration**: Setup custom reward functions
-
-### 4. System Tab
-- **Hardware Detection**: Automatic GPU/CPU capabilities assessment
-- **Memory Management**: VRAM and RAM optimization
-- **Performance Settings**: Flash attention, CPU offloading options
-- **System Information**: Real-time resource monitoring
-
-### 5. Monitoring Tab
-- **Training Progress**: Real-time loss and reward curves
-- **Metrics Display**: Training speed, memory usage, ETA
-- **Log Viewer**: Integrated logging with filtering
-- **Checkpoint Management**: Save and resume training
-
-### 6. Export Tab
-- **Export Formats**:
-  - SafeTensors (16-bit and 4-bit quantization)
-  - GGUF (Q4_K_M, Q5_K_M, Q8_0 quantization)
-  - HuggingFace format
-- **HuggingFace Hub**: Direct upload to model repository
-- **Batch Export**: Multiple format export in one operation
-
-## Configuration
-
-### Example Configuration File
-
-```json
-{
-  "model_name": "unsloth/Qwen3-1.7B",
-  "dataset_source": "huggingface",
-  "dataset_path": "tatsu-lab/alpaca",
-  "dataset_split": "train",
-  "instruction_field": "instruction",
-  "response_field": "output",
-  "template_name": "default",
-  "reasoning_start": "[THINKING]",
-  "reasoning_end": "[/THINKING]",
-  "lora_rank": 16,
-  "lora_alpha": 32,
-  "lora_dropout": 0.0,
-  "target_modules": "q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj",
-  "learning_rate": 5e-6,
-  "batch_size": 1,
-  "gradient_accumulation": 1,
-  "num_epochs": 2,
-  "warmup_steps": 10,
-  "temperature": 0.7,
-  "top_p": 0.95,
-  "num_generations": 4,
-  "kl_penalty": 0.01,
-  "clip_range": 0.2,
-  "use_flash_attention": false,
-  "gradient_checkpointing": false,
-  "mixed_precision": true,
-  "output_dir": "./outputs",
-  "checkpoint_dir": "./checkpoints",
-  "export_model": true,
-  "export_path": "./exports/model",
-  "export_format": "safetensors",
-  "pre_finetune": true
-}
+# Create example configuration
+python flask_app.py --create-example-config
 ```
 
 ## Advanced Features
 
+### GRPO vs GSPO Algorithms
+
+**GRPO (Group Relative Policy Optimization)**
+- Token-level importance weighting
+- Suitable for tasks requiring fine-grained control
+- Default choice for most fine-tuning scenarios
+
+**GSPO (Group Sequence Policy Optimization)**
+- Sequence-level importance weighting
+- Developed by Qwen/Alibaba team
+- Better stability for longer sequences
+
 ### Custom Reward Functions
 
-#### Binary Rewards
-```python
-def compute_reward(instruction, generated, reference):
-    # Check for specific criteria
-    if "correct_answer" in generated.lower():
-        return 1.0
-    return 0.0
-```
+Configure reward functions in the training interface:
+- **Binary Rewards**: Simple correct/incorrect classification
+- **Regex Matching**: Pattern-based scoring
+- **Numerical Scoring**: Custom scoring functions
 
-#### Regex-based Rewards
-```python
-# Configure in GUI or config file
+### Template System
+
+Support for various chat templates:
+- Alpaca, ChatML, Vicuna formats
+- Custom Jinja2 templates
+- Special token configuration
+- System prompt integration
+
+### Export Formats
+
+**SafeTensors**
+- Efficient tensor serialization
+- Compatible with HuggingFace ecosystem
+- Preserves all LoRA adapter weights
+
+**GGUF (llama.cpp)**
+- Quantized formats (Q4_K_M, Q5_K_M, Q8_0)
+- Optimized for CPU inference
+- Compatible with Ollama and LM Studio
+
+**HuggingFace Hub**
+- Direct upload to HF repository
+- Automatic model card generation
+- Version control support
+
+## API Documentation
+
+### REST Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/system/info` | GET | System capabilities and status |
+| `/api/models` | GET | List available base models |
+| `/api/datasets/list` | GET | Available datasets and cache status |
+| `/api/training/start` | POST | Initialize training session |
+| `/api/training/{id}/status` | GET | Session status and metrics |
+| `/api/training/{id}/stop` | POST | Stop active training |
+| `/api/export/{id}` | POST | Export trained model |
+| `/api/configs/list` | GET | Saved configurations |
+
+### WebSocket Events
+
+**Client Events**
+- `join_session`: Subscribe to session updates
+- `leave_session`: Unsubscribe from updates
+- `request_update`: Request immediate status
+
+**Server Events**
+- `training_progress`: Progress percentage
+- `training_metrics`: Current metrics object
+- `training_log`: Console output
+- `training_complete`: Session finished
+- `training_error`: Error details
+
+### Configuration Schema
+
+```json
 {
-  "reward_type": "regex",
-  "regex_pattern": r"\[ANSWER\]:\s*\d+",
-  "weight": 1.0
+  "model_name": "unsloth/Qwen3-1.7B",
+  "dataset_path": "yahma/alpaca-cleaned",
+  "num_epochs": 3,
+  "batch_size": 4,
+  "learning_rate": 2e-4,
+  "algorithm": "grpo",
+  "lora_rank": 16,
+  "lora_alpha": 32,
+  "lora_target_modules": ["q_proj", "v_proj"],
+  "temperature": 0.7,
+  "max_length": 512,
+  "gradient_checkpointing": true,
+  "use_flash_attention": false,
+  "display_name": "My Fine-tuned Model"
 }
 ```
-
-#### Numerical Comparison
-```python
-# Extract and compare numerical values
-{
-  "reward_type": "numerical",
-  "extract_number": true,
-  "number_tolerance": 0.01,
-  "relative_tolerance": false
-}
-```
-
-### Prompt Templates
-
-Define custom templates with special markers:
-
-```
-System: You are a helpful AI assistant.
-User: {instruction}
-[THINKING]
-Let me think about this step by step...
-[/THINKING]
-Assistant: {response}
-```
-
-### Training Strategies
-
-#### Pre-Fine-Tuning Phase
-- Initial supervised fine-tuning before GRPO
-- Helps establish baseline performance
-- Configurable epochs and learning rate
-
-#### GRPO Training
-- Group relative optimization for better generalization
-- Multiple generations per prompt for diversity
-- KL-regularized policy optimization
-
-### Memory (poor) Estimates by Model Size
-- 0.6B models: ~2GB VRAM + 4GB RAM
-- 1-2B models: ~4GB VRAM + 8GB RAM
-- 4B models: ~8GB VRAM + 16GB RAM
-- 8B models: ~16GB VRAM + 32GB RAM
-- 15B models: ~30GB VRAM + 64GB RAM
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **CUDA Out of Memory**
-   - Reduce batch size to 1
-   - Enable gradient checkpointing
-   - Use 4-bit quantization
-   - Reduce sequence length
+**CUDA Out of Memory**
+- Reduce batch size in training configuration
+- Enable gradient checkpointing
+- Use 4-bit quantization for larger models
 
-2. **Slow Training**
-   - Enable mixed precision (fp16/bf16)
-   - Use flash attention (if supported)
-   - Increase gradient accumulation
-   - Check GPU utilization
+**Slow Training Speed**
+- Enable Flash Attention (requires Ampere GPUs)
+- Check CUDA version compatibility
+- Ensure GPU drivers are up to date
 
-3. **Import Errors**
-   - Ensure PyTorch is installed with CUDA support
-   - Verify Unsloth installation
-   - Check Python version compatibility
+**Connection Issues**
+- Verify firewall settings for port 5000
+- Check WebSocket compatibility
+- Try different browser if issues persist
 
-4. **GUI Not Starting**
-   - Verify Tkinter installation: `python -m tkinter`
-   - Check display settings on remote systems
-   - Try headless mode as alternative
+### Performance Optimization
 
-### Debug Mode
+1. **Memory Management**
+   - Use gradient accumulation for larger effective batch sizes
+   - Enable CPU offloading for optimizer states
+   - Clear cache between training sessions
 
-Run with enhanced logging:
-```bash
-python grpo_finetuner.py --debug
-```
+2. **Speed Improvements**
+   - Enable torch.compile for supported models
+   - Use mixed precision training (fp16/bf16)
+   - Optimize dataloader workers
 
-Check logs in `./logs/` directory for detailed information.
-
-## Command Line Options
-
-```
-usage: grpo_finetuner.py [-h] [--config CONFIG] [--headless]
-                         [--create-example-config] [--debug] [--version]
-
-GRPO Fine-Tuner - Train language models with GRPO
-
-options:
-  -h, --help               Show help message
-  --config CONFIG          Configuration file path (JSON)
-  --headless              Run without GUI
-  --create-example-config  Create example configuration file
-  --debug                 Enable debug mode with verbose logging
-  --version               Show version information (v1.0.0)
-```
-
-## Project Structure
-
-```
-grpo_gui/
-├── core/                  # Core training modules
-│   ├── grpo_trainer.py   # GRPO implementation
-│   ├── dataset_handler.py # Dataset processing
-│   ├── custom_rewards.py  # Reward functions
-│   ├── prompt_templates.py # Template system
-│   └── system_config.py   # Hardware detection
-├── gui/                   # GUI components
-│   ├── app.py            # Main application
-│   ├── tabs/             # Tab implementations
-│   ├── themed_dialog.py  # Themed dialogs
-│   ├── styled_widgets.py # Custom widgets
-│   └── theme_manager.py  # Theme system
-├── utils/                 # Utilities
-│   ├── logging_config.py # Logging setup
-│   └── validators.py     # Input validation
-├── assets/               # Application assets
-│   ├── icon.png         # App icon
-│   └── Rationale-Regular.ttf # Custom font
-├── configs/              # Configuration files
-├── logs/                 # Training logs
-├── outputs/              # Model outputs
-├── checkpoints/          # Training checkpoints
-├── exports/              # Exported models
-└── cache/                # Model cache
-```
+3. **Quality Tips**
+   - Start with lower learning rates (1e-5 to 5e-4)
+   - Use warmup steps for stable training
+   - Monitor gradient norms for instability
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License - see the LICENSE file for details. Use and modify as you wish without restriction!
+
+## Acknowledgments
+
+- **Unsloth**: For efficient training optimizations
+- **TRL**, **DeepSeek** & **Qwen** Teams: For GRPO/GSPO/DPO algorithms and implementations
+- **HuggingFace**: For model and dataset ecosystem

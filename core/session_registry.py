@@ -24,6 +24,7 @@ class SessionInfo:
     epochs_trained: Optional[int] = None
     training_config: Optional[Dict[str, Any]] = None
     exports: Optional[List[Dict[str, str]]] = None
+    display_name: Optional[str] = None  # User-friendly name for the model
 
     def to_dict(self) -> Dict:
         """Convert to dictionary, handling None values."""

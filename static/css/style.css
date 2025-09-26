@@ -1,9 +1,9 @@
-/* GRPO Fine-Tuner Professional Theme */
+/* LoRA Craft Professional Theme */
 
 /* Custom Font */
 @font-face {
     font-family: 'Rationale';
-    src: url('/static/fonts/Rationale-Regular.ttf') format('truetype');
+    src: url('/static/fonts/Coda-Regular.ttf') format('truetype');
     font-weight: 400;
     font-style: normal;
     font-display: swap; /* Improve loading performance */
@@ -70,10 +70,10 @@
 /* Dataset Card Styles */
 .dataset-catalog-card {
     position: relative;
-    padding: 1.5rem;
+    padding: 1rem;
     background: var(--bg-card);
     border: 2px solid var(--border-color);
-    border-radius: 12px;
+    border-radius: 10px;
     cursor: pointer;
     transition: all 0.3s ease;
     text-align: center;
@@ -87,7 +87,9 @@
 
 .dataset-catalog-card.selected {
     border-color: var(--primary);
+    border-width: 3px;
     background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
 }
 
 .dataset-catalog-card .dataset-status {
@@ -102,14 +104,15 @@
 }
 
 .dataset-catalog-card .dataset-icon {
-    font-size: 2.5rem;
-    margin-bottom: 0.75rem;
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
 }
 
 .dataset-catalog-card h6 {
     font-weight: 600;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.4rem;
     color: var(--text-primary);
+    font-size: 0.9rem;
 }
 
 .dataset-catalog-card .dataset-description {
@@ -155,47 +158,351 @@ body {
     color: var(--text-primary);
     line-height: 1.6;
     transition: background-color 0.3s ease, color 0.3s ease;
+    font-size: 0.875rem; /* Scale down base font from 16px to 14px */
 }
 
-/* Professional Navigation Bar */
-.navbar {
-    background: var(--gradient-primary);
-    padding: 1rem 0;
-    box-shadow: var(--shadow-lg);
-}
-
-.navbar-brand {
+/* Floating Icon Dock */
+.floating-icon-dock {
+    position: fixed;
+    top: 20px;
+    left: calc(25% - 44px); /* Precisely align icon with sidebar left edge */
+    z-index: 1040;
+    transition: none; /* Disable transition for smooth scrolling */
     display: flex;
     align-items: center;
-    color: white !important;
-    font-size: 1.5rem;
-    font-weight: 700;
-    text-decoration: none;
+    gap: 12px;
 }
 
-.brand-icon {
-    width: 45px;
-    height: 45px;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 12px;
+.icon-container {
+    position: relative;
+    width: 88px;
+    height: 88px;
+    background: radial-gradient(circle,rgba(255, 255, 255, 1) 0%, rgb(139, 92, 246, 1) 100%);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-right: 12px;
-    animation: pulse 2s infinite;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 3px solid #000;
 }
 
-.brand-icon i {
-    color: white;
+[data-theme="dark"] .icon-container {
+    background: radial-gradient(circle,rgba(30, 41, 59, 1) 0%, rgb(122, 79, 221, 1) 100%);
+    border-color: #000;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.icon-container:hover {
+    transform: scale(1.05);
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+    background: radial-gradient(circle,rgba(139, 92, 246, 1) 0%, rgb(255, 255, 255, 1) 100%);
+}
+
+[data-theme="dark"] .icon-container:hover {
+    background: radial-gradient(circle,rgba(122, 79, 221, 1) 0%, rgb(30, 41, 59, 1) 100%);
+}
+
+.app-icon {
+    width: 84px;
+    height: 84px;
+    object-fit: contain;
+}
+
+/* App title next to icon */
+.app-title {
     font-size: 1.5rem;
+    font-weight: 700;
+    color: #764ba2;
+    white-space: nowrap;
+    user-select: none;
+    letter-spacing: 1px;
+    text-shadow:
+        2px 2px 0 #000,
+        -2px -2px 0 #000,
+        2px -2px 0 #000,
+        -2px 2px 0 #000,
+        0 2px 0 #000,
+        0 -2px 0 #000,
+        2px 0 0 #000,
+        -2px 0 0 #000;
+    font-variation-settings: 'wght' 700;
+    transition: all 0.3s ease;
 }
 
-.badge-pro {
-    background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
-    color: #333;
-    padding: 2px 8px;
-    border-radius: 4px;
+.app-title:hover {
+    letter-spacing: 1.2px;
+    transform: translateX(2px);
+}
+
+[data-theme="dark"] .app-title {
+    color: #a78bfa;
+    text-shadow:
+        2px 2px 0 #000,
+        -2px -2px 0 #000,
+        2px -2px 0 #000,
+        -2px 2px 0 #000,
+        0 2px 0 #000,
+        0 -2px 0 #000,
+        2px 0 0 #000,
+        -2px 0 0 #000;
+}
+
+
+/* Compact Navigation Bar */
+.navbar-compact {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 32px;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.95) 0%, rgba(139, 92, 246, 0.95) 100%);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+    z-index: 1030;
+    display: flex;
+    flex-direction: column;
+}
+
+.navbar-compact-content {
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 16px;
+    position: relative;
+}
+
+.navbar-left-spacer {
+    width: 0; /* Remove spacer to center content */
+}
+
+.navbar-center {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: visible; /* Allow GPU text to show */
+    padding: 0 10px;
+    margin: 0 auto;
+}
+
+.status-indicators {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: nowrap;
+    justify-content: center;
+}
+
+.status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.75rem;
+    cursor: help;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    min-width: 0;
+    flex-shrink: 1;
+}
+
+/* Give GPU status more space */
+.status-indicator:first-child {
+    flex-shrink: 0;
+    min-width: 150px;
+}
+
+.status-indicator:first-child .indicator-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+    display: inline-block;
+}
+
+.status-indicator:hover {
+    color: white;
+    transform: translateY(-1px);
+}
+
+.status-indicator i {
+    font-size: 0.875rem;
+}
+
+.indicator-value {
+    font-size: 0.75rem;
+    font-weight: 500;
+    opacity: 0.9;
+    max-width: none;
+}
+
+.indicator-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.indicator-dot.online {
+    background: #10b981;
+    box-shadow: 0 0 4px #10b981;
+    animation: pulse-dot 2s infinite;
+}
+
+.indicator-dot.offline {
+    background: #ef4444;
+}
+
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.navbar-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.action-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.75rem;
+}
+
+.action-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+}
+
+/* Integrated Progress Bar */
+.navbar-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+.progress-bar-thin {
+    height: 100%;
+    background: linear-gradient(90deg, #10b981, #34d399);
+    transition: width 0.3s ease;
+    position: relative;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+}
+
+.progress-bar-thin::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg,
+        transparent,
+        rgba(255, 255, 255, 0.3),
+        transparent);
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.progress-text {
+    position: absolute;
+    right: 10px;
+    top: -20px;
     font-size: 0.7rem;
+    color: white;
+    font-weight: 600;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+/* Sidebar animations */
+.sidebar-column {
+    transition: all 0.3s ease;
+    padding-top: 95px; /* Push down to align with Model Configuration header */
+}
+
+.sidebar-column.hidden {
+    margin-left: -25%;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Responsive adjustments */
+@media (max-width: 992px) and (min-width: 769px) {
+    .floating-icon-dock {
+        left: calc(33.33% - 44px); /* Adjust for medium screens (col-md-4) */
+    }
+
+    .navbar-left-spacer {
+        width: calc(33.33% - 20px);
+    }
+}
+
+@media (max-width: 768px) {
+    .floating-icon-dock {
+        top: 15px;
+        left: calc(50% - 60px); /* Center on smaller screens */
+    }
+
+    .app-title {
+        font-size: 1.2rem; /* Smaller on mobile */
+    }
+
+    .icon-container {
+        width: 56px;
+        height: 56px;
+    }
+
+    .app-icon {
+        width: 52px;
+        height: 52px;
+    }
+
+    .navbar-left-spacer {
+        width: 15px;
+    }
+
+    .status-indicators {
+        gap: 15px;
+    }
+
+    .indicator-value {
+        display: none;
+    }
+
+    .status-indicator:hover .indicator-value {
+        display: inline;
+    }
+}
+
+/* Hide old navbar elements */
+.navbar, .brand-text, .badge-pro {
+    display: none !important;
     margin-left: 8px;
     font-weight: 600;
 }
@@ -238,10 +545,15 @@ body {
     padding: 0 1rem;
 }
 
+.main-container.with-compact-header {
+    margin-top: 45px; /* Account for fixed header + floating icon */
+    padding-top: 16px;
+}
+
 /* Sidebar Cards */
 .sidebar-card {
     background: var(--bg-card);
-    border-radius: 16px;
+    border-radius: 12px;
     overflow: visible !important; /* Changed from hidden to visible to prevent button clipping */
     box-shadow: var(--shadow-md);
     transition: transform 0.3s ease, box-shadow 0.3s ease;
@@ -257,20 +569,20 @@ body {
 .sidebar-card .card-header {
     background: var(--gradient-primary);
     color: white;
-    padding: 1rem;
+    padding: 0.75rem;
     border: none;
-    border-radius: 16px 16px 0 0; /* Maintain rounded top corners */
+    border-radius: 12px 12px 0 0; /* Maintain rounded top corners */
 }
 
 .sidebar-card .card-header h5 {
     margin: 0;
-    font-size: 1.1rem;
+    font-size: 0.95rem;
     font-weight: 600;
 }
 
 .sidebar-card .card-body {
-    padding: 1rem;
-    border-radius: 0 0 16px 16px; /* Maintain rounded bottom corners */
+    padding: 0.75rem;
+    border-radius: 0 0 12px 12px; /* Maintain rounded bottom corners */
 }
 
 /* Fix button styling in sidebar */
@@ -303,8 +615,8 @@ body {
 /* Workflow Progress */
 .workflow-progress {
     background: var(--bg-card);
-    padding: 2rem;
-    border-radius: 16px;
+    padding: 1.5rem;
+    border-radius: 12px;
     box-shadow: var(--shadow-md);
 }
 
@@ -331,10 +643,10 @@ body {
 }
 
 .step-icon {
-    width: 60px;
-    height: 60px;
+    width: 48px;
+    height: 48px;
     background: var(--bg-tertiary);
-    border: 3px solid var(--border-color);
+    border: 2px solid var(--border-color);
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -358,8 +670,8 @@ body {
 }
 
 .step-label {
-    margin-top: 8px;
-    font-size: 0.9rem;
+    margin-top: 6px;
+    font-size: 0.75rem;
     color: var(--text-secondary);
     font-weight: 500;
 }
@@ -385,7 +697,7 @@ body {
 
 .step-card {
     background: var(--bg-card);
-    border-radius: 16px;
+    border-radius: 12px;
     overflow: hidden;
     box-shadow: var(--shadow-md);
     transition: all 0.3s ease;
@@ -463,10 +775,10 @@ body {
 
 /* Unified Card Button Style */
 .selection-card {
-    padding: 1.5rem;
+    padding: 1rem;
     background: var(--bg-primary);
     border: 2px solid var(--border-color);
-    border-radius: 12px;
+    border-radius: 10px;
     text-align: center;
     cursor: pointer;
     transition: all 0.3s ease;
@@ -494,19 +806,19 @@ body {
 }
 
 .selection-card i {
-    font-size: 1.5rem;
-    margin-bottom: 0.25rem;
+    font-size: 1.2rem;
+    margin-bottom: 0.2rem;
 }
 
 .selection-card h6,
 .selection-card span {
     margin: 0;
     font-weight: 600;
-    font-size: 1rem;
+    font-size: 0.85rem;
 }
 
 .selection-card small {
-    font-size: 0.8rem;
+    font-size: 0.7rem;
     color: var(--text-muted);
     margin: 0;
 }
@@ -557,6 +869,27 @@ body {
     outline: none;
     border-color: var(--primary);
     box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+}
+
+/* Model Display Name specific styling */
+#model-display-name {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] #model-display-name {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+#model-display-name::placeholder {
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
+[data-theme="dark"] #model-display-name::placeholder {
+    color: var(--text-muted);
+    opacity: 0.6;
 }
 
 .form-range {
@@ -838,6 +1171,28 @@ body {
 }
 
 /* Training Monitor */
+/* Sticky Progress Bar */
+.sticky-progress-bar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--bg-primary);
+    padding: 1rem;
+    margin: 1rem 0;
+    border-radius: 8px;
+    box-shadow: var(--shadow-md);
+}
+
+.sticky-progress-bar .progress {
+    height: 30px;
+    margin-bottom: 0;
+}
+
+.sticky-progress-bar .progress-bar {
+    font-size: 14px;
+    font-weight: 600;
+}
+
 .training-monitor {
     margin-top: 2rem;
     padding: 1.5rem;

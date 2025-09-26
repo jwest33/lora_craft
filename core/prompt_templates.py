@@ -114,6 +114,8 @@ class UnslothTemplateAdapter:
             'messages': messages,
             'add_generation_prompt': add_generation_prompt,
             'eos_token': eos_token or (self.tokenizer.eos_token if self.tokenizer else ''),
+            'system_prompt': kwargs.get('system_prompt', ''),  # Ensure system_prompt is defined
+            'reasoning_start': reasoning_start_marker or '',  # Ensure reasoning_start is defined
             **kwargs
         }
 
@@ -396,18 +398,14 @@ class PromptTemplate:
         if isinstance(sample, list):
             return self.apply_chat_template(sample, add_generation_prompt=(mode == 'inference'))
 
-        # Handle dictionary format (legacy)
-        variables = self._prepare_variables(sample)
-
-        # Get appropriate template
+        # Handle dictionary format
         if self.config.chat_template and self._compiled_template:
-            # Use Jinja2 template
-            try:
-                formatted = self._compiled_template.render(**variables)
-            except UndefinedError as e:
-                logger.error(f"Missing variable in template: {e}")
-                formatted = str(e)
+            # For chat templates, convert instruction/output to messages format
+            messages = self._convert_to_messages(sample)
+            return self.apply_chat_template(messages, add_generation_prompt=(mode == 'inference'))
         else:
+            # Use legacy template formatting
+            variables = self._prepare_variables(sample)
             # Build template from parts
             template = self._build_template(mode)
             # Simple string formatting for backward compatibility
@@ -450,14 +448,15 @@ class PromptTemplate:
                 'messages': messages,
                 'add_generation_prompt': add_generation_prompt,
                 'eos_token': self.config.eos_token or '',
+                'system_prompt': self.config.system_prompt or '',  # Always include, even if empty
                 **kwargs
             }
 
             # Add GRPO-specific variables
-            if self.config.system_prompt:
-                template_vars['system_prompt'] = self.config.system_prompt
             if add_generation_prompt and self.config.prepend_reasoning_start:
                 template_vars['reasoning_start'] = self.config.reasoning_start_marker
+            else:
+                template_vars['reasoning_start'] = ''  # Ensure it's defined even if not used
 
             try:
                 result = self._compiled_template.render(**template_vars)
@@ -506,6 +505,58 @@ class PromptTemplate:
                 parts[-1] += " " + self.config.reasoning_start_marker
 
         return "\n\n".join(parts)
+
+    def _convert_to_messages(self, sample: Dict[str, Any]) -> List[Dict[str, str]]:
+        """Convert instruction/output format to messages format.
+
+        Args:
+            sample: Dictionary with instruction/output fields
+
+        Returns:
+            List of message dictionaries with role and content
+        """
+        messages = []
+
+        # Add system message if configured
+        if self.config.system_prompt:
+            messages.append({
+                "role": "system",
+                "content": self.config.system_prompt
+            })
+
+        # Get instruction field
+        instruction = sample.get('instruction')
+        if not instruction:
+            # Try common field names
+            for field in ['prompt', 'question', 'input', 'text']:
+                if field in sample:
+                    instruction = sample[field]
+                    break
+
+        # Get response field
+        response = sample.get('response')
+        if not response:
+            # Try common field names
+            for field in ['answer', 'output', 'completion', 'label']:
+                if field in sample:
+                    response = sample[field]
+                    break
+
+        # Add user message
+        if instruction:
+            messages.append({
+                "role": "user",
+                "content": str(instruction)
+            })
+
+        # Add assistant message (for training mode)
+        if response:
+            messages.append({
+                "role": "assistant",
+                "content": str(response)
+            })
+
+        return messages
 
     def _prepare_variables(self, sample: Dict[str, Any]) -> Dict[str, Any]:
         """Prepare variables for template formatting."""
@@ -768,8 +819,45 @@ class PromptTemplate:
             logger.warning("No chat template defined for Unsloth setup")
             return tokenizer
 
-        # Set the chat template on tokenizer
-        tokenizer.chat_template = self.config.chat_template
+        # Prepare the chat template with embedded system prompt
+        # This avoids the undefined variable issue when TRL uses the template
+        chat_template = self.config.chat_template
+
+        # Get the actual values to embed
+        system_prompt_text = self.config.system_prompt or ''
+        reasoning_text = self.config.reasoning_start_marker or ''
+        eos_token_placeholder = '{{ eos_token }}'  # Keep eos_token as variable since tokenizer provides it
+
+        # Handle the expression {{ system_prompt + eos_token }}
+        if '{{ system_prompt + eos_token }}' in chat_template:
+            # Replace with concatenated result, keeping eos_token as variable
+            replacement = system_prompt_text + eos_token_placeholder
+            chat_template = chat_template.replace('{{ system_prompt + eos_token }}', replacement)
+
+        # Handle {{ system_prompt }} standalone (if any remain)
+        if '{{ system_prompt }}' in chat_template:
+            chat_template = chat_template.replace('{{ system_prompt }}', system_prompt_text)
+
+        # Handle the |default filter syntax if present
+        if 'system_prompt|default' in chat_template:
+            chat_template = chat_template.replace('{{ system_prompt|default(\'\') }}', system_prompt_text)
+            chat_template = chat_template.replace('{{ system_prompt|default("") }}', system_prompt_text)
+
+        # Handle reasoning_start variable
+        if '{{ reasoning_start }}' in chat_template:
+            chat_template = chat_template.replace('{{ reasoning_start }}', reasoning_text)
+
+        # Use regex to catch any remaining system_prompt references in expressions
+        import re
+        # Match any {{ ... system_prompt ... }} pattern
+        pattern = r'\{\{[^}]*system_prompt[^}]*\}\}'
+        if re.search(pattern, chat_template):
+            logger.warning("Found complex system_prompt expression in template, attempting to simplify")
+            # For safety, replace any remaining system_prompt references with empty string
+            chat_template = re.sub(r'\bsystem_prompt\b', '""', chat_template)
+
+        # Set the processed template on tokenizer
+        tokenizer.chat_template = chat_template
 
         # Set special tokens if configured
         if self.config.bos_token:
@@ -777,7 +865,7 @@ class PromptTemplate:
         if self.config.eos_token:
             tokenizer.eos_token = self.config.eos_token
 
-        logger.info(f"Configured tokenizer with {self.config.name} template")
+        logger.info(f"Configured tokenizer with {self.config.name} template (system_prompt embedded)")
         return tokenizer
 
     def to_dict(self) -> Dict[str, Any]:

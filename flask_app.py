@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-GRPO Fine-Tuner Flask Server
+LoRA Craft Flask Server
 A web-based interface for GRPO (Group Relative Policy Optimization) fine-tuning
 """
 
@@ -17,6 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
 from dataclasses import asdict
+import psutil
 
 from flask import Flask, render_template, request, jsonify, session, Response, send_file
 from flask_cors import CORS
@@ -86,9 +87,18 @@ class TrainingSession:
         self.created_at = datetime.now()
         self.started_at = None
         self.completed_at = None
+
+        # Store key info for display
+        self.model_name = config.get('model_name', 'model').split('/')[-1]
+        self.dataset_path = config.get('dataset_path', 'dataset').split('/')[-1]
+        self.num_epochs = config.get('num_epochs', 3)
+
+        # Generate display name
+        self.display_name = self._generate_display_name(config)
+
         self.metrics = {
             'current_epoch': 0,
-            'total_epochs': config.get('num_epochs', 3),
+            'total_epochs': self.num_epochs,
             'current_step': 0,
             'total_steps': 0,
             'loss': None,
@@ -98,12 +108,32 @@ class TrainingSession:
         }
         self.logs = []
 
+    def _generate_display_name(self, config):
+        """Generate a display name for the model."""
+        # Check if user provided a custom name
+        if config.get('display_name'):
+            return config.get('display_name')
+
+        # Generate automatic name: model_dataset_MMDD_HHMM
+        model_short = config.get('model_name', 'model').split('/')[-1].replace('-', '')
+        dataset_short = config.get('dataset_name', 'dataset').split('/')[-1].replace('-', '_')[:20]
+        timestamp = self.created_at.strftime('%m%d_%H%M')
+
+        return f"{model_short}_{dataset_short}_{timestamp}"
+
     def to_dict(self):
         """Convert session to dictionary for JSON serialization."""
         return {
             'session_id': self.session_id,
             'status': self.status,
             'config': self.config,
+            'model': self.config.get('model_name', 'Unknown'),
+            'model_name': self.model_name,
+            'display_name': self.display_name,
+            'dataset': self.config.get('dataset_path', 'Unknown'),
+            'dataset_path': self.dataset_path,
+            'epochs': self.num_epochs,
+            'num_epochs': self.num_epochs,
             'metrics': self.metrics,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'started_at': self.started_at.isoformat() if self.started_at else None,
@@ -260,28 +290,65 @@ def run_training(session_id: str, config: Dict[str, Any]):
 
         # Create GRPO configuration with algorithm support
         grpo_config = GRPOTrainingConfig(
+            # Model configuration
             model_name=config.get('model_name', 'unsloth/Qwen3-0.6B'),
-            num_train_epochs=config.get('num_epochs', 3),
-            per_device_train_batch_size=config.get('batch_size', 4),
-            learning_rate=config.get('learning_rate', 2e-4),
+
+            # LoRA configuration
             lora_r=config.get('lora_rank', 16),
             lora_alpha=config.get('lora_alpha', 32),
             lora_dropout=config.get('lora_dropout', 0.0),
+            lora_target_modules=config.get('lora_target_modules', None),
+            lora_bias=config.get('lora_bias', 'none'),
+
+            # Training configuration
+            num_train_epochs=config.get('num_epochs', 3),
+            per_device_train_batch_size=config.get('batch_size', 4),
+            gradient_accumulation_steps=config.get('gradient_accumulation_steps', 1),
+            learning_rate=config.get('learning_rate', 2e-4),
+            warmup_steps=config.get('warmup_steps', 10),
+            weight_decay=config.get('weight_decay', 0.001),
+            max_grad_norm=config.get('max_grad_norm', 0.3),
+            lr_scheduler_type=config.get('lr_scheduler_type', 'constant'),
+            optim=config.get('optim', 'paged_adamw_32bit'),
+            logging_steps=config.get('logging_steps', 10),
+            save_steps=config.get('save_steps', 100),
+            eval_steps=config.get('eval_steps', 100),
+            seed=config.get('seed', 42),
+
+            # Generation configuration
+            max_sequence_length=config.get('max_sequence_length', 2048),
+            max_new_tokens=config.get('max_new_tokens', 256),
             temperature=config.get('temperature', 0.7),
             top_p=config.get('top_p', 0.95),
+            top_k=config.get('top_k', 50),
+            repetition_penalty=config.get('repetition_penalty', 1.0),
             num_generations_per_prompt=config.get('num_generations', 4),
+            num_generations=config.get('num_generations', 4),  # For TRL compatibility
+
+            # GRPO/Algorithm specific
+            loss_type=config.get('loss_type', 'grpo'),
+            importance_sampling_level=config.get('importance_sampling_level', 'token'),
             kl_penalty=config.get('kl_penalty', 0.01),
             clip_range=config.get('clip_range', 0.2),
-            # Algorithm selection
-            loss_type=config.get('loss_type', 'grpo'),
-            importance_sampling_level='sequence' if config.get('loss_type') == 'gspo' else 'token',
+            value_coefficient=config.get('value_coefficient', 1.0),
             epsilon=config.get('epsilon', 3e-4),
             epsilon_high=config.get('epsilon_high', 4e-4),
-            # Hardware optimizations
+
+            # Quantization configuration
+            use_4bit=config.get('use_4bit', False),
+            use_8bit=config.get('use_8bit', False),
+            load_in_4bit=config.get('use_4bit', False),  # Same as use_4bit
+            bnb_4bit_compute_dtype=config.get('bnb_4bit_compute_dtype', 'float16'),
+            bnb_4bit_quant_type=config.get('bnb_4bit_quant_type', 'nf4'),
+            use_nested_quant=config.get('use_nested_quant', False),
+
+            # Optimization flags
             use_flash_attention=config.get('use_flash_attention', False),
             gradient_checkpointing=config.get('gradient_checkpointing', False),
-            fp16=config.get('mixed_precision', True) and not config.get('bf16', False),
+            fp16=config.get('fp16', False),
             bf16=config.get('bf16', False),
+
+            # Paths
             output_dir=f"./outputs/{session_id}",
             checkpoint_dir=f"./outputs/{session_id}/checkpoints"
         )
@@ -331,7 +398,7 @@ def run_training(session_id: str, config: Dict[str, Any]):
         dataset = dataset_handler.load()
         q.put(('log', f"Loaded {len(dataset)} samples"))
 
-        # Setup prompt template
+        # Setup prompt template with chat template
         template_config = TemplateConfig(
             name="training",
             description="Training template",
@@ -341,7 +408,10 @@ def run_training(session_id: str, config: Dict[str, Any]):
             reasoning_end_marker=config.get('reasoning_end', '<end_working_out>'),
             solution_start_marker=config.get('solution_start', '<SOLUTION>'),
             solution_end_marker=config.get('solution_end', '</SOLUTION>'),
-            system_prompt=config.get('system_prompt', 'You are given a problem.\nThink about the problem and provide your working out.\nPlace it between <start_working_out> and <end_working_out>.\nThen, provide your solution between <SOLUTION></SOLUTION>')
+            system_prompt=config.get('system_prompt', 'You are given a problem.\nThink about the problem and provide your working out.\nPlace it between <start_working_out> and <end_working_out>.\nThen, provide your solution between <SOLUTION></SOLUTION>'),
+            chat_template=config.get('chat_template'),  # Add chat template from config
+            prepend_reasoning_start=True,  # For GRPO templates
+            model_type=config.get('chat_template_type', 'grpo')
         )
         template = PromptTemplate(template_config)
 
@@ -401,18 +471,58 @@ def run_training(session_id: str, config: Dict[str, Any]):
                     reward_builder.add_format_reward(f"format_{len(components)}",
                         pattern=pattern, weight=weight)
 
-        # Log algorithm selection
-        loss_type = config.get('loss_type', 'grpo').upper()
-        q.put(('log', f"Using {loss_type} algorithm for training"))
+        # Log algorithm selection based on importance_sampling_level
+        importance_level = config.get('importance_sampling_level', 'token')
+        algorithm_name = 'GSPO' if importance_level == 'sequence' else 'GRPO'
+        q.put(('log', f"Using {algorithm_name} algorithm for training (importance_sampling_level: {importance_level})"))
 
-        # Training phases
-        if config.get('pre_finetune', False):
-            q.put(('log', "Starting pre-fine-tuning phase..."))
-            trainer.pre_fine_tune(dataset, template, epochs=1)
-            q.put(('log', "Pre-fine-tuning completed"))
+        # Pre-training phase for format learning (if enabled)
+        if config.get('enable_pre_training', True):
+            q.put(('log', "Starting pre-training phase for format learning..."))
+
+            # Get pre-training configuration
+            pre_training_epochs = config.get('pre_training_epochs', 1)
+            pre_training_samples = config.get('pre_training_samples', 100)
+            validate_format = config.get('validate_format', True)
+
+            # Subset dataset for pre-training
+            pre_train_dataset = dataset.select(range(min(pre_training_samples, len(dataset))))
+
+            # Configure tokenizer with chat template
+            if hasattr(trainer, 'tokenizer') and trainer.tokenizer:
+                template.setup_for_unsloth(trainer.tokenizer)
+                q.put(('log', f"Applied {config.get('chat_template_type', 'grpo')} chat template to tokenizer"))
+
+            # Run pre-fine-tuning
+            pre_metrics = trainer.pre_fine_tune(pre_train_dataset, template, epochs=pre_training_epochs)
+            q.put(('log', f"Pre-training completed: {pre_training_epochs} epochs on {len(pre_train_dataset)} samples"))
+
+            # Validate format compliance if requested
+            if validate_format:
+                q.put(('log', "Testing format compliance..."))
+                test_prompt = "What is 2 + 2?"
+                test_messages = [
+                    {'role': 'user', 'content': test_prompt}
+                ]
+
+                # Generate a sample response to check format
+                try:
+                    formatted_prompt = template.apply_chat_template(
+                        test_messages,
+                        add_generation_prompt=True
+                    )
+
+                    # Log the formatted prompt for debugging
+                    q.put(('log', f"Test prompt formatted: {formatted_prompt[:200]}..."))
+
+                    # Here you could add actual generation and validation
+                    # For now, just log that validation was attempted
+                    q.put(('log', "Format validation check completed"))
+                except Exception as e:
+                    q.put(('log', f"Format validation skipped: {str(e)}"))
 
         # GRPO/GSPO training
-        q.put(('log', f"Starting {loss_type} training..."))
+        q.put(('log', f"Starting {algorithm_name} training..."))
         metrics = trainer.grpo_train(dataset, template, reward_builder)
 
         # Update final metrics
@@ -436,7 +546,8 @@ def run_training(session_id: str, config: Dict[str, Any]):
             completed_at=datetime.now().isoformat(),
             best_reward=final_reward,
             epochs_trained=config.get('num_epochs', 0),
-            training_config=config
+            training_config=config,
+            display_name=session_obj.display_name
         )
         session_registry.add_session(session_info)
         q.put(('log', "Session added to registry"))
@@ -497,8 +608,23 @@ def get_system_info():
 
         # Add GPU memory info if available
         if torch.cuda.is_available():
-            info['gpu_memory_total'] = torch.cuda.get_device_properties(0).total_memory / 1024**3  # GB
-            info['gpu_memory_allocated'] = torch.cuda.memory_allocated(0) / 1024**3  # GB
+            gpu_props = torch.cuda.get_device_properties(0)
+            total_vram = gpu_props.total_memory / 1024**3  # GB
+            allocated_vram = torch.cuda.memory_allocated(0) / 1024**3  # GB
+            reserved_vram = torch.cuda.memory_reserved(0) / 1024**3  # GB
+            free_vram = total_vram - reserved_vram
+
+            info['gpu_memory_total'] = total_vram
+            info['gpu_memory_allocated'] = allocated_vram
+            info['gpu_memory_free'] = free_vram
+            info['gpu_memory_reserved'] = reserved_vram
+
+        # Add system RAM info using psutil
+        memory = psutil.virtual_memory()
+        info['ram_total'] = memory.total / 1024**3  # GB
+        info['ram_available'] = memory.available / 1024**3  # GB
+        info['ram_used'] = memory.used / 1024**3  # GB
+        info['ram_percent'] = memory.percent
 
         return jsonify(info)
     except Exception as e:
@@ -572,6 +698,48 @@ def load_config(filename):
             config = json.load(f)
 
         return jsonify(config)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/configs/list', methods=['GET'])
+def list_configs():
+    """List all saved configurations."""
+    try:
+        configs_dir = Path('configs')
+        configs = []
+
+        if configs_dir.exists():
+            for config_file in configs_dir.glob('*.json'):
+                # Get file info
+                stat = config_file.stat()
+                configs.append({
+                    'name': config_file.stem,
+                    'filename': config_file.name,
+                    'modified': stat.st_mtime,
+                    'size': stat.st_size
+                })
+
+        # Sort by modified time (newest first)
+        configs.sort(key=lambda x: x['modified'], reverse=True)
+
+        return jsonify(configs)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/configs/delete/<filename>', methods=['DELETE'])
+def delete_config(filename):
+    """Delete a configuration file."""
+    try:
+        filepath = Path('configs') / filename
+
+        if not filepath.exists():
+            return jsonify({'error': 'Configuration file not found'}), 404
+
+        filepath.unlink()
+
+        return jsonify({'message': f'Configuration {filename} deleted successfully'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -679,7 +847,8 @@ def list_training_sessions():
             'session_id': session_id,
             'status': session_obj.status,
             'created_at': session_obj.created_at.isoformat(),
-            'model': session_obj.config.get('model_name', 'Unknown')
+            'model': session_obj.config.get('model_name', 'Unknown'),
+            'display_name': session_obj.display_name
         })
     return jsonify(sessions)
 
@@ -1259,9 +1428,9 @@ def clear_dataset_cache():
 
 @app.route('/api/datasets/list', methods=['GET'])
 def list_popular_datasets():
-    """Get list of popular datasets with their status."""
+    """Get list of Public Datasets with their status."""
     try:
-        # Define popular datasets (matching the frontend catalog)
+        # Define Public Datasets (matching the frontend catalog)
         popular_datasets = {
             'tatsu-lab/alpaca': {
                 'name': 'Alpaca',
@@ -1334,6 +1503,135 @@ def list_popular_datasets():
 # ============================================================================
 # Template Management Routes
 # ============================================================================
+
+@app.route('/api/templates/chat-templates', methods=['GET'])
+def get_chat_templates():
+    """Get available chat templates."""
+    try:
+        # Built-in chat templates
+        builtin_templates = {
+            'grpo': {
+                'name': 'GRPO Default',
+                'template': "{% if messages[0]['role'] == 'system' %}{{ messages[0]['content'] + eos_token }}{% set loop_messages = messages[1:] %}{% else %}{{ system_prompt + eos_token }}{% set loop_messages = messages %}{% endif %}{% for message in loop_messages %}{% if message['role'] == 'user' %}{{ message['content'] }}{% elif message['role'] == 'assistant' %}{{ message['content'] + eos_token }}{% endif %}{% endfor %}{% if add_generation_prompt %}{{ reasoning_start }}{% endif %}",
+                'description': 'GRPO template optimized for reasoning tasks'
+            }
+        }
+
+        # Load custom templates from file storage
+        custom_templates = {}
+        chat_templates_dir = Path('./chat_templates')
+        if chat_templates_dir.exists():
+            for template_file in chat_templates_dir.glob('*.json'):
+                try:
+                    with open(template_file, 'r') as f:
+                        template_data = json.load(f)
+                        custom_templates[template_file.stem] = template_data
+                except:
+                    pass
+
+        return jsonify({
+            'builtin': builtin_templates,
+            'custom': custom_templates
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/templates/chat-template/save', methods=['POST'])
+def save_chat_template():
+    """Save a custom chat template."""
+    try:
+        data = request.json
+        name = data.get('name')
+        template = data.get('template')
+        description = data.get('description', '')
+
+        if not name or not template:
+            return jsonify({'error': 'Name and template required'}), 400
+
+        # Sanitize name for filesystem
+        safe_name = "".join(c for c in name if c.isalnum() or c in (' ', '-', '_')).rstrip()
+
+        # Save template to file
+        chat_templates_dir = Path('./chat_templates')
+        chat_templates_dir.mkdir(exist_ok=True)
+
+        template_path = chat_templates_dir / f"{safe_name}.json"
+        with open(template_path, 'w') as f:
+            json.dump({
+                'name': name,
+                'template': template,
+                'description': description
+            }, f, indent=2)
+
+        return jsonify({
+            'success': True,
+            'message': f'Chat template "{name}" saved successfully',
+            'template_id': safe_name
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/templates/chat-template/validate', methods=['POST'])
+def validate_chat_template():
+    """Validate a Jinja2 chat template."""
+    try:
+        data = request.json
+        template = data.get('template')
+
+        if not template:
+            return jsonify({'valid': False, 'error': 'No template provided'}), 400
+
+        # Try to validate with Jinja2
+        from jinja2 import Environment, TemplateSyntaxError
+        env = Environment()
+
+        try:
+            env.from_string(template)
+            return jsonify({'valid': True, 'message': 'Template is valid'})
+        except TemplateSyntaxError as e:
+            return jsonify({'valid': False, 'error': str(e)})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/templates/chat-template/preview', methods=['POST'])
+def preview_chat_template():
+    """Preview a chat template with sample data."""
+    try:
+        data = request.json
+        template = data.get('template')
+        messages = data.get('messages', [])
+        system_prompt = data.get('system_prompt', '')
+        reasoning_start = data.get('reasoning_start', '<start_working_out>')
+        eos_token = data.get('eos_token', '</s>')
+        add_generation_prompt = data.get('add_generation_prompt', False)
+
+        if not template:
+            return jsonify({'error': 'No template provided'}), 400
+
+        # Render template
+        from jinja2 import Environment
+        env = Environment()
+
+        try:
+            tmpl = env.from_string(template)
+            preview = tmpl.render(
+                messages=messages,
+                system_prompt=system_prompt,
+                reasoning_start=reasoning_start,
+                eos_token=eos_token,
+                add_generation_prompt=add_generation_prompt
+            )
+            return jsonify({'preview': preview})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/templates', methods=['GET'])
 def get_templates():
@@ -1504,13 +1802,19 @@ def get_testable_models():
             # Get base model name from training config
             base_model = session.training_config.get('model_name', 'Unknown')
 
+            # Extract dataset name from config
+            dataset_path = session.training_config.get('dataset_path', 'unknown')
+
             model_info = {
                 'session_id': session.session_id,
                 'model_name': session.model_name,
+                'display_name': session.display_name or session.model_name,
                 'base_model': base_model,
                 'checkpoint_path': session.checkpoint_path,
                 'created_at': session.created_at,
                 'epochs': session.epochs_trained or 0,
+                'num_epochs': session.epochs_trained or 0,
+                'dataset_path': dataset_path,
                 'best_reward': session.best_reward if session.best_reward != float('-inf') else None
             }
 

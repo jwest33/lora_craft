@@ -251,7 +251,7 @@ class ModelExporter:
             # Create README
             readme_content = f"""# Exported Model
 
-This model was exported from GRPO Fine-Tuner.
+This model was exported from LoRA Craft.
 
 ## Format
 HuggingFace Transformers format
@@ -485,7 +485,7 @@ output = llm("Your prompt here", max_tokens=100)
             "is_lora": is_lora,
             "lora_merged": merge_lora if is_lora else None,
             "quantization": quantization,
-            "export_tool": "GRPO Fine-Tuner",
+            "export_tool": "LoRA Craft",
             "export_version": "1.0.0"
         }
 
