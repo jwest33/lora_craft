@@ -1,4 +1,4 @@
-"""Utility modules for the GRPO Fine-Tuner application."""
+"""Utility modules for the LoRA Craft application."""
 
 from .logging_config import LogManager, get_logger, setup_logging
 from .validators import (

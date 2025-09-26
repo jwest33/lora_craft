@@ -8,7 +8,7 @@ xformers>=0.0.33 # pip install -v --no-build-isolation -U git+https://github.com
 
 # GRPO and Fine-tuning
 unsloth>=2025.9.7
-trl>=0.7.0
+trl==0.21.0
 # vllm>=0.2.0  # Optional: Linux/Mac only for faster generation
 peft>=0.5.0
 
@@ -29,12 +29,23 @@ py-cpuinfo>=9.0.0  # Optional: Detailed CPU information
 llama-cpp-python>=0.3.16
 mistral-common>=1.8.3
 gguf>=0.1.0
+huggingface_hub[hf_xet]
 
 # Configuration and Logging
 pyyaml>=6.0
 jsonschema>=4.0.0
 python-dotenv>=1.0.0
 jinja2>=3.1.0
+
+# Core Flask dependencies
+flask>=3.0.0
+flask-cors>=4.0.0
+flask-socketio>=5.3.0
+python-socketio>=5.10.0
+
+# Additional web dependencies
+eventlet>=0.33.0  # For async support with SocketIO
+gunicorn>=21.2.0  # Production WSGI server
 
 # Optional: Export formats
 safetensors>=0.6.2

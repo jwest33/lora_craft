@@ -1,0 +1,1651 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LoRA Craft</title>
+
+    <!-- Favicon and App Icons -->
+    <link rel="icon" type="image/png" sizes="64x64" href="{{ url_for('static', filename='images/lora_craft.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/lora_craft.png') }}">
+    <meta name="theme-color" content="#6366f1">
+
+    <!-- PWA Manifest (optional) -->
+    <link rel="manifest" href="/manifest.json">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+    <!-- Chart.js for metrics -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.css">
+
+    <!-- Custom Styles -->
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+</head>
+<body>
+    <!-- Floating Icon Dock -->
+    <div class="floating-icon-dock">
+        <div class="icon-container">
+            <img src="{{ url_for('static', filename='images/lora_craft.png') }}" alt="LoRA Craft" class="app-icon">
+        </div>
+        <div class="app-title">LoRA Craft</div>
+    </div>
+
+    <!-- Compact Navigation Bar -->
+    <nav class="navbar-compact">
+        <div class="navbar-compact-content">
+            <!-- Center: Status Indicators -->
+            <div class="navbar-center">
+                <div class="status-indicators">
+                    <div class="status-indicator" data-bs-toggle="tooltip" data-bs-placement="bottom" title="GPU Status">
+                        <i class="fas fa-microchip"></i>
+                        <span class="indicator-value" id="gpu-status">--</span>
+                    </div>
+                    <div class="status-indicator" data-bs-toggle="tooltip" data-bs-placement="bottom" title="VRAM Available">
+                        <i class="fas fa-microchip"></i>
+                        <span class="indicator-value" id="vram-status">--</span>
+                    </div>
+                    <div class="status-indicator" data-bs-toggle="tooltip" data-bs-placement="bottom" title="RAM Available">
+                        <i class="fas fa-memory"></i>
+                        <span class="indicator-value" id="ram-status">--</span>
+                    </div>
+                    <div class="status-indicator" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Connection Status">
+                        <i class="fas fa-wifi"></i>
+                        <span class="indicator-dot online" id="connection-indicator"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Actions (absolute positioned) -->
+            <div class="navbar-actions" style="position: absolute; right: 16px;">
+                <button class="action-btn" onclick="toggleTheme()" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Toggle Theme">
+                    <i class="fas fa-moon" id="theme-icon"></i>
+                </button>
+                <button class="action-btn" onclick="showHelp()" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Help & Documentation">
+                    <i class="fas fa-question-circle"></i>
+                </button>
+                <button class="action-btn" onclick="toggleSidebar()" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Toggle Sidebar">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Integrated Progress Bar -->
+        <div class="navbar-progress" id="navbar-progress" style="display: none;">
+            <div class="progress-bar-thin" id="training-progress-thin" style="width: 0%"></div>
+            <span class="progress-text" id="progress-text">0%</span>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="container main-container with-compact-header">
+        <div class="row">
+            <!-- Left Sidebar - Sessions & Quick Actions -->
+            <div class="col-lg-3 col-md-4 sidebar-column" id="sidebar-column">
+                <div class="sidebar-card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-history"></i> Training Sessions
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="sessions-list" class="sessions-list">
+                            <!-- Sessions will be populated here -->
+                        </div>
+                        <button class="btn btn-sm btn-outline-primary w-100 mt-2" onclick="refreshSessions()">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <div class="sidebar-card mt-3">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-cog"></i> Config Manager
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label small">Saved Configurations</label>
+                            <select id="saved-configs-list" class="form-select form-select-sm" onchange="onConfigSelect()">
+                                <option value="">Select a config...</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary w-100 mb-2" onclick="saveConfig()">
+                            <i class="fas fa-save"></i> Save Current Config
+                        </button>
+                        <button class="btn btn-outline-primary w-100 mb-2" onclick="loadSelectedConfig()">
+                            <i class="fas fa-folder-open"></i> Load Selected
+                        </button>
+                        <button class="btn btn-outline-danger w-100" onclick="deleteSelectedConfig()">
+                            <i class="fas fa-trash"></i> Delete Selected
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content - Workflow Steps -->
+            <div class="col-lg-9 col-md-8">
+                <!-- Progress Indicator -->
+                <div class="workflow-progress mb-4">
+                    <div class="progress-steps">
+                        <div class="step active" id="step-1-indicator" onclick="goToStep(1)" style="cursor: pointer;">
+                            <div class="step-icon">
+                                <i class="fas fa-brain"></i>
+                            </div>
+                            <div class="step-label">Model</div>
+                        </div>
+                        <div class="step-line"></div>
+                        <div class="step" id="step-2-indicator" onclick="goToStep(2)" style="cursor: pointer;">
+                            <div class="step-icon">
+                                <i class="fas fa-database"></i>
+                            </div>
+                            <div class="step-label">Dataset</div>
+                        </div>
+                        <div class="step-line"></div>
+                        <div class="step" id="step-3-indicator" onclick="goToStep(3)" style="cursor: pointer;">
+                            <div class="step-icon">
+                                <i class="fas fa-sliders-h"></i>
+                            </div>
+                            <div class="step-label">Training</div>
+                        </div>
+                        <div class="step-line"></div>
+                        <div class="step" id="step-4-indicator" onclick="goToStep(4)" style="cursor: pointer;">
+                            <div class="step-icon">
+                                <i class="fas fa-dumbbell"></i>
+                            </div>
+                            <div class="step-label">Train</div>
+                        </div>
+                        <div class="step-line"></div>
+                        <div class="step" id="step-5-indicator" onclick="goToStep(5); setTimeout(() => refreshTrainedModels(), 100);" style="cursor: pointer;">
+                            <div class="step-icon">
+                                <i class="fas fa-file-export"></i>
+                            </div>
+                            <div class="step-label">Exports</div>
+                        </div>
+                        <div class="step-line"></div>
+                        <div class="step" id="step-6-indicator" onclick="goToStep(6); setTimeout(() => loadTestableModels(), 100);" style="cursor: pointer;">
+                            <div class="step-icon">
+                                <i class="fas fa-vial"></i>
+                            </div>
+                            <div class="step-label">Test</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 1: Model Configuration -->
+                <div class="workflow-step" id="step-1">
+                    <div class="step-card">
+                        <div class="step-header" onclick="toggleStep(1)">
+                            <div class="d-flex align-items-center">
+                                <span class="step-number">1</span>
+                                <h4 class="step-title">Model Configuration</h4>
+                                <span class="step-status ms-auto">
+                                    <i class="fas fa-chevron-up" id="step-1-chevron"></i>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="step-content show" id="step-1-content">
+                            <!-- Quick Setup Options -->
+                            <div class="quick-setup mb-4">
+                                <label class="form-label fw-bold">Quick Setup</label>
+                                <div class="selection-cards cols-3">
+                                    <input type="radio" class="selection-input" name="setup-mode" id="setup-recommended" checked>
+                                    <label class="selection-card" for="setup-recommended">
+                                        <i class="fas fa-star"></i>
+                                        <span>Recommended</span>
+                                        <small>Best defaults</small>
+                                    </label>
+                                    <input type="radio" class="selection-input" name="setup-mode" id="setup-custom">
+                                    <label class="selection-card" for="setup-custom">
+                                        <i class="fas fa-cog"></i>
+                                        <span>Custom</span>
+                                        <small>Configure LoRA</small>
+                                    </label>
+                                    <input type="radio" class="selection-input" name="setup-mode" id="setup-advanced">
+                                    <label class="selection-card" for="setup-advanced">
+                                        <i class="fas fa-code"></i>
+                                        <span>Advanced</span>
+                                        <small>Full control</small>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Model Selection -->
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label">Model Family</label>
+                                        <select class="form-select" id="model-family" onchange="updateModelList(); updateConfigSummary();">
+                                            <option value="qwen">Qwen3</option>
+                                            <option value="llama">LLaMA 3.2</option>
+                                            <option value="phi">Phi-4</option>
+                                        </select>
+                                        <small class="text-muted">Choose the base model architecture</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label">Model Size</label>
+                                        <select class="form-select" id="model-name">
+                                            <!-- Populated dynamically -->
+                                        </select>
+                                        <small class="text-muted">Smaller models train faster</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Model Display Name -->
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <div class="form-group">
+                                        <label class="form-label">Model Name (Optional)</label>
+                                        <input type="text" class="form-control" id="model-display-name"
+                                               placeholder="e.g., Math Solver v2 (auto-generated if empty)">
+                                        <small class="text-muted">Give your trained model a memorable name for easy identification</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- LoRA Configuration (Hidden for Recommended mode) -->
+                            <div class="config-section mt-4" id="lora-config-section" style="display: none;">
+                                <h5 class="section-title">
+                                    <i class="fas fa-layer-group"></i> LoRA Configuration
+                                </h5>
+
+                                <!-- LoRA Presets (for Custom mode) -->
+                                <div id="lora-presets" class="mb-3" style="display: none;">
+                                    <div class="btn-group" role="group">
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="applyLoRAPreset('low')">
+                                            <i class="fas fa-memory"></i> Low VRAM
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="applyLoRAPreset('balanced')">
+                                            <i class="fas fa-balance-scale"></i> Balanced
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="applyLoRAPreset('quality')">
+                                            <i class="fas fa-gem"></i> High Quality
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="form-group">
+                                            <label class="form-label">Rank (r) <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Higher rank = more parameters to train"></i></label>
+                                            <input type="range" class="form-range" id="lora-rank-slider" min="4" max="128" value="16" onchange="updateValue('lora-rank', this.value); updateConfigSummary();">
+                                            <input type="number" class="form-control" id="lora-rank" value="16" min="4" max="128">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-group">
+                                            <label class="form-label">Alpha <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Scaling factor, typically 2x rank"></i></label>
+                                            <input type="range" class="form-range" id="lora-alpha-slider" min="8" max="256" value="32" onchange="updateValue('lora-alpha', this.value); updateConfigSummary();">
+                                            <input type="number" class="form-control" id="lora-alpha" value="32" min="8" max="256">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-group">
+                                            <label class="form-label">Dropout <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Regularization to prevent overfitting"></i></label>
+                                            <input type="range" class="form-range" id="lora-dropout-slider" min="0" max="0.5" step="0.05" value="0.05" onchange="updateValue('lora-dropout', this.value); updateConfigSummary();">
+                                            <input type="number" class="form-control" id="lora-dropout" value="0.05" min="0" max="0.5" step="0.05">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Advanced Configuration (Hidden by default) -->
+                            <div class="config-section mt-4" id="advanced-config-section" style="display: none;">
+                                <h5 class="section-title">
+                                    <i class="fas fa-code-branch"></i> Advanced Configuration
+                                </h5>
+
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <div class="form-group mb-3">
+                                            <label class="form-label">Custom Model Path</label>
+                                            <input type="text" class="form-control" id="custom-model-path" placeholder="e.g., username/model-name or local path">
+                                            <small class="text-muted">Leave empty to use selected model above</small>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label class="form-label">Target Modules</label>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="target-q-proj" checked>
+                                                <label class="form-check-label" for="target-q-proj">q_proj</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="target-v-proj" checked>
+                                                <label class="form-check-label" for="target-v-proj">v_proj</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="target-k-proj">
+                                                <label class="form-check-label" for="target-k-proj">k_proj</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="target-o-proj">
+                                                <label class="form-check-label" for="target-o-proj">o_proj</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label class="form-label">Quantization</label>
+                                            <select class="form-select" id="quantization">
+                                                <option value="none">None (Full Precision F32)</option>
+                                                <option value="f16">Half Precision (F16)</option>
+                                                <option value="q8_0" selected>8-bit Quantization (Q8_0)</option>
+                                                <option value="auto">Auto (Let converter decide)</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group mt-3">
+                                            <label class="form-label">LoRA Bias</label>
+                                            <select class="form-select" id="lora-bias">
+                                                <option value="none" selected>None</option>
+                                                <option value="all">All</option>
+                                                <option value="lora_only">LoRA Only</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step Navigation -->
+                            <div class="step-navigation mt-4">
+                                <button class="btn btn-primary ms-auto" onclick="validateAndProceed(1)">
+                                    Continue <i class="fas fa-arrow-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Dataset & Prompts -->
+                <div class="workflow-step" id="step-2">
+                    <div class="step-card">
+                        <div class="step-header" onclick="toggleStep(2)">
+                            <div class="d-flex align-items-center">
+                                <span class="step-number">2</span>
+                                <h4 class="step-title">Dataset & Prompts</h4>
+                                <span class="step-status ms-auto">
+                                    <i class="fas fa-chevron-down" id="step-2-chevron"></i>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="step-content collapse" id="step-2-content">
+                            <!-- Dataset Source -->
+                            <div class="dataset-selection mb-4">
+                                <label class="form-label fw-bold">Dataset Source</label>
+                                <div class="selection-cards cols-2">
+                                    <div class="selection-card" onclick="selectDatasetType('popular')" id="dataset-popular">
+                                        <i class="fas fa-star"></i>
+                                        <span>Public Datasets</span>
+                                        <small>Browse available datasets</small>
+                                    </div>
+                                    <div class="selection-card" onclick="selectDatasetType('upload')" id="dataset-upload">
+                                        <i class="fas fa-upload"></i>
+                                        <span>Upload File</span>
+                                        <small>Use your own data</small>
+                                    </div>
+                                </div>
+                            </div>
+
+
+                            <!-- Dataset Configuration -->
+                            <div id="dataset-config" style="display: none;">
+                                <!-- Public Datasets Catalog -->
+                                <div id="dataset-catalog" style="display: none;">
+                                    <!-- Category Filter -->
+                                    <div class="dataset-filters mb-3">
+                                        <div class="btn-group" role="group">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm active" onclick="filterDatasets('all')">All</button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="filterDatasets('math')">Math</button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="filterDatasets('coding')">Coding</button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="filterDatasets('general')">General</button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="filterDatasets('qa')">Q&A</button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Dataset Grid -->
+                                    <div id="dataset-grid" class="dataset-grid">
+                                        <!-- Populated by JavaScript -->
+                                    </div>
+                                </div>
+
+                                <!-- Upload Dataset -->
+                                <div id="dataset-upload-area" style="display: none;">
+                                    <div class="upload-area">
+                                        <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
+                                        <h5>Drop your dataset file here</h5>
+                                        <p class="text-muted">or click to browse</p>
+                                        <input type="file" id="dataset-file" accept=".json,.csv,.parquet" style="display: none;">
+                                        <button class="btn btn-outline-primary" onclick="document.getElementById('dataset-file').click()">
+                                            Browse Files
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Selected Dataset Configuration -->
+                                <div id="dataset-selected" class="mt-3">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label class="form-label">Selected Dataset</label>
+                                                <input type="text" class="form-control" id="dataset-path" value="yahma/alpaca-cleaned" readonly>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label class="form-label">Split</label>
+                                                <input type="text" class="form-control" id="dataset-split" value="train[:100]">
+                                                <small class="text-muted">Limit samples for testing</small>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Field Mapping (auto-configured) -->
+                                    <div class="field-mapping mt-3" id="field-mapping" style="display: none;">
+                                        <label class="form-label">Field Mapping</label>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <small class="text-muted">Instruction Field</small>
+                                                <input type="text" class="form-control form-control-sm" id="instruction-field-visible" value="instruction">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <small class="text-muted">Response Field</small>
+                                                <input type="text" class="form-control form-control-sm" id="response-field-visible" value="output">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- System Prompt -->
+                            <div class="config-section mt-4">
+                                <h5 class="section-title">
+                                    <i class="fas fa-file-code"></i> System Prompt
+                                </h5>
+                                <div class="template-selector mb-3">
+                                    <div class="btn-group w-100" role="group">
+                                        <input type="radio" class="btn-check" name="template-type" id="template-grpo" checked>
+                                        <label class="btn btn-outline-primary" for="template-grpo">
+                                            Default
+                                        </label>
+                                        <input type="radio" class="btn-check" name="template-type" id="template-custom">
+                                        <label class="btn btn-outline-primary" for="template-custom">
+                                            Custom
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Template Editor (for Custom mode) -->
+                                <div id="template-editor" style="display: none;">
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label">Reasoning Start Marker</label>
+                                            <input type="text" class="form-control" id="custom-reasoning-start" value="&lt;start_working_out&gt;" oninput="updateTemplatePreview()">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Reasoning End Marker</label>
+                                            <input type="text" class="form-control" id="custom-reasoning-end" value="&lt;end_working_out&gt;" oninput="updateTemplatePreview()">
+                                        </div>
+                                    </div>
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label">Solution Start Marker</label>
+                                            <input type="text" class="form-control" id="custom-solution-start" value="&lt;SOLUTION&gt;" oninput="updateTemplatePreview()">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Solution End Marker</label>
+                                            <input type="text" class="form-control" id="custom-solution-end" value="&lt;/SOLUTION&gt;" oninput="updateTemplatePreview()">
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">System Prompt</label>
+                                        <textarea class="form-control" id="custom-system-prompt" rows="3" oninput="updateTemplatePreview()">You are given a problem.
+Think about the problem and provide your working out.
+Place it between &lt;start_working_out&gt; and &lt;end_working_out&gt;.
+Then, provide your solution between &lt;SOLUTION&gt;&lt;/SOLUTION&gt;</textarea>
+                                    </div>
+
+                                    <div class="btn-group mb-3">
+                                        <button class="btn btn-sm btn-outline-primary" onclick="testTemplate()">
+                                            <i class="fas fa-vial"></i> Test Template
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-success" onclick="saveCustomTemplate()">
+                                            <i class="fas fa-save"></i> Save Template
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Template Preview -->
+                                <div class="template-preview-box">
+                                    <div class="preview-header">
+                                        <span>Template Preview</span>
+                                        <div id="preview-actions" style="display: inline;">
+                                            <button class="btn btn-sm btn-outline-light" id="edit-template-btn" onclick="editTemplate()" style="display: none;">
+                                                <i class="fas fa-edit"></i> Edit
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <pre id="template-preview" class="preview-content"></pre>
+                                </div>
+
+                                <!-- Chat Template Section -->
+                                <div class="mt-4">
+                                    <h6 class="mb-3"><i class="fas fa-comment-alt"></i> Chat Template</h6>
+
+                                    <!-- Chat Template Presets -->
+                                    <div class="mb-3">
+                                        <label class="form-label">Template Type</label>
+                                        <select class="form-select" id="chat-template-type" onchange="onChatTemplateTypeChange()">
+                                            <option value="grpo">GRPO Default (Reasoning)</option>
+                                            <option value="custom">Custom Template</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- Chat Template Editor (shown for Custom mode) -->
+                                    <div id="chat-template-editor" style="display: none;">
+                                        <div class="mb-3">
+                                            <label class="form-label">Chat Template (Jinja2)</label>
+                                            <textarea class="form-control font-monospace" id="custom-chat-template" rows="10" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" oninput="validateChatTemplate()">{% raw %}{% if messages[0]['role'] == 'system' %}{{ messages[0]['content'] + eos_token }}{% set loop_messages = messages[1:] %}{% else %}{{ system_prompt + eos_token }}{% set loop_messages = messages %}{% endif %}{% for message in loop_messages %}{% if message['role'] == 'user' %}{{ message['content'] }}{% elif message['role'] == 'assistant' %}{{ message['content'] + eos_token }}{% endif %}{% endfor %}{% if add_generation_prompt %}{{ reasoning_start }}{% endif %}{% endraw %}</textarea>
+                                            <small class="form-text text-muted">
+                                                <i class="fas fa-info-circle"></i> Jinja2 template. Available variables: messages, system_prompt, eos_token, reasoning_start, add_generation_prompt
+                                            </small>
+                                            <div id="chat-template-validation" class="mt-2"></div>
+                                        </div>
+
+                                        <!-- Template Variables Helper -->
+                                        <div class="alert alert-info">
+                                            <h6><i class="fas fa-code"></i> Template Variables</h6>
+                                            <small>
+                                                <code>messages</code> - List of message dicts with 'role' and 'content'<br>
+                                                <code>system_prompt</code> - System prompt text<br>
+                                                <code>eos_token</code> - End of sequence token<br>
+                                                <code>reasoning_start</code> - Start of reasoning marker<br>
+                                                <code>add_generation_prompt</code> - True when generating
+                                            </small>
+                                        </div>
+
+                                        <div class="btn-group">
+                                            <button class="btn btn-sm btn-outline-primary" onclick="validateChatTemplate()">
+                                                <i class="fas fa-check"></i> Validate
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-success" onclick="saveChatTemplate()">
+                                                <i class="fas fa-save"></i> Save Template
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-secondary" onclick="loadChatTemplate()">
+                                                <i class="fas fa-folder-open"></i> Load
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Pre-training Options -->
+                                    <div class="mt-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="enable-pre-training" checked>
+                                            <label class="form-check-label" for="enable-pre-training">
+                                                Enable Pre-training Phase
+                                                <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip"
+                                                   title="Pre-trains the model for 1-2 epochs to learn the template format before GRPO training"></i>
+                                            </label>
+                                        </div>
+                                        <div class="ms-4 mt-2" id="pre-training-options">
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <label class="form-label small">Pre-training Epochs</label>
+                                                    <input type="number" class="form-control form-control-sm" id="pre-training-epochs" value="1" min="1" max="3">
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label small">Sample Size</label>
+                                                    <input type="number" class="form-control form-control-sm" id="pre-training-samples" value="100" min="50" max="500">
+                                                </div>
+                                            </div>
+                                            <div class="form-check mt-2">
+                                                <input class="form-check-input" type="checkbox" id="validate-format" checked>
+                                                <label class="form-check-label small" for="validate-format">
+                                                    Validate format compliance after pre-training
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Chat Template Preview -->
+                                    <div class="template-preview-box mt-3">
+                                        <div class="preview-header">
+                                            <span>Chat Template Preview</span>
+                                        </div>
+                                        <pre id="chat-template-preview" class="preview-content" style="border-radius: 0 0 12px 12px;">Loading...</pre>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Hidden template fields (keep existing functionality) -->
+                            <input type="hidden" id="dataset-source" value="huggingface">
+                            <input type="hidden" id="instruction-field" value="instruction">
+                            <input type="hidden" id="response-field" value="output">
+                            <input type="hidden" id="reasoning-start" value="<start_working_out>">
+                            <input type="hidden" id="reasoning-end" value="<end_working_out>">
+                            <input type="hidden" id="solution-start" value="<SOLUTION>">
+                            <input type="hidden" id="solution-end" value="</SOLUTION>">
+                            <textarea id="system-prompt" style="display:none;">You are given a problem.
+Think about the problem and provide your working out.
+Place it between <start_working_out> and <end_working_out>.
+Then, provide your solution between <SOLUTION></SOLUTION></textarea>
+                            <textarea id="chat-template" style="display:none;">{% raw %}{% if messages[0]['role'] == 'system' %}{{ messages[0]['content'] + eos_token }}{% set loop_messages = messages[1:] %}{% else %}{{ system_prompt + eos_token }}{% set loop_messages = messages %}{% endif %}{% for message in loop_messages %}{% if message['role'] == 'user' %}{{ message['content'] }}{% elif message['role'] == 'assistant' %}{{ message['content'] + eos_token }}{% endif %}{% endfor %}{% if add_generation_prompt %}{{ reasoning_start }}{% endif %}{% endraw %}</textarea>
+
+                            <!-- Step Navigation -->
+                            <div class="step-navigation mt-4">
+                                <button class="btn btn-outline-secondary" onclick="goToStep(1)">
+                                    <i class="fas fa-arrow-left"></i> Back
+                                </button>
+                                <button class="btn btn-primary ms-auto" onclick="validateAndProceed(2)">
+                                    Continue <i class="fas fa-arrow-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 3: Training Configuration -->
+                <div class="workflow-step" id="step-3">
+                    <div class="step-card">
+                        <div class="step-header" onclick="toggleStep(3)">
+                            <div class="d-flex align-items-center">
+                                <span class="step-number">3</span>
+                                <h4 class="step-title">Training Configuration</h4>
+                                <span class="step-status ms-auto">
+                                    <i class="fas fa-chevron-down" id="step-3-chevron"></i>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="step-content collapse" id="step-3-content">
+                            <!-- Training Presets -->
+                            <div class="training-presets mb-4">
+                                <label class="form-label fw-bold">Training Presets</label>
+                                <div class="selection-cards cols-4">
+                                    <div class="selection-card active" onclick="applyPreset('recommended')" id="preset-recommended">
+                                        <i class="fas fa-magic"></i>
+                                        <span>Recommended</span>
+                                        <small>Auto-optimized</small>
+                                    </div>
+                                    <div class="selection-card" onclick="applyPreset('fast')" id="preset-fast">
+                                        <i class="fas fa-bolt"></i>
+                                        <span>Fast</span>
+                                        <small>Quick testing</small>
+                                    </div>
+                                    <div class="selection-card" onclick="applyPreset('balanced')" id="preset-balanced">
+                                        <i class="fas fa-balance-scale"></i>
+                                        <span>Balanced</span>
+                                        <small>General purpose</small>
+                                    </div>
+                                    <div class="selection-card" onclick="applyPreset('quality')" id="preset-quality">
+                                        <i class="fas fa-gem"></i>
+                                        <span>Quality</span>
+                                        <small>Best results</small>
+                                    </div>
+                                </div>
+                                <div id="preset-indicator" class="mt-2" style="display: none;">
+                                    <small class="text-muted">
+                                        <i class="fas fa-info-circle"></i> <span id="preset-message">Custom configuration applied</span>
+                                    </small>
+                                </div>
+                                <div id="recommended-explanation" class="alert alert-info mt-2" style="display: none;">
+                                    <i class="fas fa-lightbulb"></i>
+                                    <small id="recommendation-details">Settings optimized based on your configuration</small>
+                                </div>
+                            </div>
+
+                            <!-- Algorithm Type Selection -->
+                            <div class="algorithm-selection mb-4">
+                                <label class="form-label fw-bold">Algorithm Type</label>
+                                <div class="selection-cards cols-3">
+                                    <div class="selection-card active" onclick="selectAlgorithm('grpo')" id="algo-grpo">
+                                        <i class="fas fa-chart-line"></i>
+                                        <span>GRPO</span>
+                                        <small>Token-level optimization</small>
+                                    </div>
+                                    <div class="selection-card" onclick="selectAlgorithm('gspo')" id="algo-gspo">
+                                        <i class="fas fa-layer-group"></i>
+                                        <span>GSPO</span>
+                                        <small>Sequence-level optimization</small>
+                                    </div>
+                                    <div class="selection-card" onclick="selectAlgorithm('dr_grpo')" id="algo-dr_grpo">
+                                        <i class="fas fa-shield-alt"></i>
+                                        <span>DR-GRPO</span>
+                                        <small>Doubly robust variant</small>
+                                    </div>
+                                </div>
+                                <div class="alert alert-info mt-2" id="algorithm-info">
+                                    <i class="fas fa-info-circle"></i>
+                                    <strong>GRPO:</strong> Standard Group Relative Policy Optimization applies importance weights at the token level.
+                                </div>
+                            </div>
+
+                            <!-- Algorithm-Specific Parameters (hidden by default) -->
+                            <div class="config-section mb-4" id="gspo-params" style="display: none;">
+                                <h5 class="section-title">
+                                    <i class="fas fa-cog"></i> Algorithm-Specific Parameters
+                                </h5>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label class="form-label">Epsilon <small class="text-muted">(Lower bound)</small></label>
+                                            <input type="number" class="form-control" id="epsilon" value="0.0003" step="0.0001">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label class="form-label">Epsilon High <small class="text-muted">(Upper bound)</small></label>
+                                            <input type="number" class="form-control" id="epsilon-high" value="0.0004" step="0.0001">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Reward Function Configuration -->
+                            <div class="reward-configuration mb-4">
+                                <label class="form-label fw-bold">Reward Function</label>
+                                <div class="selection-cards cols-2">
+                                    <div class="selection-card active" onclick="selectRewardType('preset')" id="reward-preset">
+                                        <i class="fas fa-list-ul"></i>
+                                        <span>Preset Rewards</span>
+                                        <small>Pre-configured functions</small>
+                                    </div>
+                                    <div class="selection-card" onclick="selectRewardType('custom')" id="reward-custom">
+                                        <i class="fas fa-code"></i>
+                                        <span>Custom Reward</span>
+                                        <small>Build your own</small>
+                                    </div>
+                                </div>
+
+                                <!-- Preset Rewards -->
+                                <div id="preset-rewards" class="mt-3">
+                                    <select class="form-select" id="reward-preset-select">
+                                        <option value="binary">Binary Match - Exact or pattern matching</option>
+                                        <option value="numerical">Numerical - Compare numerical answers</option>
+                                        <option value="length">Length-Based - Optimize response length</option>
+                                        <option value="format">Format Compliance - Match specific formats</option>
+                                        <option value="math" selected>Math Problems - Numerical + format rewards</option>
+                                        <option value="code">Code Generation - Code blocks + comments</option>
+                                    </select>
+                                </div>
+
+                                <!-- Custom Reward Builder -->
+                                <div id="custom-reward-builder" class="mt-3" style="display: none;">
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <h6>Custom Reward Components</h6>
+                                            <div id="reward-components">
+                                                <!-- Components will be added here dynamically -->
+                                            </div>
+                                            <button class="btn btn-sm btn-outline-primary mt-2" onclick="addRewardComponent()">
+                                                <i class="fas fa-plus"></i> Add Component
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Basic Settings -->
+                            <div class="config-section">
+                                <h5 class="section-title">
+                                    <i class="fas fa-tachometer-alt"></i> Basic Settings
+                                </h5>
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <div class="form-group">
+                                            <label class="form-label">Epochs</label>
+                                            <input type="number" class="form-control" id="num-epochs" value="3" min="1" max="100">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-group">
+                                            <label class="form-label">Batch Size</label>
+                                            <input type="number" class="form-control" id="batch-size" value="4" min="1" max="32">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-group">
+                                            <label class="form-label">Learning Rate</label>
+                                            <input type="number" class="form-control" id="learning-rate" value="0.0002" step="0.00001">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-group">
+                                            <label class="form-label">Gradient Accumulation <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Accumulate gradients over multiple steps"></i></label>
+                                            <input type="number" class="form-control" id="gradient-accumulation" value="1" min="1" max="32">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row mt-3">
+                                    <div class="col-md-3">
+                                        <div class="form-group">
+                                            <label class="form-label">Max Sequence Length</label>
+                                            <input type="number" class="form-control" id="max-sequence-length" value="2048" min="128" max="32768" step="128">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-group">
+                                            <label class="form-label">Max New Tokens</label>
+                                            <input type="number" class="form-control" id="max-new-tokens" value="256" min="32" max="2048" step="32">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-group">
+                                            <label class="form-label">Warmup Steps</label>
+                                            <input type="number" class="form-control" id="warmup-steps" value="10" min="0" max="1000">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-group">
+                                            <label class="form-label">Weight Decay</label>
+                                            <input type="number" class="form-control" id="weight-decay" value="0.001" min="0" max="1" step="0.001">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- GRPO Settings -->
+                            <div class="config-section mt-4 collapsible">
+                                <h5 class="section-title" onclick="toggleSection('grpo-settings')">
+                                    <i class="fas fa-brain"></i> GRPO Settings
+                                    <i class="fas fa-chevron-down float-end"></i>
+                                </h5>
+                                <div id="grpo-settings" class="section-content">
+                                    <div class="row">
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="form-label">Temperature</label>
+                                                <input type="number" class="form-control" id="temperature" value="0.7" min="0.1" max="2.0" step="0.1">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="form-label">Top P</label>
+                                                <input type="number" class="form-control" id="top-p" value="0.95" min="0" max="1" step="0.05">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="form-label">Top K</label>
+                                                <input type="number" class="form-control" id="top-k" value="50" min="0" max="200" step="10">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="form-label">Repetition Penalty</label>
+                                                <input type="number" class="form-control" id="repetition-penalty" value="1.0" min="0.5" max="2.0" step="0.1">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row mt-3">
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="form-label">KL Penalty</label>
+                                                <input type="number" class="form-control" id="kl-penalty" value="0.01" min="0" max="1" step="0.01">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="form-label">Clip Range</label>
+                                                <input type="number" class="form-control" id="clip-range" value="0.2" min="0" max="1" step="0.05">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="form-label">Generations</label>
+                                                <input type="number" class="form-control" id="num-generations" value="4" min="1" max="10">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="form-label">Value Coefficient</label>
+                                                <input type="number" class="form-control" id="value-coefficient" value="1.0" min="0" max="10" step="0.1">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Optimizations -->
+                            <div class="config-section mt-4">
+                                <h5 class="section-title">
+                                    <i class="fas fa-dumbbell"></i> Optimizations
+                                </h5>
+                                <div class="optimization-toggles">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="use-flash-attention">
+                                        <label class="form-check-label" for="use-flash-attention">
+                                            Flash Attention <small class="text-muted">(Faster training)</small>
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="gradient-checkpointing">
+                                        <label class="form-check-label" for="gradient-checkpointing">
+                                            Gradient Checkpointing <small class="text-muted">(Less VRAM)</small>
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="mixed-precision" checked>
+                                        <label class="form-check-label" for="mixed-precision">
+                                            Mixed Precision (FP16) <small class="text-muted">(Recommended)</small>
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="use-bf16">
+                                        <label class="form-check-label" for="use-bf16">
+                                            Use BF16 <small class="text-muted">(Instead of FP16, for newer GPUs)</small>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Advanced Training Settings (Collapsible) -->
+                            <div class="config-section mt-4 collapsible">
+                                <h5 class="section-title" onclick="toggleSection('advanced-training-settings')">
+                                    <i class="fas fa-cogs"></i> Advanced Training Settings
+                                    <i class="fas fa-chevron-down float-end"></i>
+                                </h5>
+                                <div id="advanced-training-settings" class="section-content" style="display: none;">
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <div class="form-group">
+                                                <label class="form-label">LR Scheduler Type</label>
+                                                <select class="form-select" id="lr-scheduler-type">
+                                                    <option value="constant" selected>Constant</option>
+                                                    <option value="linear">Linear</option>
+                                                    <option value="cosine">Cosine</option>
+                                                    <option value="cosine_with_restarts">Cosine with Restarts</option>
+                                                    <option value="polynomial">Polynomial</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-group">
+                                                <label class="form-label">Optimizer</label>
+                                                <select class="form-select" id="optimizer">
+                                                    <option value="paged_adamw_32bit" selected>Paged AdamW 32-bit</option>
+                                                    <option value="adamw_torch">AdamW (PyTorch)</option>
+                                                    <option value="adamw_8bit">AdamW 8-bit</option>
+                                                    <option value="sgd">SGD</option>
+                                                    <option value="adafactor">Adafactor</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-group">
+                                                <label class="form-label">Max Gradient Norm</label>
+                                                <input type="number" class="form-control" id="max-grad-norm" value="0.3" min="0" max="10" step="0.1">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row mt-3">
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="form-label">Logging Steps</label>
+                                                <input type="number" class="form-control" id="logging-steps" value="10" min="1" max="1000">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="form-label">Save Steps</label>
+                                                <input type="number" class="form-control" id="save-steps" value="100" min="10" max="10000">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="form-label">Eval Steps</label>
+                                                <input type="number" class="form-control" id="eval-steps" value="100" min="10" max="10000">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="form-label">Random Seed</label>
+                                                <input type="number" class="form-control" id="seed" value="42" min="0" max="2147483647">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Quantization Settings -->
+                                    <h6 class="mt-4 mb-3"><i class="fas fa-compress"></i> Quantization Settings</h6>
+                                    <div class="row">
+                                        <div class="col-md-3">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="use-4bit">
+                                                <label class="form-check-label" for="use-4bit">
+                                                    Use 4-bit <small class="text-muted">(QLoRA)</small>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="use-8bit">
+                                                <label class="form-check-label" for="use-8bit">
+                                                    Use 8-bit <small class="text-muted">(INT8)</small>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="form-label">4-bit Compute Type</label>
+                                                <select class="form-select form-select-sm" id="bnb-4bit-compute-dtype">
+                                                    <option value="float16" selected>Float16</option>
+                                                    <option value="bfloat16">BFloat16</option>
+                                                    <option value="float32">Float32</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="form-label">4-bit Quant Type</label>
+                                                <select class="form-select form-select-sm" id="bnb-4bit-quant-type">
+                                                    <option value="nf4" selected>NF4</option>
+                                                    <option value="fp4">FP4</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row mt-2">
+                                        <div class="col-md-4">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="use-nested-quant">
+                                                <label class="form-check-label" for="use-nested-quant">
+                                                    Nested Quantization <small class="text-muted">(Double quantization)</small>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step Navigation -->
+                            <div class="step-navigation mt-4">
+                                <button class="btn btn-outline-secondary" onclick="goToStep(2)">
+                                    <i class="fas fa-arrow-left"></i> Back
+                                </button>
+                                <button class="btn btn-primary ms-auto" onclick="validateAndProceed(3)">
+                                    Continue <i class="fas fa-arrow-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 4: Review & Train -->
+                <div class="workflow-step" id="step-4">
+                    <div class="step-card">
+                        <div class="step-header" onclick="toggleStep(4)">
+                            <div class="d-flex align-items-center">
+                                <span class="step-number">4</span>
+                                <h4 class="step-title">Review & Train</h4>
+                                <span class="step-status ms-auto">
+                                    <i class="fas fa-chevron-down" id="step-4-chevron"></i>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="step-content collapse" id="step-4-content">
+                            <!-- Configuration Summary -->
+                            <div class="config-summary">
+                                <h5 class="section-title">
+                                    <i class="fas fa-clipboard-check"></i> Configuration Summary
+                                </h5>
+                                <div class="summary-grid">
+                                    <div class="summary-item">
+                                        <span class="summary-label">Model:</span>
+                                        <span class="summary-value" id="summary-model">--</span>
+                                    </div>
+                                    <div class="summary-item">
+                                        <span class="summary-label">Dataset:</span>
+                                        <span class="summary-value" id="summary-dataset">--</span>
+                                    </div>
+                                    <div class="summary-item">
+                                        <span class="summary-label">Training Time:</span>
+                                        <span class="summary-value" id="summary-time">~15 minutes</span>
+                                    </div>
+                                    <div class="summary-item">
+                                        <span class="summary-label">VRAM Required:</span>
+                                        <span class="summary-value" id="summary-vram">~4GB</span>
+                                    </div>
+                                    <div class="summary-item">
+                                        <span class="summary-label">Epochs:</span>
+                                        <span class="summary-value" id="summary-epochs">--</span>
+                                    </div>
+                                    <div class="summary-item">
+                                        <span class="summary-label">Batch Size:</span>
+                                        <span class="summary-value" id="summary-batch">--</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Config Actions -->
+                            <div class="config-actions mt-4">
+                                <button class="btn btn-outline-secondary" onclick="saveCurrentConfig()">
+                                    <i class="fas fa-save"></i> Save Config
+                                </button>
+                                <button class="btn btn-outline-secondary" onclick="exportConfig()">
+                                    <i class="fas fa-download"></i> Export
+                                </button>
+                            </div>
+
+                            <!-- Train Button -->
+                            <div class="train-section mt-4">
+                                <button class="btn btn-train" onclick="startTraining()" id="train-btn">
+                                    <i class="fas fa-dumbbell"></i> Start Training
+                                </button>
+                            </div>
+
+                            <!-- Progress bar moved to navbar, removing duplicate -->
+
+                            <!-- Training Monitor (Hidden initially) -->
+                            <div id="training-monitor" class="training-monitor" style="display: none;">
+                                <h5 class="section-title">
+                                    <i class="fas fa-chart-line"></i> Training Progress
+                                </h5>
+
+                                <!-- Metrics Panel -->
+                                <div class="metrics-panel mb-3">
+                                    <div class="row">
+                                        <div class="col-md-2">
+                                            <div class="metric-item">
+                                                <span class="metric-label">Step</span>
+                                                <span class="metric-value" id="metric-step">0</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="metric-item">
+                                                <span class="metric-label">Loss</span>
+                                                <span class="metric-value" id="metric-loss">--</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="metric-item">
+                                                <span class="metric-label">Reward</span>
+                                                <span class="metric-value" id="metric-reward">--</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="metric-item">
+                                                <span class="metric-label">Grad Norm</span>
+                                                <span class="metric-value" id="metric-grad-norm">--</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="metric-item">
+                                                <span class="metric-label">Learning Rate</span>
+                                                <span class="metric-value" id="metric-lr">--</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="metric-item">
+                                                <span class="metric-label">Epoch</span>
+                                                <span class="metric-value" id="metric-epoch">0</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Charts -->
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <canvas id="loss-chart"></canvas>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <canvas id="reward-chart"></canvas>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <canvas id="lr-chart"></canvas>
+                                    </div>
+                                </div>
+
+                                <!-- Training Logs -->
+                                <div class="training-logs mt-3">
+                                    <div class="logs-header">
+                                        <span>Training Logs</span>
+                                        <button class="btn btn-sm btn-outline-secondary" onclick="clearLogs()">
+                                            Clear
+                                        </button>
+                                    </div>
+                                    <div id="training-logs" class="logs-content"></div>
+                                </div>
+
+                                <!-- Training Controls -->
+                                <div class="training-controls mt-3">
+                                    <button class="btn btn-warning" onclick="pauseTraining()" id="pause-btn">
+                                        <i class="fas fa-pause"></i> Pause
+                                    </button>
+                                    <button class="btn btn-danger" onclick="stopTraining()" id="stop-btn">
+                                        <i class="fas fa-stop"></i> Stop
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Step Navigation -->
+                            <div class="step-navigation mt-4" id="step-4-nav">
+                                <button class="btn btn-outline-secondary" onclick="goToStep(3)">
+                                    <i class="fas fa-arrow-left"></i> Back
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 5: Exports Management -->
+                <div class="workflow-step" id="step-5">
+                    <div class="step-card">
+                        <div class="step-header" onclick="toggleStep(5)">
+                            <div class="d-flex align-items-center">
+                                <span class="step-number">5</span>
+                                <h4 class="step-title">Model Exports</h4>
+                                <span class="step-status ms-auto">
+                                    <i class="fas fa-chevron-down" id="step-5-chevron"></i>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="step-content collapse" id="step-5-content">
+                            <!-- Exports Controls -->
+                            <div class="d-flex justify-content-between align-items-center mb-4">
+                                <h5 class="section-title mb-0">
+                                    <i class="fas fa-history"></i> Trained Models & Exports
+                                </h5>
+                                <div>
+                                    <button class="btn btn-sm btn-outline-primary me-2" onclick="refreshTrainedModels()">
+                                        <i class="fas fa-sync"></i> Refresh
+                                    </button>
+                                    <button class="btn btn-sm btn-success" onclick="showBatchExport()">
+                                        <i class="fas fa-file-archive"></i> Batch Export
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <!-- Left Column: Trained Models -->
+                                <div class="col-lg-8">
+                                    <div class="models-section">
+                                        <h6 class="fw-bold mb-3">
+                                            <i class="fas fa-brain"></i> Available Models
+                                        </h6>
+                                        <div id="trained-models-list" class="models-list">
+                                            <!-- Model cards will be populated here -->
+                                            <div class="text-center text-muted p-4">
+                                                <i class="fas fa-spinner fa-spin"></i> Loading models...
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Right Column: Export History -->
+                                <div class="col-lg-4">
+                                    <div class="exports-section">
+                                        <h6 class="fw-bold mb-3">
+                                            <i class="fas fa-file-export"></i> Recent Exports
+                                        </h6>
+                                        <div id="export-history-list" class="export-history">
+                                            <!-- Export history will be populated here -->
+                                            <div class="text-center text-muted p-4">
+                                                <p class="mb-0">No exports yet</p>
+                                                <small>Exported models will appear here</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Model Details Panel (Hidden by default) -->
+                            <div id="model-details-panel" class="model-details mt-4" style="display: none;">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-info-circle"></i> Model Details
+                                        </h6>
+                                        <button type="button" class="btn-close float-end" onclick="hideModelDetails()"></button>
+                                    </div>
+                                    <div class="card-body" id="model-details-content">
+                                        <!-- Details will be populated here -->
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step Navigation -->
+                            <div class="step-navigation mt-4" id="step-5-nav">
+                                <button class="btn btn-outline-secondary" onclick="goToStep(4)">
+                                    <i class="fas fa-arrow-left"></i> Back
+                                </button>
+                                <button class="btn btn-primary ms-2" onclick="goToStep(1)">
+                                    <i class="fas fa-plus"></i> Train New Model
+                                </button>
+                                <button class="btn btn-success ms-2" onclick="goToStep(6)">
+                                    <i class="fas fa-vial"></i> Test Model
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 6: Test Model -->
+                <div class="workflow-step" id="step-6">
+                <div class="step-card">
+                    <div class="step-header" onclick="toggleStep(6)">
+                        <div class="d-flex align-items-center">
+                            <span class="step-number">6</span>
+                            <h4 class="step-title">Test Model</h4>
+                            <span class="step-status ms-auto">
+                                <i class="fas fa-chevron-down" id="step-6-chevron"></i>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="step-content collapse" id="step-6-content">
+                        <!-- Model Testing Section -->
+                        <div class="model-testing-section p-4">
+                            <h5 class="section-title mb-4">
+                                <i class="fas fa-balance-scale"></i> Model Comparison
+                            </h5>
+
+                            <!-- Model Selection -->
+                            <div class="card mb-4">
+                                <div class="card-body">
+                                    <h6 class="card-title fw-bold mb-3">
+                                        <i class="fas fa-robot"></i> Model Selection
+                                    </h6>
+                                    <div class="row">
+                                        <div class="col-lg-6 mb-3">
+                                            <label class="form-label">Select Trained Model</label>
+                                            <select class="form-select" id="test-model-select" onchange="updateModelInfo()">
+                                                <option value="">Loading models...</option>
+                                            </select>
+                                            <small class="text-muted">Choose from your trained models</small>
+                                        </div>
+                                        <div class="col-lg-6 mb-3">
+                                            <label class="form-label">Or Load from Path</label>
+                                            <div class="input-group">
+                                                <input type="text" class="form-control" id="custom-model-path"
+                                                       placeholder="./outputs/session_id/checkpoints/final">
+                                                <button class="btn btn-outline-secondary" type="button" onclick="loadFromPath()">
+                                                    <i class="fas fa-folder-open"></i> Load
+                                                </button>
+                                            </div>
+                                            <small class="text-muted">Enter path to model checkpoint</small>
+                                        </div>
+                                    </div>
+                                    <div class="mt-3 d-flex justify-content-between align-items-center">
+                                        <div id="model-info" class="text-muted small">
+                                            <i class="fas fa-info-circle"></i> No model selected
+                                        </div>
+                                        <div>
+                                            <button class="btn btn-primary me-2" onclick="loadModelsForTesting()" id="load-models-btn">
+                                                <i class="fas fa-download"></i> Load Selected
+                                            </button>
+                                            <button class="btn btn-outline-secondary" onclick="clearModelCache()">
+                                                <i class="fas fa-broom"></i> Clear Cache
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Test Configuration -->
+                            <div class="generation-config mb-4">
+                                <h6 class="fw-bold mb-3">
+                                    <i class="fas fa-cog"></i> Generation Settings
+                                </h6>
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <label class="form-label">Temperature</label>
+                                        <input type="range" class="form-range" id="test-temperature" min="0" max="2" step="0.1" value="0.7">
+                                        <small class="text-muted">Value: <span id="test-temp-value">0.7</span></small>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Max Tokens</label>
+                                        <input type="number" class="form-control" id="test-max-tokens" value="512" min="32" max="2048">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Top P</label>
+                                        <input type="range" class="form-range" id="test-top-p" min="0" max="1" step="0.05" value="0.95">
+                                        <small class="text-muted">Value: <span id="test-top-p-value">0.95</span></small>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Repetition Penalty</label>
+                                        <input type="range" class="form-range" id="test-rep-penalty" min="0.5" max="2" step="0.1" value="1.0">
+                                        <small class="text-muted">Value: <span id="test-rep-value">1.0</span></small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Test Prompt -->
+                            <div class="test-prompt mb-4">
+                                <h6 class="fw-bold mb-3">
+                                    <i class="fas fa-edit"></i> Test Prompt
+                                </h6>
+                                <textarea class="form-control" id="test-prompt" rows="4" placeholder="Enter your test prompt here...">What is 25 * 47?</textarea>
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="checkbox" id="use-chat-template" checked>
+                                    <label class="form-check-label" for="use-chat-template">
+                                        Use chat template
+                                    </label>
+                                </div>
+                                <div class="mt-3">
+                                    <button class="btn btn-success btn-lg w-100" onclick="compareModels()" id="compare-btn">
+                                        <i class="fas fa-play"></i> Compare Models
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Comparison Results -->
+                            <div class="comparison-results" id="comparison-results" style="display: none;">
+                                <h6 class="fw-bold mb-3">
+                                    <i class="fas fa-chart-bar"></i> Results
+                                </h6>
+                                <div class="row">
+                                    <!-- Trained Model Response -->
+                                    <div class="col-lg-6 mb-3">
+                                        <div class="card border-success">
+                                            <div class="card-header bg-success text-white">
+                                                <i class="fas fa-graduation-cap"></i> Trained Model
+                                                <span class="badge bg-white text-success float-end" id="trained-time">-</span>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="response-content" id="trained-response">
+                                                    <div class="text-center text-muted p-3">
+                                                        <i class="fas fa-hourglass"></i> Waiting for response...
+                                                    </div>
+                                                </div>
+                                                <div class="mt-2 small text-muted">
+                                                    Tokens: <span id="trained-tokens">-</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Base Model Response -->
+                                    <div class="col-lg-6 mb-3">
+                                        <div class="card border-primary">
+                                            <div class="card-header bg-primary text-white">
+                                                <i class="fas fa-cube"></i> Base Model
+                                                <span class="badge bg-white text-primary float-end" id="base-time">-</span>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="response-content" id="base-response">
+                                                    <div class="text-center text-muted p-3">
+                                                        <i class="fas fa-hourglass"></i> Waiting for response...
+                                                    </div>
+                                                </div>
+                                                <div class="mt-2 small text-muted">
+                                                    Tokens: <span id="base-tokens">-</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Comparison Metrics -->
+                                <div class="comparison-metrics card mt-3">
+                                    <div class="card-body">
+                                        <h6 class="fw-bold">Comparison Metrics</h6>
+                                        <div class="row text-center">
+                                            <div class="col-md-3">
+                                                <div class="metric">
+                                                    <div class="metric-value" id="length-diff">-</div>
+                                                    <div class="metric-label">Length Difference</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="metric">
+                                                    <div class="metric-value" id="time-diff">-</div>
+                                                    <div class="metric-label">Time Difference</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="metric">
+                                                    <div class="metric-value" id="trained-quality">-</div>
+                                                    <div class="metric-label">Trained Quality</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="metric">
+                                                    <div class="metric-value" id="base-quality">-</div>
+                                                    <div class="metric-label">Base Quality</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Test History -->
+                                <div class="test-history mt-4">
+                                    <h6 class="fw-bold mb-3">
+                                        <i class="fas fa-history"></i> Test History
+                                    </h6>
+                                    <div id="test-history-list" class="list-group">
+                                        <!-- Test history will be populated here -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- End of Step 6 -->
+        </div>
+        <!-- End of col-lg-9 main content -->
+    </div>
+    <!-- End of row -->
+</div>
+<!-- End of container-fluid -->
+
+    <!-- Modals -->
+    <!-- System Info Modal -->
+    <div class="modal fade" id="systemInfoModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">System Information</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="system-info-content">Loading...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save Template Modal -->
+    <div class="modal fade" id="saveTemplateModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Save Prompt Template</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Template Name</label>
+                        <input type="text" class="form-control" id="template-name-input" placeholder="Enter template name">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description (optional)</label>
+                        <textarea class="form-control" id="template-description-input" rows="2" placeholder="Enter template description"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveTemplateFromModal()">Save Template</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dataset Preview Modal -->
+    <div class="modal fade" id="datasetPreviewModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Dataset Preview: <span id="preview-dataset-name"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="dataset-preview-loading" class="text-center p-3">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p>Loading dataset samples...</p>
+                    </div>
+                    <div id="dataset-preview-content" style="display: none;">
+                        <div class="mb-3">
+                            <h6>Dataset Statistics</h6>
+                            <div id="dataset-stats" class="alert alert-light"></div>
+                        </div>
+                        <div>
+                            <h6>Sample Data</h6>
+                            <div id="dataset-samples"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" id="use-dataset-btn" onclick="useDatasetFromPreview()">Use This Dataset</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dataset Download Progress Modal -->
+    <div class="modal fade" id="downloadProgressModal" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Downloading Dataset</h5>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <strong>Dataset:</strong> <span id="downloading-dataset-name"></span>
+                    </div>
+                    <div class="mb-3">
+                        <div class="progress">
+                            <div id="download-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated"
+                                 role="progressbar" style="width: 0%">0%</div>
+                        </div>
+                    </div>
+                    <div id="download-status-message" class="text-muted">
+                        Initializing download...
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="cancelDownload()">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

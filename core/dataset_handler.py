@@ -5,13 +5,18 @@ import csv
 import pandas as pd
 import pyarrow.parquet as pq
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Iterator, Tuple, Union
+from typing import Dict, List, Optional, Any, Iterator, Tuple, Union, Callable
 from dataclasses import dataclass, field
 import logging
 from datasets import load_dataset, Dataset, DatasetDict, IterableDataset
 import requests
 from io import StringIO, BytesIO
 import numpy as np
+import time
+import shutil
+from datetime import datetime
+import hashlib
+import pickle
 
 from utils.validators import Validators
 from utils.logging_config import get_logger
@@ -49,6 +54,12 @@ class DatasetConfig:
     api_headers: Dict[str, str] = field(default_factory=dict)
     api_params: Dict[str, Any] = field(default_factory=dict)
 
+    # Caching
+    use_cache: bool = True
+    cache_dir: Optional[str] = None
+    force_download: bool = False
+    sample_size: Optional[int] = None  # For preview/sampling
+
 
 @dataclass
 class DatasetStatistics:
@@ -66,6 +77,28 @@ class DatasetStatistics:
     field_coverage: Dict[str, float]  # Percentage of non-empty values per field
 
 
+@dataclass
+class CacheInfo:
+    """Information about cached dataset."""
+    dataset_name: str
+    cache_path: Path
+    size_bytes: int
+    download_date: datetime
+    samples: int
+    checksum: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            'dataset_name': self.dataset_name,
+            'cache_path': str(self.cache_path),
+            'size_mb': round(self.size_bytes / (1024 * 1024), 2),
+            'download_date': self.download_date.isoformat(),
+            'samples': self.samples,
+            'checksum': self.checksum
+        }
+
+
 class DatasetHandler:
     """Handles loading and processing of datasets from multiple sources."""
 
@@ -77,16 +110,104 @@ class DatasetHandler:
         '.txt': 'text'
     }
 
-    def __init__(self, config: Optional[DatasetConfig] = None):
+    def __init__(self, config: Optional[DatasetConfig] = None, progress_callback: Optional[Callable] = None):
         """Initialize dataset handler.
 
         Args:
             config: Dataset configuration
+            progress_callback: Callback function for progress updates
         """
         self.config = config or DatasetConfig(source_type='direct', source_path='')
         self.dataset = None
         self.statistics = None
         self._field_mapping = {}
+        self.progress_callback = progress_callback
+        self._cache_dir = Path(self.config.cache_dir or './cache/datasets')
+        self._cache_dir.mkdir(parents=True, exist_ok=True)
+        self._cache_info_file = self._cache_dir / 'cache_info.json'
+        self._load_cache_info()
+
+    def _load_cache_info(self):
+        """Load cache information from file."""
+        self.cache_info = {}
+        if self._cache_info_file.exists():
+            try:
+                with open(self._cache_info_file, 'r') as f:
+                    data = json.load(f)
+                    for key, value in data.items():
+                        if isinstance(value, dict):
+                            value['download_date'] = datetime.fromisoformat(value['download_date'])
+                            value['cache_path'] = Path(value['cache_path'])
+                            # Convert size_mb back to size_bytes if needed (for backward compatibility)
+                            if 'size_mb' in value and 'size_bytes' not in value:
+                                value['size_bytes'] = int(value['size_mb'] * 1024 * 1024)
+                                del value['size_mb']
+                            self.cache_info[key] = CacheInfo(**value)
+            except Exception as e:
+                logger.warning(f"Failed to load cache info: {e}")
+                self.cache_info = {}
+
+    def _save_cache_info(self):
+        """Save cache information to file."""
+        try:
+            data = {key: info.to_dict() for key, info in self.cache_info.items()}
+            with open(self._cache_info_file, 'w') as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            logger.error(f"Failed to save cache info: {e}")
+
+    def _get_cache_key(self, dataset_name: str) -> str:
+        """Generate cache key for dataset."""
+        return hashlib.md5(dataset_name.encode()).hexdigest()
+
+    def is_cached(self, dataset_name: str) -> bool:
+        """Check if dataset is cached."""
+        cache_key = self._get_cache_key(dataset_name)
+        cache_path = self._cache_dir / f"{cache_key}.pkl"
+        return cache_path.exists() and cache_key in self.cache_info
+
+    def get_cache_info(self, dataset_name: str) -> Optional[CacheInfo]:
+        """Get cache information for dataset."""
+        cache_key = self._get_cache_key(dataset_name)
+        return self.cache_info.get(cache_key)
+
+    def clear_cache(self, dataset_name: Optional[str] = None):
+        """Clear cache for specific dataset or all cached datasets."""
+        if dataset_name:
+            # Clear specific dataset
+            cache_key = self._get_cache_key(dataset_name)
+            cache_path = self._cache_dir / f"{cache_key}.pkl"
+            if cache_path.exists():
+                cache_path.unlink()
+                logger.info(f"Cleared cache for {dataset_name}")
+            if cache_key in self.cache_info:
+                del self.cache_info[cache_key]
+                self._save_cache_info()
+        else:
+            # Clear all cache
+            shutil.rmtree(self._cache_dir)
+            self._cache_dir.mkdir(parents=True, exist_ok=True)
+            self.cache_info = {}
+            self._save_cache_info()
+            logger.info("Cleared all dataset cache")
+
+    def get_total_cache_size(self) -> int:
+        """Get total size of cached datasets in bytes."""
+        total_size = 0
+        for info in self.cache_info.values():
+            if info.cache_path.exists():
+                total_size += info.size_bytes
+        return total_size
+
+    def _report_progress(self, message: str, progress: float = None, status: str = "loading"):
+        """Report progress to callback if available."""
+        if self.progress_callback:
+            self.progress_callback({
+                'message': message,
+                'progress': progress,
+                'status': status,
+                'timestamp': time.time()
+            })
 
     def load(self, config: Optional[DatasetConfig] = None) -> Dataset:
         """Load dataset from configured source.
@@ -121,16 +242,42 @@ class DatasetHandler:
         return self.dataset
 
     def _load_huggingface(self) -> Dataset:
-        """Load dataset from HuggingFace Hub."""
+        """Load dataset from HuggingFace Hub with caching support."""
         try:
             # Validate dataset name
             valid, msg = Validators.validate_dataset_name(self.config.source_path)
             if not valid:
                 raise ValueError(msg)
 
+            cache_key = self._get_cache_key(self.config.source_path)
+            cache_path = self._cache_dir / f"{cache_key}.pkl"
+
+            # Check cache unless force download
+            if self.config.use_cache and not self.config.force_download and self.is_cached(self.config.source_path):
+                self._report_progress(f"Loading {self.config.source_path} from cache...", 0.1, "cache_loading")
+
+                try:
+                    with open(cache_path, 'rb') as f:
+                        dataset = pickle.load(f)
+
+                    self._report_progress(f"Loaded from cache successfully", 1.0, "cached")
+                    logger.info(f"Loaded dataset from cache: {self.config.source_path}")
+
+                    # Apply sampling if requested
+                    if self.config.sample_size and len(dataset) > self.config.sample_size:
+                        dataset = dataset.select(range(self.config.sample_size))
+                        logger.info(f"Sampled {self.config.sample_size} examples for preview")
+
+                    return dataset
+                except Exception as e:
+                    logger.warning(f"Failed to load from cache, will download: {e}")
+                    self.clear_cache(self.config.source_path)
+
+            # Download dataset
+            self._report_progress(f"Downloading {self.config.source_path}...", 0.2, "downloading")
             logger.info(f"Starting download of dataset: {self.config.source_path}")
 
-            # Load dataset - this will download if not cached
+            # Load dataset - this will download if not cached by HF
             kwargs = {
                 'path': self.config.source_path,
                 'split': self.config.split,
@@ -140,6 +287,14 @@ class DatasetHandler:
 
             if self.config.subset:
                 kwargs['name'] = self.config.subset
+
+            # For sampling, limit the split
+            if self.config.sample_size and not self.config.streaming:
+                # Modify split to limit samples
+                split_str = f"{self.config.split}[:{self.config.sample_size}]"
+                kwargs['split'] = split_str
+
+            self._report_progress(f"Loading dataset...", 0.5, "loading")
 
             # Load the dataset (this blocks until download is complete when streaming=False)
             dataset = load_dataset(**kwargs)
@@ -157,24 +312,54 @@ class DatasetHandler:
             if dataset is None:
                 raise ValueError("Failed to load dataset - no data returned")
 
+            self._report_progress(f"Processing dataset...", 0.8, "processing")
+
             # Ensure dataset is fully loaded (not lazy)
             if not self.config.streaming:
                 # Force dataset to materialize by accessing length
                 dataset_len = len(dataset)
                 logger.info(f"Dataset loaded successfully with {dataset_len} samples")
 
-                # Limit samples if specified
-                if self.config.max_samples and dataset_len > self.config.max_samples:
+                # Save to cache if not sampling
+                if self.config.use_cache and not self.config.sample_size:
+                    try:
+                        self._report_progress(f"Caching dataset...", 0.9, "caching")
+
+                        with open(cache_path, 'wb') as f:
+                            pickle.dump(dataset, f)
+
+                        # Calculate size
+                        size_bytes = cache_path.stat().st_size
+
+                        # Store cache info
+                        self.cache_info[cache_key] = CacheInfo(
+                            dataset_name=self.config.source_path,
+                            cache_path=cache_path,
+                            size_bytes=size_bytes,
+                            download_date=datetime.now(),
+                            samples=dataset_len,
+                            checksum=cache_key
+                        )
+                        self._save_cache_info()
+
+                        logger.info(f"Cached dataset: {self.config.source_path} ({size_bytes / 1024 / 1024:.2f} MB)")
+                    except Exception as e:
+                        logger.warning(f"Failed to cache dataset: {e}")
+
+                # Limit samples if specified (and not already limited by split)
+                if self.config.max_samples and dataset_len > self.config.max_samples and not self.config.sample_size:
                     dataset = dataset.select(range(self.config.max_samples))
                     logger.info(f"Limited dataset to {self.config.max_samples} samples")
 
                 # Shuffle if requested
-                if self.config.shuffle:
+                if self.config.shuffle and not self.config.sample_size:
                     dataset = dataset.shuffle(seed=self.config.seed)
 
+            self._report_progress(f"Dataset ready!", 1.0, "completed")
             return dataset
 
         except Exception as e:
+            self._report_progress(f"Failed: {str(e)}", 0, "error")
             logger.error(f"Failed to load HuggingFace dataset: {e}")
             raise
 
