@@ -122,8 +122,15 @@ You are a helpful AI assistant.
                     # Check actual parameter dtype
                     param_dtype = next(model.parameters()).dtype
                     if param_dtype != torch.float16:
-                        model = model.half()
+                        model = model.to(torch.float16)
                         logger.info(f"Converted model from {param_dtype} to float16 for consistency")
+
+                    # Ensure embeddings are also in float16
+                    if hasattr(model, 'get_input_embeddings'):
+                        embed = model.get_input_embeddings()
+                        if embed and embed.weight.dtype != torch.float16:
+                            embed.weight.data = embed.weight.data.to(torch.float16)
+                            logger.info("Converted input embeddings to float16")
             else:
                 # Load full model
                 model = AutoModelForCausalLM.from_pretrained(
@@ -138,8 +145,15 @@ You are a helpful AI assistant.
                     # Check actual parameter dtype
                     param_dtype = next(model.parameters()).dtype
                     if param_dtype != torch.float16:
-                        model = model.half()
+                        model = model.to(torch.float16)
                         logger.info(f"Converted full model from {param_dtype} to float16 for consistency")
+
+                    # Ensure embeddings are also in float16
+                    if hasattr(model, 'get_input_embeddings'):
+                        embed = model.get_input_embeddings()
+                        if embed and embed.weight.dtype != torch.float16:
+                            embed.weight.data = embed.weight.data.to(torch.float16)
+                            logger.info("Converted input embeddings to float16")
 
             model.eval()
 
@@ -191,6 +205,21 @@ You are a helpful AI assistant.
                 device_map="auto" if self.device == "cuda" else None,
                 low_cpu_mem_usage=True
             )
+
+            # Ensure consistent dtype for CUDA
+            if self.device == "cuda":
+                # Check actual parameter dtype
+                param_dtype = next(model.parameters()).dtype
+                if param_dtype != torch.float16:
+                    model = model.to(torch.float16)
+                    logger.info(f"Converted base model from {param_dtype} to float16")
+
+                # Ensure embeddings are also in float16
+                if hasattr(model, 'get_input_embeddings'):
+                    embed = model.get_input_embeddings()
+                    if embed and embed.weight.dtype != torch.float16:
+                        embed.weight.data = embed.weight.data.to(torch.float16)
+                        logger.info("Converted base model embeddings to float16")
 
             model.eval()
 
@@ -293,8 +322,20 @@ You are a helpful AI assistant.
 
             # Move inputs to the correct device
             if self.device == "cuda":
-                # Move inputs to CUDA - input_ids stay as long, attention_mask as the original dtype
+                # Move inputs to CUDA
                 inputs = {k: v.to("cuda") for k, v in inputs.items()}
+
+                # Ensure model is in evaluation mode
+                model.eval()
+
+                # Get the model's dtype for consistency
+                model_dtype = next(model.parameters()).dtype
+
+                # Ensure inputs match model dtype (except input_ids which should be long)
+                for key in inputs.keys():
+                    if key != 'input_ids':  # input_ids should remain as long
+                        if inputs[key].dtype != model_dtype:
+                            inputs[key] = inputs[key].to(model_dtype)
 
             # Set up streaming if callback provided
             streamer = None
