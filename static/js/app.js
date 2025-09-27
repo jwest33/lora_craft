@@ -5009,6 +5009,30 @@ function updateModelInfo() {
     const select = document.getElementById('test-model-select');
     const infoDiv = document.getElementById('model-info');
     const primaryModelName = document.getElementById('primary-model-name');
+    const loadBtn = document.getElementById('load-models-btn');
+
+    // Reset load button state when model selection changes
+    if (loadBtn) {
+        // Check if currently selected model is different from loaded model
+        if (selectedTestModel && selectedTestModel.sessionId !== select.value) {
+            // Reset button to primary state if a different model is selected
+            loadBtn.classList.remove('btn-success');
+            loadBtn.classList.add('btn-primary');
+            loadBtn.innerHTML = '<i class="fas fa-download"></i> <span id="load-btn-text">Load Selected</span>';
+            loadBtn.disabled = false;
+
+            // Hide loaded models status
+            const statusDiv = document.getElementById('loaded-models-status');
+            if (statusDiv) {
+                statusDiv.style.display = 'none';
+            }
+        } else if (selectedTestModel && selectedTestModel.sessionId === select.value) {
+            // Keep success state if same model is already loaded
+            loadBtn.classList.remove('btn-primary');
+            loadBtn.classList.add('btn-success');
+            loadBtn.innerHTML = '<i class="fas fa-check-circle"></i> <span id="load-btn-text">Models Loaded</span>';
+        }
+    }
 
     if (select && infoDiv) {
         const selectedOption = select.selectedOptions[0];
@@ -5217,6 +5241,25 @@ async function loadModelsForTesting() {
             showAlert('Models loaded successfully!', 'success');
             selectedTestModel = { sessionId, baseModel };
             document.getElementById('compare-btn').disabled = false;
+
+            // Update button to show success state
+            loadBtn.classList.remove('btn-primary');
+            loadBtn.classList.add('btn-success');
+            loadBtn.innerHTML = '<i class="fas fa-check-circle"></i> <span id="load-btn-text">Models Loaded</span>';
+
+            // Show loaded models status
+            const statusDiv = document.getElementById('loaded-models-status');
+            statusDiv.style.display = 'block';
+
+            // Update badges with model names
+            const trainedBadge = document.getElementById('loaded-trained-badge');
+            const baseBadge = document.getElementById('loaded-base-badge');
+
+            // Get model display name from select option
+            const modelName = selectedOption.textContent.trim();
+            trainedBadge.textContent = modelName.length > 20 ? modelName.substring(0, 20) + '...' : modelName;
+            baseBadge.textContent = baseModel.split('/').pop();
+
         } else {
             const errors = [];
             if (!result.results.trained.success) {
@@ -5226,14 +5269,24 @@ async function loadModelsForTesting() {
                 errors.push(`Base model: ${result.results.base.error}`);
             }
             showAlert('Failed to load models: ' + errors.join(', '), 'danger');
+
+            // Reset button on failure
+            loadBtn.disabled = false;
+            loadBtn.innerHTML = '<i class="fas fa-download"></i> <span id="load-btn-text">Load Selected</span>';
         }
 
     } catch (error) {
         console.error('Failed to load models:', error);
         showAlert('Failed to load models: ' + error.message, 'danger');
-    } finally {
+
+        // Reset button on error
         loadBtn.disabled = false;
-        loadBtn.innerHTML = '<i class="fas fa-download"></i> Load Models';
+        loadBtn.innerHTML = '<i class="fas fa-download"></i> <span id="load-btn-text">Load Selected</span>';
+    } finally {
+        // Re-enable button but keep success state if successful
+        if (!loadBtn.classList.contains('btn-success')) {
+            loadBtn.disabled = false;
+        }
     }
 }
 
@@ -5477,6 +5530,21 @@ async function clearModelCache() {
             showAlert('Model cache cleared', 'success');
             selectedTestModel = null;
             document.getElementById('compare-btn').disabled = true;
+
+            // Reset load button to default state
+            const loadBtn = document.getElementById('load-models-btn');
+            if (loadBtn) {
+                loadBtn.classList.remove('btn-success');
+                loadBtn.classList.add('btn-primary');
+                loadBtn.innerHTML = '<i class="fas fa-download"></i> <span id="load-btn-text">Load Selected</span>';
+                loadBtn.disabled = false;
+            }
+
+            // Hide loaded models status
+            const statusDiv = document.getElementById('loaded-models-status');
+            if (statusDiv) {
+                statusDiv.style.display = 'none';
+            }
         }
 
     } catch (error) {

@@ -27,7 +27,7 @@ class TestConfig:
     max_new_tokens: int = 512
     top_p: float = 0.95
     top_k: int = 50
-    repetition_penalty: float = 1.0
+    repetition_penalty: float = 1  # Increased from 1.0 to reduce repetition
     do_sample: bool = True
     num_beams: int = 1
     use_cache: bool = True
@@ -106,6 +106,7 @@ You are a helpful AI assistant.
                 base_model_name = adapter_config.get("base_model_name_or_path")
 
                 logger.info(f"Loading base model: {base_model_name}")
+                # Always use float16 for consistency with Unsloth training
                 model = AutoModelForCausalLM.from_pretrained(
                     base_model_name,
                     torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
@@ -115,6 +116,14 @@ You are a helpful AI assistant.
 
                 logger.info("Loading LoRA adapter")
                 model = PeftModel.from_pretrained(model, checkpoint_path)
+
+                # Ensure the model is in float16 if on CUDA
+                if self.device == "cuda":
+                    # Check actual parameter dtype
+                    param_dtype = next(model.parameters()).dtype
+                    if param_dtype != torch.float16:
+                        model = model.half()
+                        logger.info(f"Converted model from {param_dtype} to float16 for consistency")
             else:
                 # Load full model
                 model = AutoModelForCausalLM.from_pretrained(
@@ -123,6 +132,14 @@ You are a helpful AI assistant.
                     device_map="auto" if self.device == "cuda" else None,
                     low_cpu_mem_usage=True
                 )
+
+                # Ensure the model is in float16 if on CUDA
+                if self.device == "cuda":
+                    # Check actual parameter dtype
+                    param_dtype = next(model.parameters()).dtype
+                    if param_dtype != torch.float16:
+                        model = model.half()
+                        logger.info(f"Converted full model from {param_dtype} to float16 for consistency")
 
             model.eval()
 
@@ -198,7 +215,8 @@ You are a helpful AI assistant.
         model_key: str,
         config: Optional[TestConfig] = None,
         use_chat_template: bool = True,
-        streaming_callback = None
+        streaming_callback = None,
+        use_simple_prompt: bool = False
     ) -> Dict[str, Any]:
         """Generate response from a model.
 
@@ -209,6 +227,7 @@ You are a helpful AI assistant.
             config: Generation configuration
             use_chat_template: Whether to apply chat template
             streaming_callback: Callback for streaming tokens
+            use_simple_prompt: Use simple prompting without system instructions
 
         Returns:
             Dictionary with response and metadata
@@ -235,7 +254,11 @@ You are a helpful AI assistant.
                 config = TestConfig()
 
             # Apply chat template if requested
-            if use_chat_template:
+            if use_simple_prompt:
+                # For simple testing, just use the prompt directly
+                formatted_prompt = prompt
+                logger.debug("Using simple prompt format for testing")
+            elif use_chat_template:
                 if model_type == "base":
                     # Use generic chat template for base model
                     formatted_prompt = self.base_chat_template.format(prompt=prompt)
@@ -268,8 +291,10 @@ You are a helpful AI assistant.
                 max_length=2048
             )
 
+            # Move inputs to the correct device
             if self.device == "cuda":
-                inputs = inputs.to("cuda")
+                # Move inputs to CUDA - input_ids stay as long, attention_mask as the original dtype
+                inputs = {k: v.to("cuda") for k, v in inputs.items()}
 
             # Set up streaming if callback provided
             streamer = None
@@ -344,7 +369,8 @@ You are a helpful AI assistant.
         model1_session_id: str,
         model2_session_id: str,
         config: Optional[TestConfig] = None,
-        use_chat_template: bool = True
+        use_chat_template: bool = True,
+        use_simple_prompt: bool = False
     ) -> Dict[str, Any]:
         """Compare responses from two trained models.
 
@@ -371,7 +397,8 @@ You are a helpful AI assistant.
             model_type="trained",
             model_key=model1_session_id,
             config=config,
-            use_chat_template=use_chat_template
+            use_chat_template=use_chat_template,
+            use_simple_prompt=use_simple_prompt
         )
         results["model1"] = {
             **model1_result,
@@ -384,7 +411,8 @@ You are a helpful AI assistant.
             model_type="trained",
             model_key=model2_session_id,
             config=config,
-            use_chat_template=use_chat_template
+            use_chat_template=use_chat_template,
+            use_simple_prompt=use_simple_prompt
         )
         results["model2"] = {
             **model2_result,
@@ -425,7 +453,8 @@ You are a helpful AI assistant.
         trained_session_id: str,
         base_model_name: str,
         config: Optional[TestConfig] = None,
-        use_chat_template: bool = True
+        use_chat_template: bool = True,
+        use_simple_prompt: bool = False
     ) -> Dict[str, Any]:
         """Compare responses from trained and base models.
 
@@ -451,7 +480,8 @@ You are a helpful AI assistant.
             model_type="trained",
             model_key=trained_session_id,
             config=config,
-            use_chat_template=use_chat_template
+            use_chat_template=use_chat_template,
+            use_simple_prompt=use_simple_prompt
         )
         results["trained"] = trained_result
 
@@ -461,7 +491,8 @@ You are a helpful AI assistant.
             model_type="base",
             model_key=base_model_name,
             config=config,
-            use_chat_template=use_chat_template
+            use_chat_template=use_chat_template,
+            use_simple_prompt=use_simple_prompt
         )
         results["base"] = base_result
 
