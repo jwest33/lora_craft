@@ -119,18 +119,16 @@ You are a helpful AI assistant.
 
                 # Ensure the model is in float16 if on CUDA
                 if self.device == "cuda":
-                    # Check actual parameter dtype
-                    param_dtype = next(model.parameters()).dtype
-                    if param_dtype != torch.float16:
-                        model = model.to(torch.float16)
-                        logger.info(f"Converted model from {param_dtype} to float16 for consistency")
+                    # Convert entire model to float16
+                    model = model.to(torch.float16)
+                    logger.info("Converted model to float16 for consistency")
 
-                    # Ensure embeddings are also in float16
-                    if hasattr(model, 'get_input_embeddings'):
-                        embed = model.get_input_embeddings()
-                        if embed and embed.weight.dtype != torch.float16:
-                            embed.weight.data = embed.weight.data.to(torch.float16)
-                            logger.info("Converted input embeddings to float16")
+                    # Ensure all submodules are also in float16
+                    for name, module in model.named_modules():
+                        for param_name, param in module.named_parameters(recurse=False):
+                            if param.dtype != torch.float16:
+                                param.data = param.data.to(torch.float16)
+                                logger.debug(f"Converted {name}.{param_name} to float16")
             else:
                 # Load full model
                 model = AutoModelForCausalLM.from_pretrained(
@@ -142,18 +140,16 @@ You are a helpful AI assistant.
 
                 # Ensure the model is in float16 if on CUDA
                 if self.device == "cuda":
-                    # Check actual parameter dtype
-                    param_dtype = next(model.parameters()).dtype
-                    if param_dtype != torch.float16:
-                        model = model.to(torch.float16)
-                        logger.info(f"Converted full model from {param_dtype} to float16 for consistency")
+                    # Convert entire model to float16
+                    model = model.to(torch.float16)
+                    logger.info("Converted full model to float16 for consistency")
 
-                    # Ensure embeddings are also in float16
-                    if hasattr(model, 'get_input_embeddings'):
-                        embed = model.get_input_embeddings()
-                        if embed and embed.weight.dtype != torch.float16:
-                            embed.weight.data = embed.weight.data.to(torch.float16)
-                            logger.info("Converted input embeddings to float16")
+                    # Ensure all submodules are also in float16
+                    for name, module in model.named_modules():
+                        for param_name, param in module.named_parameters(recurse=False):
+                            if param.dtype != torch.float16:
+                                param.data = param.data.to(torch.float16)
+                                logger.debug(f"Converted {name}.{param_name} to float16")
 
             model.eval()
 
@@ -208,18 +204,16 @@ You are a helpful AI assistant.
 
             # Ensure consistent dtype for CUDA
             if self.device == "cuda":
-                # Check actual parameter dtype
-                param_dtype = next(model.parameters()).dtype
-                if param_dtype != torch.float16:
-                    model = model.to(torch.float16)
-                    logger.info(f"Converted base model from {param_dtype} to float16")
+                # Convert entire model to float16
+                model = model.to(torch.float16)
+                logger.info("Converted base model to float16")
 
-                # Ensure embeddings are also in float16
-                if hasattr(model, 'get_input_embeddings'):
-                    embed = model.get_input_embeddings()
-                    if embed and embed.weight.dtype != torch.float16:
-                        embed.weight.data = embed.weight.data.to(torch.float16)
-                        logger.info("Converted base model embeddings to float16")
+                # Ensure all submodules are also in float16
+                for name, module in model.named_modules():
+                    for param_name, param in module.named_parameters(recurse=False):
+                        if param.dtype != torch.float16:
+                            param.data = param.data.to(torch.float16)
+                            logger.debug(f"Converted {name}.{param_name} to float16")
 
             model.eval()
 
@@ -328,14 +322,26 @@ You are a helpful AI assistant.
                 # Ensure model is in evaluation mode
                 model.eval()
 
-                # Get the model's dtype for consistency
+                # Get the model's dtype for consistency (should be float16)
                 model_dtype = next(model.parameters()).dtype
+                logger.debug(f"Model dtype: {model_dtype}")
 
-                # Ensure inputs match model dtype (except input_ids which should be long)
+                # Ensure inputs match model dtype
                 for key in inputs.keys():
-                    if key != 'input_ids':  # input_ids should remain as long
+                    if key == 'input_ids':
+                        # input_ids should remain as long
+                        if inputs[key].dtype != torch.long:
+                            inputs[key] = inputs[key].long()
+                    elif key == 'attention_mask':
+                        # attention_mask should match model dtype
                         if inputs[key].dtype != model_dtype:
                             inputs[key] = inputs[key].to(model_dtype)
+                            logger.debug(f"Converted attention_mask to {model_dtype}")
+                    else:
+                        # Any other tensor should match model dtype
+                        if inputs[key].dtype != model_dtype:
+                            inputs[key] = inputs[key].to(model_dtype)
+                            logger.debug(f"Converted {key} to {model_dtype}")
 
             # Set up streaming if callback provided
             streamer = None
@@ -556,14 +562,32 @@ You are a helpful AI assistant.
         Args:
             model_key: Specific model to clear, or None for all
         """
+        import gc
+
         if model_key:
             if model_key in self.loaded_models:
+                # Delete the model
                 del self.loaded_models[model_key]
-                torch.cuda.empty_cache()
+
+                # Force garbage collection
+                gc.collect()
+
+                # Clear CUDA cache if available
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+
                 logger.info(f"Cleared model cache for {model_key}")
         else:
+            # Clear all models
             self.loaded_models.clear()
-            torch.cuda.empty_cache()
+
+            # Force garbage collection
+            gc.collect()
+
+            # Clear CUDA cache if available
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
             logger.info("Cleared all model cache")
 
     def set_chat_template(self, template: str):

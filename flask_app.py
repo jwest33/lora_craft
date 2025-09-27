@@ -290,6 +290,18 @@ def process_training_queue(session_id: str):
                     if session_obj:
                         session_obj.status = 'completed'
                         session_obj.completed_at = datetime.now()
+
+                    # Clean up training models from memory
+                    try:
+                        # Clear any Unsloth models that might be in GPU memory
+                        import gc
+                        gc.collect()
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+                        logger.info(f"Cleared GPU memory after training completion for session {session_id}")
+                    except Exception as e:
+                        logger.warning(f"Error clearing GPU memory: {e}")
+
                     emit_to_session(session_id, 'training_complete', {
                         'message': msg_data,
                         'session_id': session_id
@@ -767,11 +779,15 @@ def run_training(session_id: str, config: Dict[str, Any]):
         # Mark session as completed
         if session_id in training_sessions:
             session_obj = training_sessions[session_id]
-            # Note: We don't automatically cleanup the model anymore to allow exports
-            # Users can still manually trigger cleanup if needed to free memory
-            # Uncomment the following line to enable auto-cleanup:
-            # if session_obj.trainer:
-            #     session_obj.trainer.cleanup()
+            # Clean up the trainer model from memory after training
+            # The trained model is saved to disk and can be loaded separately for testing
+            if session_obj.trainer:
+                try:
+                    session_obj.trainer.cleanup()
+                    logger.info(f"Cleaned up trainer resources for session {session_id}")
+                except Exception as e:
+                    logger.warning(f"Error cleaning up trainer: {e}")
+
             session_obj.completed_at = datetime.now()
             if session_obj.status == 'running':
                 session_obj.status = 'completed'

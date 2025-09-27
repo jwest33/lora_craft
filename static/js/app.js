@@ -3747,72 +3747,329 @@ function showHelp() {
 
 function applyConfigToUI(config) {
     // Apply configuration values to UI elements
+
+    // Model configuration
     if (config.model_name) {
-        document.getElementById('model-select').value = config.model_name;
+        const modelSelect = document.getElementById('model-name');
+        if (modelSelect) {
+            modelSelect.value = config.model_name;
+        }
+        // Also check for custom model path
+        const customModelPath = document.getElementById('custom-model-path');
+        if (customModelPath && config.model_name.includes('/')) {
+            customModelPath.value = config.model_name;
+        }
     }
+
+    if (config.display_name) {
+        const displayName = document.getElementById('model-display-name');
+        if (displayName) displayName.value = config.display_name;
+    }
+
+    // Dataset configuration
     if (config.dataset_source) {
-        document.getElementById('dataset-source').value = config.dataset_source;
-        updateDatasetFields();
+        const datasetSource = document.getElementById('dataset-source');
+        if (datasetSource) datasetSource.value = config.dataset_source;
     }
-    if (config.dataset_name) {
-        document.getElementById('dataset-name').value = config.dataset_name;
+
+    if (config.dataset_path) {
+        const datasetPath = document.getElementById('dataset-path');
+        if (datasetPath) datasetPath.value = config.dataset_path;
     }
+
+    if (config.dataset_split) {
+        const datasetSplit = document.getElementById('dataset-split');
+        if (datasetSplit) datasetSplit.value = config.dataset_split;
+    }
+
     if (config.instruction_field) {
-        document.getElementById('instruction-field').value = config.instruction_field;
+        const instructionField = document.getElementById('instruction-field');
+        if (instructionField) instructionField.value = config.instruction_field;
+
+        const instructionFieldVisible = document.getElementById('instruction-field-visible');
+        if (instructionFieldVisible) instructionFieldVisible.value = config.instruction_field;
     }
-    if (config.output_field) {
-        document.getElementById('output-field').value = config.output_field;
+
+    if (config.response_field) {
+        const responseField = document.getElementById('response-field');
+        if (responseField) responseField.value = config.response_field;
+
+        const responseFieldVisible = document.getElementById('response-field-visible');
+        if (responseFieldVisible) responseFieldVisible.value = config.response_field;
+    }
+
+    // Template configuration - IMPORTANT: Restore these fields
+    if (config.system_prompt) {
+        const systemPrompt = document.getElementById('system-prompt');
+        if (systemPrompt) systemPrompt.value = config.system_prompt;
+
+        const customSystemPrompt = document.getElementById('custom-system-prompt');
+        if (customSystemPrompt) customSystemPrompt.value = config.system_prompt;
+    }
+
+    if (config.reasoning_start) {
+        const reasoningStart = document.getElementById('reasoning-start');
+        if (reasoningStart) reasoningStart.value = config.reasoning_start;
+
+        const customReasoningStart = document.getElementById('custom-reasoning-start');
+        if (customReasoningStart) customReasoningStart.value = config.reasoning_start;
+    }
+
+    if (config.reasoning_end) {
+        const reasoningEnd = document.getElementById('reasoning-end');
+        if (reasoningEnd) reasoningEnd.value = config.reasoning_end;
+
+        const customReasoningEnd = document.getElementById('custom-reasoning-end');
+        if (customReasoningEnd) customReasoningEnd.value = config.reasoning_end;
+    }
+
+    if (config.solution_start) {
+        const solutionStart = document.getElementById('solution-start');
+        if (solutionStart) solutionStart.value = config.solution_start;
+
+        const customSolutionStart = document.getElementById('custom-solution-start');
+        if (customSolutionStart) customSolutionStart.value = config.solution_start;
+    }
+
+    if (config.solution_end) {
+        const solutionEnd = document.getElementById('solution-end');
+        if (solutionEnd) solutionEnd.value = config.solution_end;
+
+        const customSolutionEnd = document.getElementById('custom-solution-end');
+        if (customSolutionEnd) customSolutionEnd.value = config.solution_end;
+    }
+
+    // Check if we need to switch to custom template mode
+    const isCustomTemplate = (
+        (config.system_prompt && config.system_prompt !== 'You are given a problem.\nThink about the problem and provide your working out.\nPlace it between <start_working_out> and <end_working_out>.\nThen, provide your solution between <SOLUTION></SOLUTION>') ||
+        (config.reasoning_start && config.reasoning_start !== '<start_working_out>') ||
+        (config.reasoning_end && config.reasoning_end !== '<end_working_out>') ||
+        (config.solution_start && config.solution_start !== '<SOLUTION>') ||
+        (config.solution_end && config.solution_end !== '</SOLUTION>')
+    );
+
+    if (isCustomTemplate) {
+        // Switch to custom template mode
+        const customRadio = document.getElementById('template-custom');
+        if (customRadio) {
+            customRadio.checked = true;
+            handleTemplateMode('custom');
+        }
+    }
+
+    // Chat template configuration
+    if (config.chat_template_type) {
+        const chatTemplateType = document.getElementById('chat-template-type');
+        if (chatTemplateType) chatTemplateType.value = config.chat_template_type;
+    }
+
+    if (config.chat_template) {
+        const chatTemplate = document.getElementById('chat-template');
+        if (chatTemplate) chatTemplate.value = config.chat_template;
     }
 
     // Training parameters
-    if (config.num_train_epochs) {
-        document.getElementById('epochs').value = config.num_train_epochs;
+    if (config.num_epochs) {
+        const numEpochs = document.getElementById('num-epochs');
+        if (numEpochs) numEpochs.value = config.num_epochs;
     }
-    if (config.per_device_train_batch_size) {
-        document.getElementById('batch-size').value = config.per_device_train_batch_size;
+
+    if (config.batch_size) {
+        const batchSize = document.getElementById('batch-size');
+        if (batchSize) batchSize.value = config.batch_size;
     }
+
     if (config.learning_rate) {
-        document.getElementById('learning-rate').value = config.learning_rate;
+        const learningRate = document.getElementById('learning-rate');
+        if (learningRate) learningRate.value = config.learning_rate;
     }
+
     if (config.gradient_accumulation_steps) {
-        document.getElementById('gradient-accumulation').value = config.gradient_accumulation_steps;
+        const gradAccum = document.getElementById('gradient-accumulation');
+        if (gradAccum) gradAccum.value = config.gradient_accumulation_steps;
     }
+
     if (config.max_sequence_length) {
-        document.getElementById('max-sequence-length').value = config.max_sequence_length;
+        const maxSeqLength = document.getElementById('max-sequence-length');
+        if (maxSeqLength) maxSeqLength.value = config.max_sequence_length;
+    }
+
+    if (config.max_new_tokens) {
+        const maxNewTokens = document.getElementById('max-new-tokens');
+        if (maxNewTokens) maxNewTokens.value = config.max_new_tokens;
+    }
+
+    if (config.warmup_steps) {
+        const warmupSteps = document.getElementById('warmup-steps');
+        if (warmupSteps) warmupSteps.value = config.warmup_steps;
+    }
+
+    if (config.weight_decay) {
+        const weightDecay = document.getElementById('weight-decay');
+        if (weightDecay) weightDecay.value = config.weight_decay;
     }
 
     // LoRA parameters
     if (config.lora_rank) {
-        document.getElementById('lora-rank').value = config.lora_rank;
+        const loraRank = document.getElementById('lora-rank');
+        if (loraRank) loraRank.value = config.lora_rank;
     }
+
     if (config.lora_alpha) {
-        document.getElementById('lora-alpha').value = config.lora_alpha;
+        const loraAlpha = document.getElementById('lora-alpha');
+        if (loraAlpha) loraAlpha.value = config.lora_alpha;
     }
+
     if (config.lora_dropout) {
-        document.getElementById('lora-dropout').value = config.lora_dropout;
+        const loraDropout = document.getElementById('lora-dropout');
+        if (loraDropout) loraDropout.value = config.lora_dropout;
+    }
+
+    if (config.lora_target_modules && Array.isArray(config.lora_target_modules)) {
+        // Reset all checkboxes first
+        ['target-q-proj', 'target-v-proj', 'target-k-proj', 'target-o-proj'].forEach(id => {
+            const checkbox = document.getElementById(id);
+            if (checkbox) checkbox.checked = false;
+        });
+
+        // Check the ones in the config
+        config.lora_target_modules.forEach(module => {
+            const checkbox = document.getElementById(`target-${module.replace('_', '-')}`);
+            if (checkbox) checkbox.checked = true;
+        });
+    }
+
+    if (config.lora_bias) {
+        const loraBias = document.getElementById('lora-bias');
+        if (loraBias) loraBias.value = config.lora_bias;
     }
 
     // GRPO parameters
-    if (config.kl_penalty) {
-        document.getElementById('kl-penalty').value = config.kl_penalty;
+    if (config.temperature !== undefined) {
+        const temperature = document.getElementById('temperature');
+        if (temperature) temperature.value = config.temperature;
     }
-    if (config.clip_range) {
-        document.getElementById('clip-range').value = config.clip_range;
+
+    if (config.top_p !== undefined) {
+        const topP = document.getElementById('top-p');
+        if (topP) topP.value = config.top_p;
     }
+
+    if (config.top_k !== undefined) {
+        const topK = document.getElementById('top-k');
+        if (topK) topK.value = config.top_k;
+    }
+
+    if (config.repetition_penalty !== undefined) {
+        const repPenalty = document.getElementById('repetition-penalty');
+        if (repPenalty) repPenalty.value = config.repetition_penalty;
+    }
+
+    if (config.kl_penalty !== undefined) {
+        const klPenalty = document.getElementById('kl-penalty');
+        if (klPenalty) klPenalty.value = config.kl_penalty;
+    }
+
+    if (config.clip_range !== undefined) {
+        const clipRange = document.getElementById('clip-range');
+        if (clipRange) clipRange.value = config.clip_range;
+    }
+
     if (config.num_generations) {
-        document.getElementById('num-generations').value = config.num_generations;
+        const numGenerations = document.getElementById('num-generations');
+        if (numGenerations) numGenerations.value = config.num_generations;
     }
 
-    // Template selection
-    if (config.template_type) {
-        document.getElementById('template-type').value = config.template_type;
-        updateTemplateFields();
+    if (config.value_coefficient !== undefined) {
+        const valueCoeff = document.getElementById('value-coefficient');
+        if (valueCoeff) valueCoeff.value = config.value_coefficient;
     }
 
-    // Reward components
-    if (config.reward_components) {
-        // TODO: Apply reward components to UI
+    // Algorithm selection
+    if (config.importance_sampling_level) {
+        const algorithm = config.importance_sampling_level === 'sequence' ? 'gspo' : 'grpo';
+        const grpoRadio = document.getElementById('algo-grpo');
+        const gspoRadio = document.getElementById('algo-gspo');
+
+        if (algorithm === 'gspo' && gspoRadio) {
+            gspoRadio.checked = true;
+        } else if (grpoRadio) {
+            grpoRadio.checked = true;
+        }
     }
+
+    if (config.epsilon !== undefined) {
+        const epsilon = document.getElementById('epsilon');
+        if (epsilon) epsilon.value = config.epsilon;
+    }
+
+    if (config.epsilon_high !== undefined) {
+        const epsilonHigh = document.getElementById('epsilon-high');
+        if (epsilonHigh) epsilonHigh.value = config.epsilon_high;
+    }
+
+    // Pre-training configuration
+    if (config.enable_pre_training !== undefined) {
+        const enablePreTraining = document.getElementById('enable-pre-training');
+        if (enablePreTraining) enablePreTraining.checked = config.enable_pre_training;
+    }
+
+    if (config.pre_training_epochs) {
+        const preTrainingEpochs = document.getElementById('pre-training-epochs');
+        if (preTrainingEpochs) preTrainingEpochs.value = config.pre_training_epochs;
+    }
+
+    if (config.pre_training_samples) {
+        const preTrainingSamples = document.getElementById('pre-training-samples');
+        if (preTrainingSamples) preTrainingSamples.value = config.pre_training_samples;
+    }
+
+    if (config.validate_format !== undefined) {
+        const validateFormat = document.getElementById('validate-format');
+        if (validateFormat) validateFormat.checked = config.validate_format;
+    }
+
+    // Advanced settings
+    if (config.lr_scheduler_type) {
+        const lrScheduler = document.getElementById('lr-scheduler-type');
+        if (lrScheduler) lrScheduler.value = config.lr_scheduler_type;
+    }
+
+    if (config.optim) {
+        const optimizer = document.getElementById('optimizer');
+        if (optimizer) optimizer.value = config.optim;
+    }
+
+    if (config.max_grad_norm !== undefined) {
+        const maxGradNorm = document.getElementById('max-grad-norm');
+        if (maxGradNorm) maxGradNorm.value = config.max_grad_norm;
+    }
+
+    if (config.logging_steps) {
+        const loggingSteps = document.getElementById('logging-steps');
+        if (loggingSteps) loggingSteps.value = config.logging_steps;
+    }
+
+    if (config.save_steps) {
+        const saveSteps = document.getElementById('save-steps');
+        if (saveSteps) saveSteps.value = config.save_steps;
+    }
+
+    if (config.eval_steps) {
+        const evalSteps = document.getElementById('eval-steps');
+        if (evalSteps) evalSteps.value = config.eval_steps;
+    }
+
+    if (config.seed !== undefined) {
+        const seed = document.getElementById('seed');
+        if (seed) seed.value = config.seed;
+    }
+
+    // Update template preview after loading
+    updateTemplatePreview();
+
+    // Update configuration summary
+    updateConfigSummary();
 }
 
 // ============================================================================
