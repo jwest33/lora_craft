@@ -22,6 +22,7 @@ import psutil
 from flask import Flask, render_template, request, jsonify, session, Response, send_file
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit, join_room, leave_room
+from werkzeug.utils import secure_filename
 import torch
 
 # Add project root to path
@@ -53,8 +54,13 @@ logger = get_logger(__name__)
 # Initialize Flask app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
-app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file size
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024 * 1024  # 10GB max file size for large datasets
 app.config['SESSION_TYPE'] = 'filesystem'
+app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+app.config['ALLOWED_EXTENSIONS'] = {'json', 'jsonl', 'csv', 'parquet'}
+
+# Create upload directory if it doesn't exist
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Enable CORS for API access
 CORS(app, resources={r"/api/*": {"origins": "*"}})
@@ -539,11 +545,22 @@ def run_training(session_id: str, config: Dict[str, Any]):
 
         # Load dataset
         q.put(('log', "Loading dataset..."))
+
+        # Determine source type based on dataset_path
+        dataset_path = config.get('dataset_path', 'tatsu-lab/alpaca')
+        source_type = config.get('dataset_source', 'huggingface')
+
+        # Check if this is an uploaded file
+        if dataset_path and (dataset_path.startswith(app.config['UPLOAD_FOLDER']) or
+                            '\\uploads\\' in dataset_path or '/uploads/' in dataset_path):
+            source_type = 'local'
+            q.put(('log', f"Using uploaded dataset file: {os.path.basename(dataset_path)}"))
+
         dataset_config = DatasetConfig(
-            source_type=config.get('dataset_source', 'huggingface'),
-            source_path=config.get('dataset_path', 'tatsu-lab/alpaca'),
+            source_type=source_type,
+            source_path=dataset_path,
             subset=config.get('dataset_config', None),  # Config for multi-config datasets
-            split=config.get('dataset_split', 'train[:100]'),  # Limit for demo
+            split=config.get('dataset_split', 'train[:100]') if source_type == 'huggingface' else 'train',  # No split for local files
             instruction_field=config.get('instruction_field', 'instruction'),
             response_field=config.get('response_field', 'output'),
             max_samples=config.get('max_samples', 100)
@@ -1705,9 +1722,87 @@ def detect_dataset_fields():
         data = request.json
         dataset_name = data.get('dataset_name')
         dataset_config = data.get('config', None)
+        is_local = data.get('is_local', False)
 
         if not dataset_name:
             return jsonify({'error': 'Dataset name required'}), 400
+
+        # Check if this is an uploaded file
+        if is_local or dataset_name.startswith(app.config['UPLOAD_FOLDER']) or '\\uploads\\' in dataset_name or '/uploads/' in dataset_name:
+            # Handle local uploaded file
+            filepath = Path(dataset_name)
+
+            # Ensure file exists
+            if not filepath.exists():
+                return jsonify({'error': 'File not found'}), 404
+
+            # Read the file to detect columns
+            columns = []
+            suggested_mappings = {'instruction': None, 'response': None}
+            sample_data = []
+
+            extension = filepath.suffix[1:].lower()
+
+            try:
+                if extension == 'csv':
+                    import pandas as pd
+                    df = pd.read_csv(filepath, nrows=5)
+                    columns = list(df.columns)
+                    sample_data = df.head(3).to_dict('records')
+
+                elif extension == 'json':
+                    import json
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        data_json = json.load(f)
+                        if isinstance(data_json, list) and len(data_json) > 0:
+                            columns = list(data_json[0].keys())
+                            sample_data = data_json[:3]
+
+                elif extension == 'jsonl':
+                    import json
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        first_lines = []
+                        for i, line in enumerate(f):
+                            if i >= 3:
+                                break
+                            first_lines.append(json.loads(line))
+                        if first_lines:
+                            columns = list(first_lines[0].keys())
+                            sample_data = first_lines
+
+                elif extension == 'parquet':
+                    import pandas as pd
+                    df = pd.read_parquet(filepath, engine='auto')
+                    columns = list(df.columns)
+                    sample_data = df.head(3).to_dict('records')
+
+                # Detect instruction/response fields
+                instruction_patterns = ['instruction', 'prompt', 'question', 'input', 'text', 'problem', 'query', 'user']
+                response_patterns = ['response', 'answer', 'output', 'completion', 'label', 'generated_solution', 'solution', 'reply', 'assistant']
+
+                for col in columns:
+                    col_lower = col.lower()
+                    if not suggested_mappings['instruction']:
+                        for pattern in instruction_patterns:
+                            if pattern in col_lower:
+                                suggested_mappings['instruction'] = col
+                                break
+                    if not suggested_mappings['response']:
+                        for pattern in response_patterns:
+                            if pattern in col_lower:
+                                suggested_mappings['response'] = col
+                                break
+
+                return jsonify({
+                    'columns': columns,
+                    'suggested_mappings': suggested_mappings,
+                    'sample_data': sample_data,
+                    'is_local': True
+                })
+
+            except Exception as e:
+                logger.error(f"Failed to read local file: {e}")
+                return jsonify({'error': f'Failed to read file: {str(e)}'}), 500
 
         # Check if dataset has predefined field mapping
         dataset_info = POPULAR_DATASETS.get(dataset_name, {})
@@ -1910,6 +2005,173 @@ def list_popular_datasets():
 
     except Exception as e:
         logger.error(f"Failed to list datasets: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+def allowed_file(filename):
+    """Check if file has allowed extension."""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+
+
+@app.route('/api/datasets/upload', methods=['POST'])
+def upload_dataset():
+    """Upload a dataset file (JSON, JSONL, CSV, or Parquet)."""
+    try:
+        # Check if file is in request
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+
+        file = request.files['file']
+
+        # Check if file is selected
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+
+        # Validate file extension
+        if not allowed_file(file.filename):
+            return jsonify({
+                'error': f'Invalid file type. Allowed types: {", ".join(app.config["ALLOWED_EXTENSIONS"])}'
+            }), 400
+
+        # Generate secure filename with timestamp to avoid conflicts
+        original_filename = secure_filename(file.filename)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        base_name = original_filename.rsplit('.', 1)[0]
+        extension = original_filename.rsplit('.', 1)[1]
+        filename = f"{base_name}_{timestamp}.{extension}"
+
+        # Save file
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+
+        # Get file info
+        file_size = os.path.getsize(filepath)
+
+        # Try to detect dataset structure
+        dataset_info = {}
+        try:
+            # Create temporary dataset handler to analyze the file
+            temp_config = DatasetConfig(
+                source_type='local',
+                source_path=filepath,
+                max_samples=5  # Only load a few samples for preview
+            )
+            temp_handler = DatasetHandler(temp_config)
+            temp_dataset = temp_handler.load()
+
+            # Get field information
+            if hasattr(temp_dataset, 'column_names'):
+                dataset_info['columns'] = temp_dataset.column_names
+                dataset_info['num_samples'] = len(temp_dataset)
+
+                # Get sample data
+                samples = []
+                for i, item in enumerate(temp_dataset):
+                    if i >= 3:  # Only get 3 samples
+                        break
+                    samples.append(dict(item))
+                dataset_info['samples'] = samples
+
+                # Try to auto-detect instruction/response fields
+                columns_lower = [col.lower() for col in temp_dataset.column_names]
+                instruction_candidates = ['instruction', 'prompt', 'question', 'input', 'text', 'problem']
+                response_candidates = ['response', 'answer', 'output', 'completion', 'label', 'solution']
+
+                detected_instruction = None
+                detected_response = None
+
+                for candidate in instruction_candidates:
+                    if candidate in columns_lower:
+                        idx = columns_lower.index(candidate)
+                        detected_instruction = temp_dataset.column_names[idx]
+                        break
+
+                for candidate in response_candidates:
+                    if candidate in columns_lower:
+                        idx = columns_lower.index(candidate)
+                        detected_response = temp_dataset.column_names[idx]
+                        break
+
+                if detected_instruction:
+                    dataset_info['detected_instruction_field'] = detected_instruction
+                if detected_response:
+                    dataset_info['detected_response_field'] = detected_response
+
+        except Exception as e:
+            logger.warning(f"Could not analyze dataset structure: {e}")
+            dataset_info['error'] = str(e)
+
+        logger.info(f"Dataset uploaded successfully: {filename} ({file_size / 1024 / 1024:.2f} MB)")
+
+        return jsonify({
+            'success': True,
+            'filename': filename,
+            'filepath': filepath,
+            'original_filename': original_filename,
+            'size_mb': round(file_size / 1024 / 1024, 2),
+            'dataset_info': dataset_info
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to upload dataset: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/datasets/uploaded', methods=['GET'])
+def list_uploaded_datasets():
+    """List all uploaded dataset files."""
+    try:
+        uploaded_files = []
+        upload_dir = Path(app.config['UPLOAD_FOLDER'])
+
+        if upload_dir.exists():
+            for filepath in upload_dir.iterdir():
+                if filepath.is_file() and filepath.suffix[1:] in app.config['ALLOWED_EXTENSIONS']:
+                    file_info = {
+                        'filename': filepath.name,
+                        'filepath': str(filepath),
+                        'size_mb': round(filepath.stat().st_size / 1024 / 1024, 2),
+                        'uploaded_at': datetime.fromtimestamp(filepath.stat().st_mtime).isoformat(),
+                        'extension': filepath.suffix[1:]
+                    }
+                    uploaded_files.append(file_info)
+
+        # Sort by upload date (newest first)
+        uploaded_files.sort(key=lambda x: x['uploaded_at'], reverse=True)
+
+        return jsonify({'files': uploaded_files})
+
+    except Exception as e:
+        logger.error(f"Failed to list uploaded datasets: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/datasets/uploaded/<filename>', methods=['DELETE'])
+def delete_uploaded_dataset(filename):
+    """Delete an uploaded dataset file."""
+    try:
+        # Validate filename
+        filename = secure_filename(filename)
+        filepath = Path(app.config['UPLOAD_FOLDER']) / filename
+
+        if not filepath.exists():
+            return jsonify({'error': 'File not found'}), 404
+
+        # Check if file is in upload directory (security check)
+        if not str(filepath).startswith(app.config['UPLOAD_FOLDER']):
+            return jsonify({'error': 'Invalid file path'}), 403
+
+        # Delete the file
+        filepath.unlink()
+        logger.info(f"Deleted uploaded dataset: {filename}")
+
+        return jsonify({
+            'success': True,
+            'message': f'File {filename} deleted successfully'
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to delete uploaded dataset: {e}")
         return jsonify({'error': str(e)}), 500
 
 

@@ -35,6 +35,18 @@ function initializeApp() {
     // Load templates
     loadAvailableTemplates();
 
+    // Add file upload listener
+    const fileInput = document.getElementById('dataset-file');
+    if (fileInput) {
+        console.log('Attaching file upload listener to dataset-file input');
+        fileInput.addEventListener('change', handleFileUpload);
+    } else {
+        console.warn('dataset-file input not found during initialization');
+    }
+
+    // Add drag and drop support for dataset upload
+    setupDragAndDrop();
+
     // Refresh sessions and check for running sessions
     refreshSessions().then(() => {
         checkForRunningSessions();
@@ -715,6 +727,8 @@ function selectDatasetType(type) {
         datasetCatalogEl.style.display = 'none';
         datasetCustomArea.style.display = 'none';
         datasetUploadArea.style.display = 'block';
+        // Load previously uploaded datasets
+        loadUploadedDatasets();
     }
 }
 
@@ -916,13 +930,538 @@ function filterDatasets(category) {
     });
 }
 
-function handleFileUpload(event) {
+async function handleFileUpload(event) {
+    console.log('handleFileUpload called', event);
     const file = event.target.files[0];
-    if (file) {
-        // Handle file upload
-        document.getElementById('dataset-path').value = file.name;
-        showAlert(`File selected: ${file.name}`, 'success');
-        // TODO: Implement actual file upload
+    if (!file) {
+        console.log('No file selected');
+        return;
+    }
+    console.log('File selected:', file.name, 'Size:', file.size, 'Type:', file.type);
+
+    // Validate file size (10GB max)
+    const maxSize = 10 * 1024 * 1024 * 1024; // 10GB
+    if (file.size > maxSize) {
+        showAlert(`File too large. Maximum size is 10GB, your file is ${(file.size / 1024 / 1024).toFixed(2)}MB`, 'danger');
+        event.target.value = ''; // Clear the file input
+        return;
+    }
+
+    // Validate file extension
+    const allowedExtensions = ['json', 'jsonl', 'csv', 'parquet'];
+    const extension = file.name.split('.').pop().toLowerCase();
+    if (!allowedExtensions.includes(extension)) {
+        showAlert(`Invalid file type. Allowed types: ${allowedExtensions.join(', ')}`, 'danger');
+        event.target.value = ''; // Clear the file input
+        return;
+    }
+
+    // Show upload progress
+    const progressModal = createUploadProgressModal();
+    const modal = new bootstrap.Modal(progressModal);
+    modal.show();
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        // Update progress message
+        updateUploadProgress(progressModal, `Uploading ${file.name}...`, 30);
+
+        const response = await fetch('/api/datasets/upload', {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            // Update dataset path with uploaded file path
+            document.getElementById('dataset-path').value = result.filepath;
+            document.getElementById('dataset-path').setAttribute('data-upload-filename', result.filename);
+            document.getElementById('dataset-path').setAttribute('data-source-type', 'upload');
+
+            // Show dataset info if available
+            if (result.dataset_info) {
+                displayUploadedDatasetInfo(result.dataset_info, result.original_filename);
+
+                // Auto-fill field mappings if detected
+                if (result.dataset_info.detected_instruction_field) {
+                    document.getElementById('instruction-field').value = result.dataset_info.detected_instruction_field;
+                }
+                if (result.dataset_info.detected_response_field) {
+                    document.getElementById('response-field').value = result.dataset_info.detected_response_field;
+                }
+            }
+
+            updateUploadProgress(progressModal, 'Upload complete!', 100);
+            setTimeout(() => {
+                modal.hide();
+                progressModal.remove();
+                showAlert(`Dataset uploaded successfully: ${result.original_filename} (${result.size_mb}MB)`, 'success');
+                // Refresh the uploaded datasets list
+                loadUploadedDatasets();
+            }, 1000);
+        } else {
+            throw new Error(result.error || 'Upload failed');
+        }
+    } catch (error) {
+        console.error('Upload failed:', error);
+        modal.hide();
+        progressModal.remove();
+        showAlert(`Failed to upload dataset: ${error.message}`, 'danger');
+        event.target.value = ''; // Clear the file input
+    }
+}
+
+function createUploadProgressModal() {
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.tabIndex = -1;
+    modal.innerHTML = `
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Uploading Dataset</h5>
+                </div>
+                <div class="modal-body">
+                    <div class="upload-progress-message mb-3">Preparing upload...</div>
+                    <div class="progress">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated"
+                             role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    return modal;
+}
+
+function updateUploadProgress(modal, message, percent) {
+    const messageEl = modal.querySelector('.upload-progress-message');
+    const progressBar = modal.querySelector('.progress-bar');
+
+    if (messageEl) messageEl.textContent = message;
+    if (progressBar) progressBar.style.width = `${percent}%`;
+}
+
+async function loadUploadedDatasets() {
+    try {
+        const response = await fetch('/api/datasets/uploaded');
+        const data = await response.json();
+
+        if (!response.ok) {
+            console.error('Failed to load uploaded datasets:', data.error);
+            return;
+        }
+
+        displayUploadedDatasets(data.files || []);
+    } catch (error) {
+        console.error('Error loading uploaded datasets:', error);
+    }
+}
+
+function displayUploadedDatasets(files) {
+    // Find or create container for uploaded datasets
+    let container = document.getElementById('uploaded-datasets-list');
+    if (!container) {
+        const uploadArea = document.getElementById('dataset-upload-area');
+        if (!uploadArea) return;
+
+        // Create container structure WITHOUT destroying existing elements
+        const uploadedContainer = document.createElement('div');
+        uploadedContainer.id = 'uploaded-datasets-container';
+        uploadedContainer.className = 'mb-4';
+        uploadedContainer.innerHTML = `
+            <h6 class="mb-3">Previously Uploaded Datasets</h6>
+            <div id="uploaded-datasets-list"></div>
+        `;
+
+        const separator = document.createElement('hr');
+        separator.className = 'my-4';
+
+        const newDatasetHeader = document.createElement('h6');
+        newDatasetHeader.className = 'mb-3';
+        newDatasetHeader.textContent = 'Upload New Dataset';
+
+        // Insert at the beginning without destroying existing content
+        uploadArea.insertBefore(uploadedContainer, uploadArea.firstChild);
+        uploadArea.insertBefore(separator, uploadArea.children[1]);
+        uploadArea.insertBefore(newDatasetHeader, uploadArea.children[2]);
+
+        container = document.getElementById('uploaded-datasets-list');
+
+        // Re-attach file upload listener since DOM might have been modified
+        const fileInput = document.getElementById('dataset-file');
+        if (fileInput) {
+            // Remove any existing listener first
+            fileInput.removeEventListener('change', handleFileUpload);
+            // Add the listener again
+            fileInput.addEventListener('change', handleFileUpload);
+        }
+    }
+
+    if (files.length === 0) {
+        container.innerHTML = '<div class="text-muted">No uploaded datasets found. Upload a new dataset below.</div>';
+        return;
+    }
+
+    // Create cards for each uploaded dataset
+    container.innerHTML = files.map(file => `
+        <div class="uploaded-dataset-card card mb-2" data-filepath="${file.filepath}" data-filename="${file.filename}">
+            <div class="card-body p-3">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <h6 class="mb-1">${file.filename}</h6>
+                        <small class="text-muted">
+                            <i class="fas fa-file"></i> ${file.extension.toUpperCase()} •
+                            <i class="fas fa-database"></i> ${file.size_mb} MB •
+                            <i class="fas fa-clock"></i> ${new Date(file.uploaded_at).toLocaleDateString()}
+                        </small>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <button class="btn btn-sm btn-outline-primary me-2" onclick="selectUploadedDataset('${file.filename}', '${file.filepath}')">
+                            <i class="fas fa-check"></i> Select
+                        </button>
+                        <button class="btn btn-sm btn-outline-info me-2" onclick="configureDatasetFields('${file.filename}', '${file.filepath}')">
+                            <i class="fas fa-cog"></i> Configure Fields
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteUploadedDataset('${file.filename}')">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function selectUploadedDataset(filename, filepath) {
+    // Update dataset path
+    document.getElementById('dataset-path').value = filepath;
+    document.getElementById('dataset-path').setAttribute('data-upload-filename', filename);
+    document.getElementById('dataset-path').setAttribute('data-source-type', 'upload');
+
+    // Load saved field mappings if they exist
+    const fieldMappings = loadSavedFieldMapping(filename);
+    if (fieldMappings) {
+        document.getElementById('instruction-field').value = fieldMappings.instruction || 'instruction';
+        document.getElementById('response-field').value = fieldMappings.response || 'output';
+
+        // Update visible fields too
+        const instructionVisible = document.getElementById('instruction-field-visible');
+        const responseVisible = document.getElementById('response-field-visible');
+        if (instructionVisible) instructionVisible.value = fieldMappings.instruction || 'instruction';
+        if (responseVisible) responseVisible.value = fieldMappings.response || 'output';
+    }
+
+    // Visual feedback
+    document.querySelectorAll('.uploaded-dataset-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+    document.querySelector(`.uploaded-dataset-card[data-filename="${filename}"]`)?.classList.add('selected');
+
+    showAlert(`Selected dataset: ${filename}`, 'success');
+
+    // Show field mapping section
+    const fieldMapping = document.getElementById('field-mapping');
+    if (fieldMapping) {
+        fieldMapping.style.display = 'block';
+    }
+}
+
+async function configureDatasetFields(filename, filepath) {
+    try {
+        // Fetch dataset fields
+        const response = await fetch('/api/datasets/detect-fields', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                dataset_name: filepath,
+                is_local: true
+            })
+        });
+
+        const fieldsData = await response.json();
+
+        if (!response.ok) {
+            showAlert('Failed to detect dataset fields: ' + fieldsData.error, 'danger');
+            return;
+        }
+
+        // Show field mapping dialog for uploaded dataset
+        showUploadedDatasetFieldMapping(filename, filepath, fieldsData);
+
+    } catch (error) {
+        console.error('Error detecting fields:', error);
+        showAlert('Failed to detect dataset fields', 'danger');
+    }
+}
+
+function showUploadedDatasetFieldMapping(filename, filepath, fieldsData) {
+    // Create or reuse field mapping modal
+    let modal = document.getElementById('uploadedFieldMappingModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'uploadedFieldMappingModal';
+        modal.className = 'modal fade';
+        modal.tabIndex = -1;
+        document.body.appendChild(modal);
+    }
+
+    // Load saved mappings
+    const savedMappings = loadSavedFieldMapping(filename) || {};
+
+    modal.innerHTML = `
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Configure Fields for ${filename}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted">Select which columns contain the instruction/input and response/output for training.</p>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-question-circle"></i> Instruction Field
+                            </label>
+                            <select class="form-select" id="modal-instruction-field">
+                                <option value="">-- Select Field --</option>
+                                ${fieldsData.columns.map(col => `
+                                    <option value="${col}"
+                                        ${savedMappings.instruction === col || fieldsData.suggested_mappings?.instruction === col ? 'selected' : ''}>
+                                        ${col}
+                                    </option>
+                                `).join('')}
+                            </select>
+                            <small class="text-muted">The field containing the input/question/prompt</small>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-reply"></i> Response Field
+                            </label>
+                            <select class="form-select" id="modal-response-field">
+                                <option value="">-- Select Field --</option>
+                                ${fieldsData.columns.map(col => `
+                                    <option value="${col}"
+                                        ${savedMappings.response === col || fieldsData.suggested_mappings?.response === col ? 'selected' : ''}>
+                                        ${col}
+                                    </option>
+                                `).join('')}
+                            </select>
+                            <small class="text-muted">The field containing the output/answer/response</small>
+                        </div>
+                    </div>
+
+                    ${fieldsData.sample_data ? `
+                        <div class="mt-3">
+                            <h6>Sample Data Preview</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            ${fieldsData.columns.map(col => `<th>${col}</th>`).join('')}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${fieldsData.sample_data.slice(0, 3).map(row => `
+                                            <tr>
+                                                ${fieldsData.columns.map(col => `
+                                                    <td>${row[col] ? JSON.stringify(row[col]).slice(0, 100) : ''}</td>
+                                                `).join('')}
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveUploadedDatasetFieldMapping('${filename}', '${filepath}')">
+                        Save Configuration
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+}
+
+function saveUploadedDatasetFieldMapping(filename, filepath) {
+    const instructionField = document.getElementById('modal-instruction-field').value;
+    const responseField = document.getElementById('modal-response-field').value;
+
+    if (!instructionField || !responseField) {
+        showAlert('Please select both instruction and response fields', 'warning');
+        return;
+    }
+
+    // Save field mappings to localStorage
+    const mappings = { instruction: instructionField, response: responseField };
+    saveFieldMapping(filename, mappings);
+
+    // Update the main form fields
+    document.getElementById('instruction-field').value = instructionField;
+    document.getElementById('response-field').value = responseField;
+
+    const instructionVisible = document.getElementById('instruction-field-visible');
+    const responseVisible = document.getElementById('response-field-visible');
+    if (instructionVisible) instructionVisible.value = instructionField;
+    if (responseVisible) responseVisible.value = responseField;
+
+    // Select the dataset
+    selectUploadedDataset(filename, filepath);
+
+    // Close modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('uploadedFieldMappingModal'));
+    if (modal) modal.hide();
+
+    showAlert('Field configuration saved', 'success');
+}
+
+function saveFieldMapping(filename, mappings) {
+    let savedMappings = JSON.parse(localStorage.getItem('datasetFieldMappings') || '{}');
+    savedMappings[filename] = mappings;
+    localStorage.setItem('datasetFieldMappings', JSON.stringify(savedMappings));
+}
+
+function loadSavedFieldMapping(filename) {
+    const savedMappings = JSON.parse(localStorage.getItem('datasetFieldMappings') || '{}');
+    return savedMappings[filename];
+}
+
+async function deleteUploadedDataset(filename) {
+    if (!confirm(`Are you sure you want to delete "${filename}"? This action cannot be undone.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/datasets/uploaded/${filename}`, {
+            method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            // Remove saved field mappings
+            let savedMappings = JSON.parse(localStorage.getItem('datasetFieldMappings') || '{}');
+            delete savedMappings[filename];
+            localStorage.setItem('datasetFieldMappings', JSON.stringify(savedMappings));
+
+            // Reload the list
+            loadUploadedDatasets();
+            showAlert(`Dataset "${filename}" deleted successfully`, 'success');
+        } else {
+            showAlert(`Failed to delete dataset: ${result.error}`, 'danger');
+        }
+    } catch (error) {
+        console.error('Error deleting dataset:', error);
+        showAlert('Failed to delete dataset', 'danger');
+    }
+}
+
+function displayUploadedDatasetInfo(info, filename) {
+    // Create or update dataset info display
+    let infoContainer = document.getElementById('uploaded-dataset-info');
+    if (!infoContainer) {
+        infoContainer = document.createElement('div');
+        infoContainer.id = 'uploaded-dataset-info';
+        infoContainer.className = 'alert alert-info mt-3';
+
+        const uploadArea = document.getElementById('dataset-upload-area');
+        if (uploadArea) {
+            uploadArea.appendChild(infoContainer);
+        }
+    }
+
+    let html = `<h6><i class="fas fa-file-upload"></i> Uploaded: ${filename}</h6>`;
+
+    if (info.columns) {
+        html += `<p class="mb-2"><strong>Columns:</strong> ${info.columns.join(', ')}</p>`;
+    }
+
+    if (info.num_samples) {
+        html += `<p class="mb-2"><strong>Samples:</strong> ${info.num_samples.toLocaleString()}</p>`;
+    }
+
+    if (info.detected_instruction_field || info.detected_response_field) {
+        html += '<p class="mb-2"><strong>Auto-detected fields:</strong></p>';
+        html += '<ul class="small mb-0">';
+        if (info.detected_instruction_field) {
+            html += `<li>Instruction: <code>${info.detected_instruction_field}</code></li>`;
+        }
+        if (info.detected_response_field) {
+            html += `<li>Response: <code>${info.detected_response_field}</code></li>`;
+        }
+        html += '</ul>';
+    }
+
+    infoContainer.innerHTML = html;
+    infoContainer.style.display = 'block';
+}
+
+function setupDragAndDrop() {
+    const uploadArea = document.getElementById('dataset-upload-area');
+    if (!uploadArea) return;
+
+    const dropZone = uploadArea.querySelector('.upload-area');
+    if (!dropZone) return;
+
+    // Prevent default drag behaviors
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+        document.body.addEventListener(eventName, preventDefaults, false);
+    });
+
+    // Highlight drop zone when item is dragged over
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, highlight, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, unhighlight, false);
+    });
+
+    // Handle dropped files
+    dropZone.addEventListener('drop', handleDrop, false);
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    function highlight(e) {
+        dropZone.classList.add('border-primary');
+        dropZone.style.backgroundColor = '#f0f8ff';
+    }
+
+    function unhighlight(e) {
+        dropZone.classList.remove('border-primary');
+        dropZone.style.backgroundColor = '';
+    }
+
+    function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+
+        if (files.length > 0) {
+            // Create a fake event with the file for handleFileUpload
+            const fakeEvent = {
+                target: {
+                    files: files,
+                    value: ''
+                }
+            };
+            handleFileUpload(fakeEvent);
+        }
     }
 }
 
@@ -4475,6 +5014,12 @@ async function generateExportName(sessionId) {
 
 // Make functions globally accessible
 // (Removed references to deleted Quick Actions functions)
+
+// Uploaded datasets functions
+window.selectUploadedDataset = selectUploadedDataset;
+window.configureDatasetFields = configureDatasetFields;
+window.deleteUploadedDataset = deleteUploadedDataset;
+window.saveUploadedDatasetFieldMapping = saveUploadedDatasetFieldMapping;
 
 async function refreshTrainedModels() {
     const modelsList = document.getElementById('trained-models-list');
