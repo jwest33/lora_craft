@@ -628,6 +628,8 @@ class GRPOModelTrainer:
             max_grad_norm=self.config.max_grad_norm,
             report_to="none",
             output_dir=self.config.output_dir,
+            # KL divergence regularization (critical for stable training)
+            beta=self.config.kl_penalty,  # Controls KL divergence weight
             # GRPO/GSPO algorithm selection
             loss_type=self.config.loss_type,
             importance_sampling_level=self.config.importance_sampling_level,
