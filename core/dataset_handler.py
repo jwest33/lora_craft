@@ -236,8 +236,33 @@ class DatasetHandler:
 
         # Apply preprocessing
         if self.dataset:
+            if self.progress_callback:
+                self.progress_callback({
+                    'message': 'Preprocessing dataset...',
+                    'progress': 0.95,
+                    'status': 'preprocessing',
+                    'timestamp': time.time()
+                })
+
             self.dataset = self._preprocess_dataset(self.dataset)
+
+            if self.progress_callback:
+                self.progress_callback({
+                    'message': 'Calculating statistics...',
+                    'progress': 0.98,
+                    'status': 'finalizing',
+                    'timestamp': time.time()
+                })
+
             self.statistics = self._calculate_statistics(self.dataset)
+
+            if self.progress_callback:
+                self.progress_callback({
+                    'message': 'Dataset ready!',
+                    'progress': 1.0,
+                    'status': 'completed',
+                    'timestamp': time.time()
+                })
 
         return self.dataset
 
@@ -274,7 +299,7 @@ class DatasetHandler:
                     self.clear_cache(self.config.source_path)
 
             # Download dataset
-            self._report_progress(f"Downloading {self.config.source_path}...", 0.2, "downloading")
+            self._report_progress(f"Preparing to download {self.config.source_path}...", 0.2, "downloading")
             logger.info(f"Starting download of dataset: {self.config.source_path}")
 
             # Load dataset - this will download if not cached by HF
@@ -294,10 +319,60 @@ class DatasetHandler:
                 split_str = f"{self.config.split}[:{self.config.sample_size}]"
                 kwargs['split'] = split_str
 
-            self._report_progress(f"Loading dataset...", 0.5, "loading")
+            self._report_progress(f"Downloading dataset from HuggingFace...", 0.3, "downloading")
+            self._report_progress(f"This may take a few moments for large datasets...", 0.4, "downloading")
 
-            # Load the dataset (this blocks until download is complete when streaming=False)
-            dataset = load_dataset(**kwargs)
+            # Try to load the dataset, handling multi-config datasets
+            try:
+                self._report_progress(f"Loading dataset configuration...", 0.5, "loading")
+                # Load the dataset (this blocks until download is complete when streaming=False)
+                dataset = load_dataset(**kwargs)
+                self._report_progress(f"Dataset loaded successfully", 0.7, "processing")
+            except ValueError as e:
+                # Check if it's a split error or config error
+                error_msg = str(e)
+                if "Unknown split" in error_msg:
+                    # Extract available splits from error message
+                    import re
+                    splits_match = re.search(r"Should be one of \[(.+?)\]", error_msg)
+                    if splits_match:
+                        available_splits = [s.strip().strip("'") for s in splits_match.group(1).split(',')]
+                        logger.warning(f"Split '{self.config.split}' not found. Available splits: {available_splits}")
+                        self._report_progress(f"Using '{available_splits[0]}' split instead of '{self.config.split}'...", 0.55, "loading")
+
+                        # Use first available split
+                        kwargs['split'] = available_splits[0]
+                        dataset = load_dataset(**kwargs)
+                        self._report_progress(f"Dataset loaded with '{available_splits[0]}' split", 0.7, "processing")
+                    else:
+                        raise
+                elif "Config name is missing" in error_msg:
+                    logger.warning(f"Dataset requires config, trying with 'all' config: {error_msg}")
+                    self._report_progress(f"Dataset requires config selection...", 0.55, "loading")
+
+                    # Extract available configs from error message
+                    import re
+                    configs_match = re.search(r"available configs: \[(.*?)\]", error_msg)
+                    if configs_match:
+                        available_configs = [c.strip().strip("'") for c in configs_match.group(1).split(',')]
+                        # Try with 'all' first, then 'default', then first available
+                        for config in ['all', 'default'] + available_configs:
+                            if config in available_configs:
+                                logger.info(f"Auto-selecting config: {config}")
+                                self._report_progress(f"Using '{config}' config...", 0.6, "loading")
+                                kwargs['name'] = config
+                                dataset = load_dataset(**kwargs)
+                                self._report_progress(f"Dataset loaded with '{config}' config", 0.7, "processing")
+                                break
+                    else:
+                        # Fallback to 'all' config
+                        kwargs['name'] = 'all'
+                        self._report_progress(f"Using default 'all' config...", 0.6, "loading")
+                        dataset = load_dataset(**kwargs)
+                        self._report_progress(f"Dataset loaded successfully", 0.7, "processing")
+                else:
+                    # Re-raise if it's not a config error
+                    raise
 
             # Handle DatasetDict
             if isinstance(dataset, DatasetDict):
@@ -307,7 +382,17 @@ class DatasetHandler:
                     # Use first available split
                     available_splits = list(dataset.keys())
                     logger.warning(f"Split '{self.config.split}' not found. Available splits: {available_splits}")
-                    dataset = dataset[available_splits[0]] if available_splits else None
+                    if available_splits:
+                        # If 'train' was requested but not found, try common alternatives
+                        if self.config.split == 'train' and 'cot' in available_splits:
+                            # Special case for OpenMathReasoning and similar datasets
+                            dataset = dataset['cot']
+                            logger.info(f"Using 'cot' split as alternative to 'train'")
+                        else:
+                            dataset = dataset[available_splits[0]]
+                            logger.info(f"Using '{available_splits[0]}' split")
+                    else:
+                        dataset = None
 
             if dataset is None:
                 raise ValueError("Failed to load dataset - no data returned")
@@ -355,7 +440,7 @@ class DatasetHandler:
                 if self.config.shuffle and not self.config.sample_size:
                     dataset = dataset.shuffle(seed=self.config.seed)
 
-            self._report_progress(f"Dataset ready!", 1.0, "completed")
+            self._report_progress(f"Dataset loaded, processing...", 0.9, "loaded")
             return dataset
 
         except Exception as e:
@@ -516,24 +601,87 @@ class DatasetHandler:
         """Map dataset fields to standard format."""
         columns = dataset.column_names if hasattr(dataset, 'column_names') else []
 
-        # Auto-detect fields if not specified
-        if self.config.instruction_field not in columns:
-            # Try to find instruction field
-            instruction_candidates = ['instruction', 'prompt', 'question', 'input', 'text']
+        # If the configured fields exist in the dataset, use them directly
+        # Otherwise, try to auto-detect
+
+        # For instruction field
+        if self.config.instruction_field in columns:
+            # Field exists, use it directly (no mapping needed)
+            # Store the actual field name for filtering operations
+            self._actual_instruction_field = self.config.instruction_field
+        elif self.config.instruction_field != 'instruction':
+            # User specified a custom field name, map it to 'instruction'
+            if self.config.instruction_field in columns:
+                self._field_mapping['instruction'] = self.config.instruction_field
+                self._actual_instruction_field = 'instruction'  # After mapping
+            else:
+                logger.warning(f"Configured instruction field '{self.config.instruction_field}' not found in columns: {columns[:10]}")
+                # Try auto-detection
+                instruction_candidates = ['instruction', 'prompt', 'question', 'input', 'text', 'problem']
+                for candidate in instruction_candidates:
+                    if candidate in columns:
+                        self._field_mapping['instruction'] = candidate
+                        self._actual_instruction_field = 'instruction'
+                        break
+        else:
+            # Default 'instruction' field not found, try auto-detect
+            instruction_candidates = ['prompt', 'question', 'input', 'text', 'problem']
             for candidate in instruction_candidates:
                 if candidate in columns:
-                    self._field_mapping[self.config.instruction_field] = candidate
+                    self._field_mapping['instruction'] = candidate
+                    self._actual_instruction_field = 'instruction'
                     break
+            else:
+                # No mapping found, keep original
+                self._actual_instruction_field = self.config.instruction_field
 
-        if self.config.response_field not in columns:
-            # Try to find response field
-            response_candidates = ['response', 'answer', 'output', 'completion', 'label']
+        # For response field
+        if self.config.response_field in columns:
+            # Field exists, use it directly (no mapping needed)
+            self._actual_response_field = self.config.response_field
+        elif self.config.response_field != 'response':
+            # User specified a custom field name, map it to 'response'
+            if self.config.response_field in columns:
+                self._field_mapping['response'] = self.config.response_field
+                self._actual_response_field = 'response'  # After mapping
+            else:
+                logger.warning(f"Configured response field '{self.config.response_field}' not found in columns: {columns[:10]}")
+                # Try auto-detection
+                response_candidates = ['response', 'answer', 'output', 'completion', 'label', 'generated_solution', 'solution']
+                for candidate in response_candidates:
+                    if candidate in columns:
+                        self._field_mapping['response'] = candidate
+                        self._actual_response_field = 'response'
+                        break
+        else:
+            # Default 'response' field not found, try auto-detect
+            response_candidates = ['answer', 'output', 'completion', 'label', 'generated_solution', 'solution']
             for candidate in response_candidates:
                 if candidate in columns:
-                    self._field_mapping[self.config.response_field] = candidate
+                    self._field_mapping['response'] = candidate
+                    self._actual_response_field = 'response'
                     break
+            else:
+                # No mapping found, keep original
+                self._actual_response_field = self.config.response_field
 
-        # Apply field mapping
+        # Special handling for SQuAD dataset
+        if 'squad' in self.config.source_path.lower() and 'answers' in columns:
+            def process_squad(example):
+                # SQuAD has answers as a dict with 'text' and 'answer_start' lists
+                if 'answers' in example and isinstance(example['answers'], dict):
+                    # Extract first answer text if available
+                    if 'text' in example['answers'] and example['answers']['text']:
+                        answer_text = example['answers']['text'][0] if isinstance(example['answers']['text'], list) else example['answers']['text']
+                    else:
+                        answer_text = ""
+                    example['answers'] = answer_text
+                return example
+
+            dataset = dataset.map(process_squad)
+            logger.info("Applied SQuAD-specific processing for answers field")
+
+        # Apply field mapping if needed
         if self._field_mapping:
             def map_fields(example):
                 mapped = {}
@@ -570,12 +718,52 @@ class DatasetHandler:
 
     def _remove_empty(self, dataset: Dataset) -> Dataset:
         """Remove samples with empty fields."""
-        def not_empty(example):
-            instruction = str(example.get(self.config.instruction_field, '')).strip()
-            response = str(example.get(self.config.response_field, '')).strip()
+        # After field mapping, we should have 'instruction' and 'response' fields
+        # If mapping occurred, use those; otherwise use the configured fields
+        if hasattr(self, '_field_mapping') and self._field_mapping:
+            # Field mapping was applied, so use the mapped field names
+            instruction_field = 'instruction' if 'instruction' in self._field_mapping else self.config.instruction_field
+            response_field = 'response' if 'response' in self._field_mapping else self.config.response_field
+        else:
+            # No mapping, use configured fields
+            instruction_field = self.config.instruction_field
+            response_field = self.config.response_field
+
+        # Check if the fields exist at all
+        if instruction_field not in dataset.column_names or response_field not in dataset.column_names:
+            logger.warning(f"Fields not found for filtering. Looking for {instruction_field} and {response_field} in {dataset.column_names[:10]}")
+            # If fields don't exist, don't filter
+            return dataset
+
+        total_samples = len(dataset)
+
+        # Report start of filtering
+        if self.progress_callback:
+            self.progress_callback({
+                'message': f'Filtering empty samples from {total_samples:,} records...',
+                'progress': 0,
+                'status': 'filtering',
+                'timestamp': time.time()
+            })
+
+        def not_empty(example, idx):
+            # idx is passed as an integer when with_indices=True
+            # Report progress periodically
+            if self.progress_callback and idx % 10000 == 0:
+                progress = idx / total_samples
+                self.progress_callback({
+                    'message': f'Filtering: {idx:,}/{total_samples:,} samples processed',
+                    'progress': progress,
+                    'status': 'filtering',
+                    'timestamp': time.time()
+                })
+
+            instruction = str(example.get(instruction_field, '')).strip()
+            response = str(example.get(response_field, '')).strip()
             return bool(instruction) and bool(response)
 
-        return dataset.filter(not_empty)
+        # Use with_indices to track progress
+        return dataset.filter(not_empty, with_indices=True)
 
     def _transform_text(self, dataset: Dataset) -> Dataset:
         """Apply text transformations."""

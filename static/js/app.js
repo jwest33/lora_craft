@@ -18,6 +18,7 @@ let rewardChart = null;
 let datasetStatusCache = {};
 let trainedModels = [];
 let selectedModelsForExport = new Set();
+let collapseInstances = {}; // Store Bootstrap Collapse instances
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
@@ -34,14 +35,22 @@ function initializeApp() {
     // Load templates
     loadAvailableTemplates();
 
-    // Refresh sessions
-    refreshSessions();
+    // Refresh sessions and check for running sessions
+    refreshSessions().then(() => {
+        checkForRunningSessions();
+    });
 
     // Load saved configurations
     loadConfigList();
 
     // Setup event listeners
     setupEventListeners();
+
+    // Initialize Bootstrap collapse instances
+    initializeCollapseInstances();
+
+    // Initialize valid generations dropdown
+    updateValidGenerations();
 
     // Initialize tooltips
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
@@ -83,28 +92,43 @@ function initializeSocketIO() {
     });
     
     socket.on('training_progress', function(data) {
-        console.log('Training progress:', data);
-        updateTrainingProgress(data.progress);
+        // Only process if it's for our current session
+        if (data.session_id === currentSessionId) {
+            console.log('Training progress:', data);
+            updateTrainingProgress(data.progress);
+        }
     });
 
     socket.on('training_metrics', function(data) {
-        console.log('Training metrics received:', data);
-        updateTrainingMetrics(data);
+        // Only process if it's for our current session
+        if (data.session_id === currentSessionId) {
+            console.log('Training metrics received:', data);
+            updateTrainingMetrics(data);
+        }
     });
 
     socket.on('training_log', function(data) {
-        console.log('Training log:', data.message);
-        appendLog(data.message);
+        // Only process if it's for our current session
+        if (data.session_id === currentSessionId) {
+            console.log('Training log:', data.message);
+            appendLog(data.message);
+        }
     });
 
     socket.on('training_complete', function(data) {
-        console.log('Training complete:', data);
-        handleTrainingComplete(data);
+        // Only process if it's for our current session
+        if (data.session_id === currentSessionId) {
+            console.log('Training complete:', data);
+            handleTrainingComplete(data);
+        }
     });
 
     socket.on('training_error', function(data) {
-        console.error('Training error:', data);
-        handleTrainingError(data);
+        // Only process if it's for our current session
+        if (data.session_id === currentSessionId) {
+            console.error('Training error:', data);
+            handleTrainingError(data);
+        }
     });
 
     // Dataset download events
@@ -151,6 +175,21 @@ function updateConnectionStatus(status) {
 // Step Navigation & Validation
 // ============================================================================
 
+function initializeCollapseInstances() {
+    // Initialize Bootstrap Collapse instances for all steps
+    for (let i = 1; i <= 6; i++) {
+        const content = document.getElementById(`step-${i}-content`);
+        if (content) {
+            // Only create instance if it doesn't already exist
+            if (!collapseInstances[i]) {
+                collapseInstances[i] = new bootstrap.Collapse(content, {
+                    toggle: false
+                });
+            }
+        }
+    }
+}
+
 function toggleStep(stepNum) {
     const content = document.getElementById(`step-${stepNum}-content`);
     const chevron = document.getElementById(`step-${stepNum}-chevron`);
@@ -160,10 +199,12 @@ function toggleStep(stepNum) {
         return;
     }
 
-    // Use Bootstrap's collapse functionality
-    const bsCollapse = new bootstrap.Collapse(content, {
-        toggle: false
-    });
+    // Use the pre-initialized collapse instance
+    const bsCollapse = collapseInstances[stepNum];
+    if (!bsCollapse) {
+        console.error(`Collapse instance for step ${stepNum} not found`);
+        return;
+    }
 
     if (content.classList.contains('show')) {
         // Collapse this step
@@ -177,12 +218,12 @@ function toggleStep(stepNum) {
                 const otherContent = document.getElementById(`step-${i}-content`);
                 const otherChevron = document.getElementById(`step-${i}-chevron`);
                 if (otherContent && otherChevron && otherContent.classList.contains('show')) {
-                    const otherCollapse = new bootstrap.Collapse(otherContent, {
-                        toggle: false
-                    });
-                    otherCollapse.hide();
-                    otherChevron.classList.remove('fa-chevron-up');
-                    otherChevron.classList.add('fa-chevron-down');
+                    const otherCollapse = collapseInstances[i];
+                    if (otherCollapse) {
+                        otherCollapse.hide();
+                        otherChevron.classList.remove('fa-chevron-up');
+                        otherChevron.classList.add('fa-chevron-down');
+                    }
                 }
             }
         }
@@ -216,12 +257,12 @@ function goToStep(stepNum) {
     const currentChevron = document.getElementById(`step-${currentStep}-chevron`);
 
     if (currentContent && currentChevron && currentContent.classList.contains('show')) {
-        const currentCollapse = new bootstrap.Collapse(currentContent, {
-            toggle: false
-        });
-        currentCollapse.hide();
-        currentChevron.classList.remove('fa-chevron-up');
-        currentChevron.classList.add('fa-chevron-down');
+        const currentCollapse = collapseInstances[currentStep];
+        if (currentCollapse) {
+            currentCollapse.hide();
+            currentChevron.classList.remove('fa-chevron-up');
+            currentChevron.classList.add('fa-chevron-down');
+        }
     }
 
     // Expand target step
@@ -229,12 +270,12 @@ function goToStep(stepNum) {
     const targetChevron = document.getElementById(`step-${stepNum}-chevron`);
 
     if (targetContent && targetChevron) {
-        const targetCollapse = new bootstrap.Collapse(targetContent, {
-            toggle: false
-        });
-        targetCollapse.show();
-        targetChevron.classList.remove('fa-chevron-down');
-        targetChevron.classList.add('fa-chevron-up');
+        const targetCollapse = collapseInstances[stepNum];
+        if (targetCollapse) {
+            targetCollapse.show();
+            targetChevron.classList.remove('fa-chevron-down');
+            targetChevron.classList.add('fa-chevron-up');
+        }
     }
 
     currentStep = stepNum;
@@ -378,7 +419,12 @@ function updateStepIndicators() {
     for (let i = 1; i <= 6; i++) {
         const indicator = document.getElementById(`step-${i}-indicator`);
         if (indicator) {
+            // Remove both old and new class names for compatibility
             indicator.classList.remove('active', 'completed');
+
+            // Also check for .step class (old) and .compact-step class (new)
+            const stepElement = indicator.classList.contains('step') ? indicator :
+                                indicator.classList.contains('compact-step') ? indicator : null;
 
             if (i < currentStep && stepValidation[i]) {
                 indicator.classList.add('completed');
@@ -402,6 +448,48 @@ async function loadAvailableModels() {
         console.error('Failed to load models:', error);
         showAlert('Failed to load models', 'danger');
     }
+}
+
+function getDivisors(n) {
+    const divisors = [];
+    for (let i = 1; i <= n; i++) {
+        if (n % i === 0) {
+            divisors.push(i);
+        }
+    }
+    return divisors;
+}
+
+function updateValidGenerations() {
+    const batchSizeInput = document.getElementById('batch-size');
+    const batchSize = parseInt(batchSizeInput.value) || 4;
+    const generationsSelect = document.getElementById('num-generations');
+
+    // Calculate valid divisors of batch size
+    const validOptions = getDivisors(batchSize);
+
+    // Clear current options
+    generationsSelect.innerHTML = '';
+
+    // Add valid options - always default to batch size
+    validOptions.forEach(value => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = value;
+
+        // Select the batch size by default
+        if (value === batchSize) {
+            option.selected = true;
+        }
+
+        generationsSelect.appendChild(option);
+    });
+
+    // Explicitly set the value to ensure it's selected
+    generationsSelect.value = batchSize;
+
+    // Update config summary if needed
+    updateConfigSummary();
 }
 
 function updateModelList() {
@@ -515,7 +603,7 @@ const datasetCatalog = {
         name: 'GSM8K',
         path: 'openai/gsm8k',
         config: 'main',  // GSM8K requires config specification (main or socratic)
-        size: '8.5K problems',
+        size: '8K problems',
         category: 'math',
         description: 'Grade school math problems',
         language: 'English',
@@ -525,22 +613,23 @@ const datasetCatalog = {
     'dapo-math': {
         name: 'DAPO Math 17k',
         path: 'open-r1/DAPO-Math-17k-Processed',
+        config: 'all',  // DAPO-Math requires config specification (all, cn, or en)
         size: '17K problems',
         category: 'math',
         description: 'Advanced math with reasoning',
         language: 'English',
         icon: '📐',
-        fields: { instruction: 'problem', response: 'solution' }
+        fields: { instruction: 'prompt', response: 'solution' }
     },
     'openmath': {
         name: 'OpenMath Reasoning',
         path: 'nvidia/OpenMathReasoning',
-        size: '100K+ problems',
+        size: '3.2M problems',
         category: 'math',
         description: 'Mathematical reasoning dataset',
         language: 'English',
         icon: '🔢',
-        fields: { instruction: 'question', response: 'answer' }
+        fields: { instruction: 'problem', response: 'generated_solution' }
     },
     'code-alpaca': {
         name: 'Code Alpaca',
@@ -574,20 +663,21 @@ const datasetCatalog = {
     },
     'squad': {
         name: 'SQuAD v2',
-        path: 'squad_v2',
-        size: '150K questions',
+        path: 'squad',
+        size: '130K questions',
         category: 'qa',
         description: 'Reading comprehension Q&A',
         language: 'English',
         icon: '📖',
-        fields: { instruction: 'question', response: 'answers' }
+        fields: { instruction: 'question', response: 'answers' },
+        requiresProcessing: true
     }
 };
 
 function selectDatasetType(type) {
     // Update UI based on selection
     document.querySelectorAll('.selection-card').forEach(card => {
-        if (card.id === 'dataset-popular' || card.id === 'dataset-upload') {
+        if (card.id === 'dataset-popular' || card.id === 'dataset-upload' || card.id === 'dataset-custom') {
             card.classList.remove('active');
         }
     });
@@ -597,11 +687,14 @@ function selectDatasetType(type) {
         document.getElementById('dataset-popular').classList.add('active');
     } else if (type === 'upload') {
         document.getElementById('dataset-upload').classList.add('active');
+    } else if (type === 'custom') {
+        document.getElementById('dataset-custom').classList.add('active');
     }
 
     const datasetConfig = document.getElementById('dataset-config');
     const datasetCatalogEl = document.getElementById('dataset-catalog');
     const datasetUploadArea = document.getElementById('dataset-upload-area');
+    const datasetCustomArea = document.getElementById('dataset-custom-area');
 
     // Show dataset configuration section
     datasetConfig.style.display = 'block';
@@ -610,10 +703,17 @@ function selectDatasetType(type) {
         // Show catalog
         datasetCatalogEl.style.display = 'block';
         datasetUploadArea.style.display = 'none';
+        datasetCustomArea.style.display = 'none';
         loadDatasetCatalog();
+    } else if (type === 'custom') {
+        // Show custom dataset input
+        datasetCatalogEl.style.display = 'none';
+        datasetUploadArea.style.display = 'none';
+        datasetCustomArea.style.display = 'block';
     } else if (type === 'upload') {
         // Show upload area
         datasetCatalogEl.style.display = 'none';
+        datasetCustomArea.style.display = 'none';
         datasetUploadArea.style.display = 'block';
     }
 }
@@ -757,15 +857,41 @@ function selectDataset(key) {
             document.getElementById('dataset-path').setAttribute('data-config', dataset.config);
         }
 
-        // Auto-configure field mappings
-        document.getElementById('instruction-field').value = dataset.fields.instruction;
-        document.getElementById('response-field').value = dataset.fields.response;
-        document.getElementById('instruction-field-visible').value = dataset.fields.instruction;
-        document.getElementById('response-field-visible').value = dataset.fields.response;
+        // Auto-configure field mappings with defensive checks
+        if (dataset.fields) {
+            const instructionField = dataset.fields.instruction || 'instruction';
+            const responseField = dataset.fields.response || 'output';
+
+            // Update hidden fields
+            const hiddenInstruction = document.getElementById('instruction-field');
+            const hiddenResponse = document.getElementById('response-field');
+            if (hiddenInstruction) hiddenInstruction.value = instructionField;
+            if (hiddenResponse) hiddenResponse.value = responseField;
+
+            // Update visible fields
+            const visibleInstruction = document.getElementById('instruction-field-visible');
+            const visibleResponse = document.getElementById('response-field-visible');
+            if (visibleInstruction) visibleInstruction.value = instructionField;
+            if (visibleResponse) visibleResponse.value = responseField;
+
+            console.log(`Field mapping updated - Instruction: ${instructionField}, Response: ${responseField}`);
+        } else {
+            // Default values if fields are not defined
+            console.warn(`Dataset ${key} has no field mappings defined, using defaults`);
+            const defaultInstruction = 'instruction';
+            const defaultResponse = 'output';
+
+            document.getElementById('instruction-field').value = defaultInstruction;
+            document.getElementById('response-field').value = defaultResponse;
+            document.getElementById('instruction-field-visible').value = defaultInstruction;
+            document.getElementById('response-field-visible').value = defaultResponse;
+        }
 
         // Show field mapping for advanced users
         const fieldMapping = document.getElementById('field-mapping');
-        fieldMapping.style.display = 'block';
+        if (fieldMapping) {
+            fieldMapping.style.display = 'block';
+        }
 
         // Visual feedback
         showAlert(`Selected ${dataset.name} dataset`, 'success');
@@ -1601,6 +1727,11 @@ function setupTrainingParameterListeners() {
         if (field) {
             field.addEventListener('input', function() {
                 checkIfCustomConfiguration();
+
+                // Update generations dropdown when batch size changes
+                if (fieldId === 'batch-size') {
+                    updateValidGenerations();
+                }
             });
         }
     });
@@ -1771,7 +1902,7 @@ function gatherConfig() {
         repetition_penalty: parseFloat(document.getElementById('repetition-penalty')?.value || 1.0),
         kl_penalty: parseFloat(document.getElementById('kl-penalty').value),
         clip_range: parseFloat(document.getElementById('clip-range')?.value || 0.2),
-        num_generations: parseInt(document.getElementById('num-generations').value),
+        num_generations: parseInt(document.getElementById('num-generations').value) || parseInt(document.getElementById('batch-size').value) || 4,
         value_coefficient: parseFloat(document.getElementById('value-coefficient')?.value || 1.0),
 
         // Algorithm selection (always use 'grpo' as loss_type, differentiate via importance_sampling_level)
@@ -1877,12 +2008,18 @@ async function startTraining() {
         }
     }
 
+    // Leave any existing training session rooms
+    if (socket && socket.connected && currentSessionId) {
+        socket.emit('leave_training_session', { session_id: currentSessionId });
+    }
+
     const config = gatherConfig();
 
     // Show training monitor and sticky progress bar
     document.getElementById('training-monitor').style.display = 'block';
-    const navbarProgress = document.getElementById('navbar-progress');
-    if (navbarProgress) navbarProgress.style.display = 'block';
+    // Navbar progress bar removed
+    // const navbarProgress = document.getElementById('navbar-progress');
+    // if (navbarProgress) navbarProgress.style.display = 'block';
     const stickyContainer = document.getElementById('sticky-progress-container');
     if (stickyContainer) stickyContainer.style.display = 'block';
     document.getElementById('step-4-nav').style.display = 'none';
@@ -1916,9 +2053,9 @@ async function startTraining() {
             resetCharts();
 
             // Join the session room for updates
-            if (socket) {
+            if (socket && socket.connected) {
                 console.log('Joining training session:', currentSessionId);
-                socket.emit('join_session', { session_id: currentSessionId });
+                socket.emit('join_training_session', { session_id: currentSessionId });
             }
 
             trainBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Training...';
@@ -1942,8 +2079,9 @@ function stopTraining() {
         if (response.ok) {
             showAlert('Training stopped', 'warning');
             // Hide sticky progress bar
-            const navbarProgress = document.getElementById('navbar-progress');
-            if (navbarProgress) navbarProgress.style.display = 'none';
+            // Navbar progress bar removed
+            // const navbarProgress = document.getElementById('navbar-progress');
+            // if (navbarProgress) navbarProgress.style.display = 'none';
             const stickyContainer = document.getElementById('sticky-progress-container');
             if (stickyContainer) stickyContainer.style.display = 'none';
         }
@@ -2101,24 +2239,32 @@ function updateTrainingProgress(progress) {
         }
     }
 
-    // Update navbar thin progress bar
-    const progressBarThin = document.getElementById('training-progress-thin');
-    const progressText = document.getElementById('progress-text');
-    if (progressBarThin) {
-        progressBarThin.style.width = progress + '%';
-        if (progressText) {
-            progressText.textContent = progress + '%';
-        }
-    }
+    // Navbar progress bar removed
+    // const progressBarThin = document.getElementById('training-progress-thin');
+    // const progressText = document.getElementById('progress-text');
+    // if (progressBarThin) {
+    //     progressBarThin.style.width = progress + '%';
+    //     if (progressText) {
+    //         progressText.textContent = progress + '%';
+    //     }
+    // }
 }
 
-function updateTrainingMetrics(metrics) {
+function updateTrainingMetrics(metrics, isHistorical = false) {
     // Debug: Log incoming metrics
-    console.log('Received metrics:', metrics);
+    if (!isHistorical) {
+        console.log('Received metrics:', metrics);
+    }
 
     // Update metrics panel
-    if (metrics.step !== undefined) {
+    if (metrics.step !== undefined && metrics.step > 0) {
         document.getElementById('metric-step').textContent = metrics.step;
+
+        // If we have total_steps, update progress based on step count
+        if (metrics.total_steps) {
+            const progress = Math.round((metrics.step / metrics.total_steps) * 100);
+            updateTrainingProgress(progress);
+        }
     }
     if (metrics.loss !== undefined) {
         // Format loss value based on magnitude
@@ -2139,9 +2285,27 @@ function updateTrainingMetrics(metrics) {
         document.getElementById('metric-epoch').textContent = parseFloat(metrics.epoch).toFixed(2);
     }
 
+    // Determine the step number for chart labels
+    const stepNumber = metrics.step || (lossChart ? lossChart.data.labels.length + 1 : 1);
+
+    // Check if we already have data for this step (avoid duplicates)
+    const lastStep = lossChart && lossChart.data.labels.length > 0
+        ? lossChart.data.labels[lossChart.data.labels.length - 1]
+        : -1;
+
+    // Only add data if it's a new step or if we're loading historical data
+    const isNewStep = stepNumber > lastStep || isHistorical;
+
     // Update loss chart
-    if (lossChart && metrics.loss !== undefined) {
-        lossChart.data.labels.push(metrics.step || lossChart.data.labels.length);
+    if (lossChart && metrics.loss !== undefined && isNewStep) {
+        // Remove duplicate if step already exists (for historical data)
+        const existingIndex = lossChart.data.labels.indexOf(stepNumber);
+        if (existingIndex >= 0 && !isHistorical) {
+            lossChart.data.labels.splice(existingIndex, 1);
+            lossChart.data.datasets[0].data.splice(existingIndex, 1);
+        }
+
+        lossChart.data.labels.push(stepNumber);
         lossChart.data.datasets[0].data.push(metrics.loss);
 
         // Keep last 100 points for better visualization
@@ -2154,8 +2318,14 @@ function updateTrainingMetrics(metrics) {
     }
 
     // Update reward chart
-    if (rewardChart && metrics.mean_reward !== undefined) {
-        rewardChart.data.labels.push(metrics.step || rewardChart.data.labels.length);
+    if (rewardChart && metrics.mean_reward !== undefined && isNewStep) {
+        const existingIndex = rewardChart.data.labels.indexOf(stepNumber);
+        if (existingIndex >= 0 && !isHistorical) {
+            rewardChart.data.labels.splice(existingIndex, 1);
+            rewardChart.data.datasets[0].data.splice(existingIndex, 1);
+        }
+
+        rewardChart.data.labels.push(stepNumber);
         rewardChart.data.datasets[0].data.push(metrics.mean_reward);
 
         // Keep last 100 points
@@ -2168,8 +2338,14 @@ function updateTrainingMetrics(metrics) {
     }
 
     // Update learning rate chart
-    if (lrChart && metrics.learning_rate !== undefined) {
-        lrChart.data.labels.push(metrics.step || lrChart.data.labels.length);
+    if (lrChart && metrics.learning_rate !== undefined && isNewStep) {
+        const existingIndex = lrChart.data.labels.indexOf(stepNumber);
+        if (existingIndex >= 0 && !isHistorical) {
+            lrChart.data.labels.splice(existingIndex, 1);
+            lrChart.data.datasets[0].data.splice(existingIndex, 1);
+        }
+
+        lrChart.data.labels.push(stepNumber);
         lrChart.data.datasets[0].data.push(metrics.learning_rate);
 
         // Keep last 100 points
@@ -2202,8 +2378,9 @@ function handleTrainingComplete(data) {
     trainBtn.classList.add('btn-success');
 
     // Hide sticky progress bar
-    const navbarProgress = document.getElementById('navbar-progress');
-    if (navbarProgress) navbarProgress.style.display = 'none';
+    // Navbar progress bar removed
+    // const navbarProgress = document.getElementById('navbar-progress');
+    // if (navbarProgress) navbarProgress.style.display = 'none';
     const stickyContainer = document.getElementById('sticky-progress-container');
     if (stickyContainer) stickyContainer.style.display = 'none';
 
@@ -2225,8 +2402,9 @@ function handleTrainingError(data) {
     trainBtn.innerHTML = '<i class="fas fa-dumbbell"></i> Start Training';
 
     // Hide sticky progress bar
-    const navbarProgress = document.getElementById('navbar-progress');
-    if (navbarProgress) navbarProgress.style.display = 'none';
+    // Navbar progress bar removed
+    // const navbarProgress = document.getElementById('navbar-progress');
+    // if (navbarProgress) navbarProgress.style.display = 'none';
     const stickyContainer = document.getElementById('sticky-progress-container');
     if (stickyContainer) stickyContainer.style.display = 'none';
 
@@ -2236,6 +2414,32 @@ function handleTrainingError(data) {
 // ============================================================================
 // Session Management
 // ============================================================================
+
+async function checkForRunningSessions() {
+    try {
+        const response = await fetch('/api/training/sessions');
+        const sessions = await response.json();
+
+        // Find any running sessions
+        const runningSessions = sessions.filter(s => s.status === 'running');
+
+        if (runningSessions.length > 0) {
+            // Auto-reconnect to the most recent running session
+            const mostRecentRunning = runningSessions.sort((a, b) =>
+                new Date(b.created_at) - new Date(a.created_at)
+            )[0];
+
+            showAlert(`Found active training session: ${mostRecentRunning.display_name || mostRecentRunning.model}. Reconnecting...`, 'info');
+
+            // Slight delay to allow UI to initialize
+            setTimeout(() => {
+                loadSession(mostRecentRunning.session_id);
+            }, 500);
+        }
+    } catch (error) {
+        console.error('Failed to check for running sessions:', error);
+    }
+}
 
 async function refreshSessions() {
     try {
@@ -2249,25 +2453,40 @@ async function refreshSessions() {
             const sessionItem = document.createElement('div');
             sessionItem.className = 'session-item p-2 border-bottom';
 
-            // Create export button HTML for completed sessions
-            const exportBtnHtml = session.status === 'completed'
-                ? `<button class="btn btn-sm btn-success ms-2" onclick="event.stopPropagation(); showExportModal('${session.session_id}')">
+            // Add pulsing animation for running sessions
+            if (session.status === 'running') {
+                sessionItem.className += ' running-session';
+            }
+
+            // Create action button HTML - only export button for completed sessions
+            let actionBtnHtml = '';
+            if (session.status === 'completed') {
+                actionBtnHtml = `<button class="btn btn-sm btn-success ms-2" onclick="event.stopPropagation(); showExportModal('${session.session_id}')">
                        <i class="fas fa-file-export"></i>
-                   </button>`
-                : '';
+                   </button>`;
+            }
 
             const displayName = session.display_name || session.model.split('/').pop();
+            const statusText = session.status === 'running' ? 'Training...' : session.status;
+
             sessionItem.innerHTML = `
-                <div class="d-flex justify-content-between align-items-center">
-                    <div class="flex-grow-1" style="cursor: pointer;" onclick="loadSession('${session.session_id}')">
-                        <div class="fw-bold">${displayName}</div>
-                        <small class="text-muted">${new Date(session.created_at).toLocaleString()}</small>
-                        <small class="text-muted d-block" style="font-size: 0.75rem;">ID: ${session.session_id.substring(0, 8)}</small>
+                <div class="position-relative" style="cursor: pointer;" onclick="loadSession('${session.session_id}')">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="fw-bold">${displayName}</div>
+                            <small class="text-muted">${new Date(session.created_at).toLocaleString()}</small>
+                            <small class="text-muted d-block" style="font-size: 0.75rem;">ID: ${session.session_id.substring(0, 8)}</small>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            ${session.status !== 'running' ? `<span class="badge bg-${getStatusColor(session.status)}">${session.status}</span>` : ''}
+                            ${actionBtnHtml}
+                        </div>
                     </div>
-                    <div class="d-flex align-items-center">
-                        <span class="badge bg-${getStatusColor(session.status)}">${session.status}</span>
-                        ${exportBtnHtml}
-                    </div>
+                    ${session.status === 'running' ? `
+                        <div class="position-absolute bottom-0 end-0 mb-1 me-1">
+                            <span class="badge bg-${getStatusColor(session.status)} pulse-animation">${statusText}</span>
+                        </div>
+                    ` : ''}
                 </div>
             `;
             sessionsList.appendChild(sessionItem);
@@ -2295,9 +2514,14 @@ function loadSession(sessionId) {
         .then(sessions => {
             const session = sessions.find(s => s.session_id === sessionId);
             if (session) {
-                showSessionInfoPanel(session);
-                if (session.status === 'completed') {
-                    lastCompletedSessionId = sessionId;
+                // If session is running, reconnect to it
+                if (session.status === 'running') {
+                    reconnectToTrainingSession(session);
+                } else {
+                    showSessionInfoPanel(session);
+                    if (session.status === 'completed') {
+                        lastCompletedSessionId = sessionId;
+                    }
                 }
             }
         })
@@ -2305,6 +2529,77 @@ function loadSession(sessionId) {
             console.error('Failed to load session:', error);
             showAlert('Failed to load session details.', 'danger');
         });
+}
+
+async function reconnectToTrainingSession(session) {
+    console.log('Reconnecting to training session:', session.session_id);
+
+    // Set the current session
+    currentSessionId = session.session_id;
+
+    // Navigate to Step 4 (Training section)
+    goToStep(4);
+
+    // Show training monitor
+    document.getElementById('training-monitor').style.display = 'block';
+    const stickyContainer = document.getElementById('sticky-progress-container');
+    if (stickyContainer) stickyContainer.style.display = 'block';
+    document.getElementById('step-4-nav').style.display = 'none';
+
+    // Update train button to show it's in progress
+    const trainBtn = document.getElementById('train-btn');
+    if (trainBtn) {
+        trainBtn.disabled = true;
+        trainBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Training in Progress...';
+    }
+
+    // Initialize charts if they haven't been initialized
+    if (!lossChart) {
+        initializeCharts();
+    } else {
+        // Reset charts if they exist to avoid duplicate data
+        resetCharts();
+    }
+
+    // Join the socket room for this session
+    if (socket && socket.connected) {
+        socket.emit('join_training_session', { session_id: session.session_id });
+    }
+
+    // Fetch training history to populate charts and logs
+    try {
+        const historyResponse = await fetch(`/api/training/session/${session.session_id}/history`);
+        if (historyResponse.ok) {
+            const history = await historyResponse.json();
+
+            // Clear and populate logs
+            const logsContainer = document.getElementById('training-logs');
+            if (logsContainer) {
+                logsContainer.innerHTML = '';
+                if (history.logs && history.logs.length > 0) {
+                    history.logs.forEach(log => appendLog(log));
+                }
+            }
+
+            // Populate metrics in charts (after reset)
+            if (history.metrics && history.metrics.length > 0) {
+                // Sort metrics by step to ensure proper order
+                const sortedMetrics = history.metrics.sort((a, b) => (a.step || 0) - (b.step || 0));
+                sortedMetrics.forEach(metric => {
+                    updateTrainingMetrics(metric, true); // Pass flag to indicate historical data
+                });
+            }
+
+            // Update progress if available
+            if (history.progress !== undefined) {
+                updateTrainingProgress(history.progress);
+            }
+        }
+    } catch (error) {
+        console.error('Failed to fetch training history:', error);
+    }
+
+    showAlert(`Reconnected to training session: ${session.display_name || session.model}`, 'info');
 }
 
 function showSessionInfoPanel(session) {
@@ -2689,21 +2984,31 @@ function toggleTheme() {
 }
 
 function toggleSidebar() {
-    const sidebar = document.getElementById('sidebar-column');
+    // Updated for new flex layout
+    const sidebar = document.getElementById('sidebar-panel');
+    const mainWrapper = document.querySelector('.main-wrapper');
+
     if (sidebar) {
         sidebar.classList.toggle('hidden');
 
-        // Adjust main content width
-        const mainContent = sidebar.nextElementSibling;
-        if (mainContent) {
+        // Toggle class on main wrapper for layout adjustment
+        if (mainWrapper) {
             if (sidebar.classList.contains('hidden')) {
-                mainContent.classList.remove('col-lg-9', 'col-md-8');
-                mainContent.classList.add('col-lg-12', 'col-md-12');
+                mainWrapper.classList.add('sidebar-hidden');
             } else {
-                mainContent.classList.remove('col-lg-12', 'col-md-12');
-                mainContent.classList.add('col-lg-9', 'col-md-8');
+                mainWrapper.classList.remove('sidebar-hidden');
             }
         }
+
+        // Save preference
+        const isHidden = sidebar.classList.contains('hidden');
+        localStorage.setItem('sidebarHidden', isHidden);
+    }
+
+    // For backwards compatibility, also check old ID
+    const oldSidebar = document.getElementById('sidebar-column');
+    if (oldSidebar) {
+        oldSidebar.classList.toggle('hidden');
     }
 }
 
@@ -2755,13 +3060,28 @@ function setupIconScrollEffect() {
     window.addEventListener('scroll', requestTick);
 }
 
-// Load saved theme
+// Load saved theme and sidebar state
 document.addEventListener('DOMContentLoaded', function() {
+    // Load theme
     const savedTheme = localStorage.getItem('theme') || 'light';
     document.documentElement.setAttribute('data-theme', savedTheme);
 
     const icon = document.getElementById('theme-icon');
-    icon.className = savedTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+    if (icon) {
+        icon.className = savedTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+    }
+
+    // Load sidebar state
+    const sidebarHidden = localStorage.getItem('sidebarHidden') === 'true';
+    const sidebar = document.getElementById('sidebar-panel');
+    const mainWrapper = document.querySelector('.main-wrapper');
+
+    if (sidebar && sidebarHidden) {
+        sidebar.classList.add('hidden');
+        if (mainWrapper) {
+            mainWrapper.classList.add('sidebar-hidden');
+        }
+    }
 });
 
 // ============================================================================
@@ -2787,7 +3107,7 @@ async function updateSystemStatus() {
             const vramTotal = info.gpu_memory_total || 0;
             const vramAllocated = info.gpu_memory_allocated || 0;
             const vramReserved = info.gpu_memory_reserved || 0;
-            const vramAvailable = vramTotal - vramReserved;  // Available = Total - Reserved
+            const vramAvailable = vramTotal - vramAllocated;  // Available = Total - Allocated
             document.getElementById('vram-status').textContent = `${vramAvailable.toFixed(1)}/${vramTotal.toFixed(1)}GB`;
         } else {
             document.getElementById('gpu-status').textContent = 'CPU Only';
@@ -2816,7 +3136,7 @@ async function updateSystemStatus() {
                     const vramTotal = info.gpu_memory_total || 0;
                     const vramAllocated = info.gpu_memory_allocated || 0;
                     const vramReserved = info.gpu_memory_reserved || 0;
-                    const vramAvailable = vramTotal - vramReserved;
+                    const vramAvailable = vramReserved;
                     vramTooltip.setContent({ '.tooltip-inner': `VRAM: ${vramAvailable.toFixed(2)}GB available / ${vramTotal.toFixed(2)}GB total (${vramAllocated.toFixed(2)}GB allocated, ${vramReserved.toFixed(2)}GB reserved)` });
                 }
             }
@@ -3047,6 +3367,30 @@ function setupEventListeners() {
         element.addEventListener('change', saveState);
     });
 
+    // Field mapping sync - update hidden fields when visible fields change
+    const instructionFieldVisible = document.getElementById('instruction-field-visible');
+    const responseFieldVisible = document.getElementById('response-field-visible');
+
+    if (instructionFieldVisible) {
+        instructionFieldVisible.addEventListener('input', function() {
+            const hiddenField = document.getElementById('instruction-field');
+            if (hiddenField) {
+                hiddenField.value = this.value;
+                console.log('Updated instruction field to:', this.value);
+            }
+        });
+    }
+
+    if (responseFieldVisible) {
+        responseFieldVisible.addEventListener('input', function() {
+            const hiddenField = document.getElementById('response-field');
+            if (hiddenField) {
+                hiddenField.value = this.value;
+                console.log('Updated response field to:', this.value);
+            }
+        });
+    }
+
     // Keyboard shortcuts
     document.addEventListener('keydown', function(event) {
         if (event.ctrlKey || event.metaKey) {
@@ -3090,11 +3434,54 @@ function estimateTrainingRequirements() {
 // Dataset Management Functions
 // ============================================================================
 
-async function downloadDataset(key) {
+async function downloadDataset(key, fieldMapping = null) {
     const dataset = datasetCatalog[key];
     if (!dataset) return;
 
+    // Check if dataset is large and show warning
+    const estimatedMb = dataset.estimated_mb || 100;
+    const sampleCount = dataset.sample_count || 50000;
+
+    if (estimatedMb > 500 || sampleCount > 100000) {
+        const confirmed = await showLargeDatasetWarning(dataset.name, estimatedMb, sampleCount);
+        if (!confirmed) return;
+    }
+
     try {
+        // Use dataset's predefined field mapping if available
+        if (!fieldMapping && dataset.fields) {
+            fieldMapping = {
+                instruction: dataset.fields.instruction,
+                response: dataset.fields.response
+            };
+        }
+
+        // If no field mapping provided and dataset doesn't have predefined mapping,
+        // detect fields first
+        if (!fieldMapping && !dataset.field_mapping) {
+            const fieldsResponse = await fetch('/api/datasets/detect-fields', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    dataset_name: dataset.path,
+                    config: dataset.config
+                })
+            });
+
+            if (fieldsResponse.ok) {
+                const fieldsData = await fieldsResponse.json();
+
+                // If suggested mappings are incomplete, show field selection dialog
+                if (!fieldsData.suggested_mappings.instruction || !fieldsData.suggested_mappings.response) {
+                    showFieldMappingDialog(key, fieldsData);
+                    return;
+                }
+
+                // Use suggested mappings
+                fieldMapping = fieldsData.suggested_mappings;
+            }
+        }
+
         // Show download progress modal
         const modal = new bootstrap.Modal(document.getElementById('downloadProgressModal'));
         modal.show();
@@ -3112,6 +3499,11 @@ async function downloadDataset(key) {
         // Add config if specified (for multi-config datasets like GSM8K)
         if (dataset.config) {
             requestBody.config = dataset.config;
+        }
+
+        // Add field mapping if available
+        if (fieldMapping) {
+            requestBody.field_mapping = fieldMapping;
         }
 
         const response = await fetch('/api/datasets/download', {
@@ -3154,6 +3546,16 @@ function updateDatasetProgress(data) {
         statusMessage.innerHTML = '<i class="fas fa-download text-primary"></i> Downloading...';
     } else if (data.status === 'processing') {
         statusMessage.innerHTML = '<i class="fas fa-cog fa-spin text-info"></i> Processing dataset...';
+    } else if (data.status === 'filtering') {
+        statusMessage.innerHTML = '<i class="fas fa-filter text-warning"></i> ' + data.message;
+    } else if (data.status === 'preprocessing') {
+        statusMessage.innerHTML = '<i class="fas fa-cogs fa-spin text-info"></i> Preprocessing...';
+    } else if (data.status === 'finalizing') {
+        statusMessage.innerHTML = '<i class="fas fa-chart-bar text-info"></i> Calculating statistics...';
+    } else if (data.status === 'loaded') {
+        statusMessage.innerHTML = '<i class="fas fa-check-circle text-info"></i> Dataset loaded, processing...';
+    } else if (data.status === 'completed') {
+        statusMessage.innerHTML = '<i class="fas fa-check-circle text-success"></i> Dataset ready!';
     }
 }
 
@@ -3180,6 +3582,298 @@ function cancelDownload() {
     // TODO: Implement download cancellation
     const modal = bootstrap.Modal.getInstance(document.getElementById('downloadProgressModal'));
     if (modal) modal.hide();
+}
+
+function showLargeDatasetWarning(datasetName, estimatedMb, sampleCount) {
+    return new Promise((resolve) => {
+        // Create warning modal HTML if it doesn't exist
+        let modal = document.getElementById('largeDatasetWarningModal');
+        if (!modal) {
+            const modalHTML = `
+                <div class="modal fade" id="largeDatasetWarningModal" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header bg-warning text-dark">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-exclamation-triangle"></i> Large Dataset Warning
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div id="large-dataset-warning-content"></div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="cancel-large-download">Cancel</button>
+                                <button type="button" class="btn btn-warning" id="confirm-large-download">
+                                    <i class="fas fa-download"></i> Download Anyway
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+            modal = document.getElementById('largeDatasetWarningModal');
+        }
+
+        // Build warning content
+        const content = document.getElementById('large-dataset-warning-content');
+        const sizeText = estimatedMb >= 1000 ? `${(estimatedMb/1000).toFixed(1)} GB` : `${estimatedMb} MB`;
+
+        content.innerHTML = `
+            <div class="alert alert-warning mb-3">
+                <strong>${datasetName}</strong> is a large dataset!
+            </div>
+
+            <div class="mb-3">
+                <p><strong>Dataset Information:</strong></p>
+                <ul>
+                    <li>Estimated size: <strong>${sizeText}</strong></li>
+                    <li>Sample count: <strong>${sampleCount.toLocaleString()}</strong> samples</li>
+                    <li>Download time: <strong>${estimatedMb > 5000 ? '30+ minutes' : estimatedMb > 1000 ? '10-30 minutes' : '5-10 minutes'}</strong> (depending on connection)</li>
+                </ul>
+            </div>
+
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> <strong>Tips:</strong>
+                <ul class="mb-0 mt-2">
+                    <li>Large datasets may take significant time to download and process</li>
+                    <li>Consider using a smaller dataset for testing first</li>
+                    <li>Ensure you have sufficient disk space available</li>
+                </ul>
+            </div>
+
+            <p class="mb-0 text-muted">Do you want to continue with the download?</p>
+        `;
+
+        // Show modal
+        const bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
+
+        // Handle buttons
+        document.getElementById('confirm-large-download').onclick = function() {
+            bsModal.hide();
+            resolve(true);
+        };
+
+        document.getElementById('cancel-large-download').onclick = function() {
+            bsModal.hide();
+            resolve(false);
+        };
+
+        // Handle modal dismiss (X button or ESC key)
+        modal.addEventListener('hidden.bs.modal', function onHidden() {
+            modal.removeEventListener('hidden.bs.modal', onHidden);
+            resolve(false);
+        }, { once: true });
+    });
+}
+
+function showFieldMappingDialog(datasetKey, fieldsData) {
+    const dataset = datasetCatalog[datasetKey];
+
+    // Create field mapping modal HTML if it doesn't exist
+    let modal = document.getElementById('fieldMappingModal');
+    if (!modal) {
+        const modalHTML = `
+            <div class="modal fade" id="fieldMappingModal" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Select Dataset Fields</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="text-muted">Please select which fields to use for instruction and response:</p>
+                            <div id="field-mapping-content"></div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-primary" id="apply-field-mapping">Apply Mapping</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        modal = document.getElementById('fieldMappingModal');
+    }
+
+    // Build field selection content
+    const content = document.getElementById('field-mapping-content');
+    content.innerHTML = `
+        <div class="mb-3">
+            <label class="form-label fw-bold">Dataset: ${dataset.name}</label>
+            <p class="text-muted small">Available columns: ${fieldsData.columns.join(', ')}</p>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label for="instruction-field" class="form-label">
+                    <i class="fas fa-question-circle"></i> Instruction Field
+                </label>
+                <select class="form-select" id="instruction-field">
+                    <option value="">-- Select Field --</option>
+                    ${fieldsData.columns.map(col => `
+                        <option value="${col}" ${fieldsData.suggested_mappings.instruction === col ? 'selected' : ''}>
+                            ${col}
+                        </option>
+                    `).join('')}
+                </select>
+                <small class="text-muted">The field containing the input/question/prompt</small>
+            </div>
+
+            <div class="col-md-6 mb-3">
+                <label for="response-field" class="form-label">
+                    <i class="fas fa-reply"></i> Response Field
+                </label>
+                <select class="form-select" id="response-field">
+                    <option value="">-- Select Field --</option>
+                    ${fieldsData.columns.map(col => `
+                        <option value="${col}" ${fieldsData.suggested_mappings.response === col ? 'selected' : ''}>
+                            ${col}
+                        </option>
+                    `).join('')}
+                </select>
+                <small class="text-muted">The field containing the output/answer/response</small>
+            </div>
+        </div>
+
+        ${fieldsData.sample_data ? `
+            <div class="mt-3">
+                <label class="form-label">Sample Data Preview:</label>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead>
+                            <tr>
+                                ${Object.keys(fieldsData.sample_data).map(col => `<th>${col}</th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                ${Object.values(fieldsData.sample_data).map(val => `<td class="text-truncate" style="max-width: 200px;">${val}</td>`).join('')}
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        ` : ''}
+    `;
+
+    // Show modal
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+
+    // Handle apply button
+    document.getElementById('apply-field-mapping').onclick = function() {
+        const instructionField = document.getElementById('instruction-field').value;
+        const responseField = document.getElementById('response-field').value;
+
+        if (!instructionField || !responseField) {
+            showAlert('Please select both instruction and response fields', 'warning');
+            return;
+        }
+
+        // Hide modal
+        bsModal.hide();
+
+        // Continue download with field mapping
+        downloadDataset(datasetKey, {
+            instruction: instructionField,
+            response: responseField
+        });
+    };
+}
+
+async function downloadCustomDataset() {
+    const datasetName = document.getElementById('custom-dataset-name').value.trim();
+    const datasetConfig = document.getElementById('custom-dataset-config').value.trim();
+
+    if (!datasetName) {
+        showAlert('Please enter a dataset name', 'warning');
+        return;
+    }
+
+    // Validate dataset name format
+    const validFormat = /^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+$|^[a-zA-Z0-9_-]+$/;
+    if (!validFormat.test(datasetName)) {
+        showAlert('Invalid dataset name format. Use: username/dataset-name or dataset-name', 'danger');
+        return;
+    }
+
+    try {
+        // First detect fields
+        const fieldsResponse = await fetch('/api/datasets/detect-fields', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                dataset_name: datasetName,
+                config: datasetConfig || null
+            })
+        });
+
+        if (!fieldsResponse.ok) {
+            const error = await fieldsResponse.json();
+            showAlert(`Failed to detect dataset fields: ${error.error}`, 'danger');
+            return;
+        }
+
+        const fieldsData = await fieldsResponse.json();
+
+        // Check if we need field mapping
+        let fieldMapping = null;
+        if (!fieldsData.suggested_mappings.instruction || !fieldsData.suggested_mappings.response) {
+            // Show field mapping dialog
+            const customKey = 'custom_' + datasetName.replace('/', '_');
+            datasetCatalog[customKey] = {
+                name: datasetName,
+                path: datasetName,
+                config: datasetConfig || null
+            };
+            showFieldMappingDialog(customKey, fieldsData);
+            return;
+        }
+
+        // Use suggested mappings
+        fieldMapping = fieldsData.suggested_mappings;
+
+        // Show download progress modal
+        const modal = new bootstrap.Modal(document.getElementById('downloadProgressModal'));
+        modal.show();
+
+        document.getElementById('downloading-dataset-name').textContent = datasetName;
+        document.getElementById('download-progress-bar').style.width = '0%';
+        document.getElementById('download-status-message').textContent = 'Initializing download...';
+
+        // Start download
+        const requestBody = {
+            dataset_name: datasetName,
+            config: datasetConfig || null,
+            force_download: false,
+            field_mapping: fieldMapping
+        };
+
+        const response = await fetch('/api/datasets/download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        });
+
+        const result = await response.json();
+        if (result.session_id) {
+            currentDatasetSession = result.session_id;
+
+            // Join WebSocket session for progress updates
+            socket.emit('join_dataset_session', { session_id: result.session_id });
+
+            // Clear the input fields
+            document.getElementById('custom-dataset-name').value = '';
+            document.getElementById('custom-dataset-config').value = '';
+        }
+    } catch (error) {
+        console.error('Failed to download custom dataset:', error);
+        showAlert('Failed to download custom dataset', 'danger');
+    }
 }
 
 async function previewDataset(key) {
@@ -3236,17 +3930,17 @@ async function previewDataset(key) {
         if (result.samples && result.samples.length > 0) {
             result.samples.forEach((sample, idx) => {
                 const sampleCard = document.createElement('div');
-                sampleCard.className = 'card mb-2';
+                sampleCard.className = 'card sample-card mb-2';
                 sampleCard.innerHTML = `
                     <div class="card-body">
                         <h6 class="card-subtitle mb-2 text-muted">Sample ${idx + 1}</h6>
                         <div class="mb-2">
                             <strong>Instruction:</strong>
-                            <pre class="bg-light p-2 rounded" style="white-space: pre-wrap;">${escapeHtml(sample[dataset.fields.instruction] || sample.instruction || '')}</pre>
+                            <pre class="sample-pre p-2 rounded" style="white-space: pre-wrap;">${escapeHtml(sample[dataset.fields.instruction] || sample.instruction || '')}</pre>
                         </div>
                         <div>
                             <strong>Response:</strong>
-                            <pre class="bg-light p-2 rounded" style="white-space: pre-wrap;">${escapeHtml(sample[dataset.fields.response] || sample.response || sample.output || '')}</pre>
+                            <pre class="sample-pre p-2 rounded" style="white-space: pre-wrap;">${escapeHtml(sample[dataset.fields.response] || sample.response || sample.output || '')}</pre>
                         </div>
                     </div>
                 `;
@@ -3539,9 +4233,6 @@ async function createExportModal(sessionId) {
                             <button class="btn btn-primary" onclick="downloadExport()">
                                 <i class="fas fa-download"></i> Download Model
                             </button>
-                            <button class="btn btn-secondary" onclick="viewExportDetails()">
-                                <i class="fas fa-info-circle"></i> View Details
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -3684,11 +4375,6 @@ function downloadExport() {
     window.open(downloadUrl, '_blank');
 }
 
-function viewExportDetails() {
-    // TODO: Show detailed export information
-    showAlert('Export details coming soon!', 'info');
-}
-
 function showExportButton(sessionId) {
     // Add export button to the UI
     const controlsDiv = document.querySelector('.training-controls');
@@ -3731,8 +4417,37 @@ async function generateExportName(sessionId) {
         if (response.ok) {
             const session = await response.json();
 
-            // Use display_name if available
-            if (session.display_name) {
+            // Try to get dataset name from multiple sources
+            let datasetName = 'dataset';
+
+            // Priority 1: Check session.dataset_name or session.dataset
+            if (session.dataset_name) {
+                datasetName = session.dataset_name;
+            } else if (session.dataset) {
+                datasetName = session.dataset;
+            }
+            // Priority 2: Check config.dataset_name or config.dataset_path
+            else if (session.config?.dataset_name) {
+                datasetName = session.config.dataset_name;
+            } else if (session.config?.dataset_path) {
+                datasetName = session.config.dataset_path;
+            }
+            // Priority 3: Check config.dataset_source
+            else if (session.config?.dataset_source === 'popular' && session.config?.dataset_config) {
+                // Try to extract from dataset config
+                const configData = typeof session.config.dataset_config === 'string'
+                    ? JSON.parse(session.config.dataset_config)
+                    : session.config.dataset_config;
+                if (configData?.name) {
+                    datasetName = configData.name;
+                }
+            }
+
+            // Clean up dataset name - remove paths and special chars
+            datasetName = datasetName.split('/').pop().replace(/[^a-zA-Z0-9]/g, '_');
+
+            // Use display_name if available and includes dataset
+            if (session.display_name && session.display_name.toLowerCase().includes(datasetName.toLowerCase())) {
                 const cleanName = session.display_name.replace(/[^a-zA-Z0-9]/g, '_');
                 const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
                 return `${cleanName}_${timestamp}`;
@@ -3740,17 +4455,20 @@ async function generateExportName(sessionId) {
 
             // Otherwise generate from model and dataset names
             const modelName = (session.model || session.config?.model_name || 'model').split('/').pop().replace(/[^a-zA-Z0-9]/g, '_');
-            const datasetName = (session.dataset || session.config?.dataset_name || 'dataset').split('/').pop().replace(/[^a-zA-Z0-9]/g, '_');
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+
+            // Always include dataset name in export
             return `${modelName}_${datasetName}_${timestamp}`;
         }
     } catch (error) {
         console.error('Failed to fetch session data for export name:', error);
     }
 
-    // Fallback name if API call fails
+    // Fallback name if API call fails - try to get dataset from current form
+    const datasetPath = document.getElementById('dataset-path')?.value;
+    const datasetName = datasetPath ? datasetPath.split('/').pop().replace(/[^a-zA-Z0-9]/g, '_') : 'dataset';
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-    return `model_export_${timestamp}`;
+    return `model_${datasetName}_${timestamp}`;
 }
 
 
@@ -3823,11 +4541,14 @@ function displayTrainedModels(models) {
                         ${model.has_final_checkpoint ? '<span class="badge bg-primary ms-1">Final</span>' : ''}
                     </div>
                     <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-primary" onclick="showModelDetails('${model.session_id}')">
+                        <button class="btn btn-outline-primary" onclick="showModelDetails('${model.session_id}')" title="Details">
                             <i class="fas fa-info"></i>
                         </button>
-                        <button class="btn btn-success" onclick="showExportModalForModel('${model.session_id}')">
-                            <i class="fas fa-file-export"></i> Export
+                        <button class="btn btn-success" onclick="showExportModalForModel('${model.session_id}')" title="Export">
+                            <i class="fas fa-file-export"></i>
+                        </button>
+                        <button class="btn btn-outline-danger" onclick="deleteModel('${model.session_id}')" title="Delete">
+                            <i class="fas fa-trash"></i>
                         </button>
                     </div>
                 </div>
@@ -4092,10 +4813,16 @@ async function refreshExportHistory() {
                             </small>
                             ${exp.total_size_mb ? `<br><small>Size: ${exp.total_size_mb} MB</small>` : ''}
                         </div>
-                        <button class="btn btn-sm btn-primary"
-                                onclick="downloadExportFromHistory('${exp.session_id}', '${exp.export_format}', '${exp.export_name}')">
-                            <i class="fas fa-download"></i>
-                        </button>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-sm btn-primary" title="Download"
+                                    onclick="downloadExportFromHistory('${exp.session_id}', '${exp.export_format}', '${exp.export_name}')">
+                                <i class="fas fa-download"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" title="Delete"
+                                    onclick="deleteExport('${exp.session_id}', '${exp.export_format}', '${exp.export_name}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -4109,6 +4836,66 @@ async function refreshExportHistory() {
 function downloadExportFromHistory(sessionId, format, exportName) {
     const downloadUrl = `/api/export/download/${sessionId}/${format}/${exportName}`;
     window.open(downloadUrl, '_blank');
+}
+
+async function deleteModel(sessionId) {
+    // Get model name for confirmation dialog
+    const model = trainedModels.find(m => m.session_id === sessionId);
+    const modelName = model ? generateModelDisplayName(model) : sessionId.substring(0, 8) + '...';
+
+    if (!confirm(`Are you sure you want to delete this model?\n\n${modelName}\n\nThis will permanently delete:\n• All model checkpoints\n• All exports\n• Training history\n\nThis action cannot be undone!`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/models/${sessionId}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            showAlert(`Model deleted successfully`, 'success');
+            // Refresh the models list
+            refreshTrainedModels();
+            // Also refresh export history
+            refreshExportHistory();
+        } else {
+            showAlert(`Failed to delete model: ${result.error}`, 'danger');
+        }
+    } catch (error) {
+        console.error('Delete model error:', error);
+        showAlert('Failed to delete model: ' + error.message, 'danger');
+    }
+}
+
+async function deleteExport(sessionId, exportFormat, exportName) {
+    const displayName = `${exportFormat.toUpperCase()} - ${exportName}`;
+
+    if (!confirm(`Are you sure you want to delete this export?\n\n${displayName}\n\nThis action cannot be undone!`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/export/${sessionId}/${exportFormat}/${exportName}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            showAlert(`Export deleted successfully`, 'success');
+            // Refresh export history
+            refreshExportHistory();
+        } else {
+            showAlert(`Failed to delete export: ${result.error}`, 'danger');
+        }
+    } catch (error) {
+        console.error('Delete export error:', error);
+        showAlert('Failed to delete export: ' + error.message, 'danger');
+    }
 }
 
 // Initialize export formats on page load
@@ -4139,7 +4926,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 let testableModels = [];
 let selectedTestModel = null;
+let selectedComparisonModel = null;
 let testHistory = [];
+let comparisonMode = 'base';
 
 async function loadTestableModels() {
     try {
@@ -4161,6 +4950,14 @@ async function loadTestableModels() {
             });
         }
 
+        // Update comparison model select based on primary selection
+        const primarySelect = document.getElementById('test-model-select');
+        if (primarySelect && primarySelect.value) {
+            updateComparisonDropdown(primarySelect.value);
+        } else {
+            updateComparisonDropdown(null);
+        }
+
         // Update loaded models indicator
         if (data.loaded && data.loaded.length > 0) {
             const loadedInfo = data.loaded.map(m => `${m.type}: ${m.id}`).join(', ');
@@ -4173,24 +4970,132 @@ async function loadTestableModels() {
     }
 }
 
+function toggleComparisonMode() {
+    const mode = document.querySelector('input[name="comparison-mode"]:checked').value;
+    comparisonMode = mode;
+
+    const secondModelSection = document.getElementById('second-model-section');
+    const comparisonCardHeader = document.getElementById('comparison-card-header');
+    const comparisonModelName = document.getElementById('comparison-model-name');
+    const comparisonIcon = document.getElementById('comparison-icon');
+
+    if (mode === 'model') {
+        // Show second model selector
+        secondModelSection.style.display = 'block';
+
+        // Update card header for model comparison
+        if (comparisonIcon) {
+            comparisonIcon.className = 'fas fa-graduation-cap';
+        }
+        if (comparisonModelName) {
+            comparisonModelName.textContent = selectedComparisonModel ?
+                (selectedComparisonModel.name || 'Comparison Model') : 'Comparison Model';
+        }
+    } else {
+        // Hide second model selector
+        secondModelSection.style.display = 'none';
+
+        // Update card header for base model comparison
+        if (comparisonIcon) {
+            comparisonIcon.className = 'fas fa-cube';
+        }
+        if (comparisonModelName) {
+            comparisonModelName.textContent = 'Base Model';
+        }
+    }
+}
+
 function updateModelInfo() {
     const select = document.getElementById('test-model-select');
     const infoDiv = document.getElementById('model-info');
+    const primaryModelName = document.getElementById('primary-model-name');
 
     if (select && infoDiv) {
         const selectedOption = select.selectedOptions[0];
         if (selectedOption && selectedOption.value) {
             const model = testableModels.find(m => m.session_id === selectedOption.value);
             if (model) {
+                // Update primary model name in results card
+                if (primaryModelName) {
+                    primaryModelName.textContent = model.name || 'Trained Model';
+                }
+
                 infoDiv.innerHTML = `
                     <i class="fas fa-check-circle text-success"></i>
                     <strong>${generateModelDisplayName(model)}</strong>
                     <br>
                     <small>Base: ${model.base_model}</small>
                 `;
+
+                // Update comparison dropdown to exclude this model
+                updateComparisonDropdown(model.session_id);
             }
         } else {
             infoDiv.innerHTML = '<i class="fas fa-info-circle"></i> No model selected';
+            // Reset comparison dropdown if no primary model selected
+            updateComparisonDropdown(null);
+        }
+    }
+}
+
+function updateComparisonDropdown(excludeSessionId) {
+    const comparisonSelect = document.getElementById('comparison-model-select');
+    if (!comparisonSelect) return;
+
+    const currentValue = comparisonSelect.value;
+    comparisonSelect.innerHTML = '<option value="">Select a model to compare against...</option>';
+
+    testableModels.forEach(model => {
+        // Skip the model that's selected as primary
+        if (model.session_id === excludeSessionId) return;
+
+        const option = document.createElement('option');
+        option.value = model.session_id;
+        option.textContent = generateModelDisplayName(model);
+        option.dataset.sessionId = model.session_id;
+        option.dataset.baseModel = model.base_model;
+
+        // Restore previous selection if it's still valid
+        if (model.session_id === currentValue) {
+            option.selected = true;
+        }
+
+        comparisonSelect.appendChild(option);
+    });
+
+    // If the previously selected comparison model was the same as the new primary, clear the selection
+    if (currentValue === excludeSessionId) {
+        comparisonSelect.value = '';
+        updateComparisonModelInfo();
+    }
+}
+
+function updateComparisonModelInfo() {
+    const select = document.getElementById('comparison-model-select');
+    const infoDiv = document.getElementById('comparison-model-info');
+    const comparisonModelName = document.getElementById('comparison-model-name');
+
+    if (select && infoDiv) {
+        const selectedOption = select.selectedOptions[0];
+        if (selectedOption && selectedOption.value) {
+            const model = testableModels.find(m => m.session_id === selectedOption.value);
+            if (model) {
+                selectedComparisonModel = model;
+
+                // Update comparison model name in results card if in model mode
+                if (comparisonMode === 'model' && comparisonModelName) {
+                    comparisonModelName.textContent = model.name || 'Comparison Model';
+                }
+
+                infoDiv.innerHTML = `
+                    <i class="fas fa-check-circle text-success"></i>
+                    Selected: ${model.name || model.session_id.substring(0, 8) + '...'}
+                    <br>Base: ${model.base_model}
+                `;
+            }
+        } else {
+            selectedComparisonModel = null;
+            infoDiv.innerHTML = '<i class="fas fa-info-circle"></i> No comparison model selected';
         }
     }
 }
@@ -4338,6 +5243,18 @@ async function compareModels() {
         return;
     }
 
+    // Check if comparison model is selected when in model mode
+    if (comparisonMode === 'model' && !selectedComparisonModel) {
+        showAlert('Please select a comparison model', 'warning');
+        return;
+    }
+
+    // Check if trying to compare model with itself
+    if (comparisonMode === 'model' && selectedTestModel.sessionId === selectedComparisonModel.session_id) {
+        showAlert('Please select a different model for comparison', 'warning');
+        return;
+    }
+
     const prompt = document.getElementById('test-prompt').value;
     if (!prompt) {
         showAlert('Please enter a test prompt', 'warning');
@@ -4351,9 +5268,11 @@ async function compareModels() {
     // Show results section
     document.getElementById('comparison-results').style.display = 'block';
 
-    // Reset results
-    document.getElementById('trained-response').innerHTML = '<div class="text-center text-muted p-3"><i class="fas fa-spinner fa-spin"></i> Generating...</div>';
-    document.getElementById('base-response').innerHTML = '<div class="text-center text-muted p-3"><i class="fas fa-spinner fa-spin"></i> Generating...</div>';
+    // Reset results for streaming
+    const trainedResponseDiv = document.getElementById('trained-response');
+    const baseResponseDiv = document.getElementById('base-response');
+    trainedResponseDiv.textContent = '';
+    baseResponseDiv.textContent = '';
 
     try {
         const config = {
@@ -4364,50 +5283,110 @@ async function compareModels() {
             do_sample: true
         };
 
-        const response = await fetch('/api/test/compare', {
+        // Prepare request data
+        const requestData = {
+            prompt: prompt,
+            config: config,
+            use_chat_template: document.getElementById('use-chat-template').checked
+        };
+
+        let streamUrl;
+        if (comparisonMode === 'base') {
+            requestData.session_id = selectedTestModel.sessionId;
+            requestData.base_model = selectedTestModel.baseModel;
+            streamUrl = '/api/test/compare/stream';
+        } else {
+            requestData.model1_session_id = selectedTestModel.sessionId;
+            requestData.model2_session_id = selectedComparisonModel.session_id;
+            streamUrl = '/api/test/compare-models/stream';
+        }
+
+        // First send the POST request to initiate streaming
+        const initResponse = await fetch(streamUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                prompt: prompt,
-                session_id: selectedTestModel.sessionId,
-                base_model: selectedTestModel.baseModel,
-                config: config,
-                use_chat_template: document.getElementById('use-chat-template').checked
-            })
+            body: JSON.stringify(requestData)
         });
 
-        const results = await response.json();
-
-        // Display trained model response
-        if (results.trained && results.trained.success) {
-            document.getElementById('trained-response').textContent = results.trained.response;
-            document.getElementById('trained-time').textContent = `${results.trained.metadata.generation_time.toFixed(2)}s`;
-            document.getElementById('trained-tokens').textContent = `${results.trained.metadata.output_tokens} tokens`;
-        } else {
-            document.getElementById('trained-response').innerHTML = `<div class="text-danger">Error: ${results.trained.error}</div>`;
+        if (!initResponse.ok) {
+            throw new Error(`HTTP error! status: ${initResponse.status}`);
         }
 
-        // Display base model response
-        if (results.base && results.base.success) {
-            document.getElementById('base-response').textContent = results.base.response;
-            document.getElementById('base-time').textContent = `${results.base.metadata.generation_time.toFixed(2)}s`;
-            document.getElementById('base-tokens').textContent = `${results.base.metadata.output_tokens} tokens`;
-        } else {
-            document.getElementById('base-response').innerHTML = `<div class="text-danger">Error: ${results.base.error}</div>`;
-        }
+        // Read the stream
+        const reader = initResponse.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let results = {};
 
-        // Display comparison metrics
-        if (results.comparison) {
-            document.getElementById('length-diff').textContent = results.comparison.length_diff > 0 ? `+${results.comparison.length_diff}` : results.comparison.length_diff;
-            document.getElementById('time-diff').textContent = `${results.comparison.time_diff.toFixed(2)}s`;
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-            // Simple quality assessment (can be enhanced)
-            document.getElementById('trained-quality').textContent = '★★★★☆';
-            document.getElementById('base-quality').textContent = '★★★☆☆';
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+
+                        if (data.type === 'trained' || data.type === 'model1') {
+                            trainedResponseDiv.textContent += data.token;
+                        } else if (data.type === 'base' || data.type === 'model2') {
+                            baseResponseDiv.textContent += data.token;
+                        } else if (data.type === 'complete') {
+                            // Store final results
+                            results = data;
+
+                            // Update metadata for trained/model1
+                            const trainedData = data.trained || data.model1;
+                            if (trainedData && trainedData.success) {
+                                document.getElementById('trained-time').textContent =
+                                    `${trainedData.metadata.generation_time.toFixed(2)}s`;
+                                document.getElementById('trained-tokens').textContent =
+                                    `${trainedData.metadata.output_tokens} tokens`;
+                            }
+
+                            // Update metadata for base/model2
+                            const comparisonData = data.base || data.model2;
+                            if (comparisonData && comparisonData.success) {
+                                document.getElementById('base-time').textContent =
+                                    `${comparisonData.metadata.generation_time.toFixed(2)}s`;
+                                document.getElementById('base-tokens').textContent =
+                                    `${comparisonData.metadata.output_tokens} tokens`;
+                            }
+
+                            // Display comparison metrics if available
+                            if (trainedData && comparisonData) {
+                                const trainedLength = trainedResponseDiv.textContent.length;
+                                const baseLength = baseResponseDiv.textContent.length;
+                                const lengthDiff = trainedLength - baseLength;
+                                document.getElementById('length-diff').textContent =
+                                    lengthDiff > 0 ? `+${lengthDiff}` : lengthDiff;
+
+                                const timeDiff = trainedData.metadata.generation_time -
+                                    comparisonData.metadata.generation_time;
+                                document.getElementById('time-diff').textContent = `${timeDiff.toFixed(2)}s`;
+
+                                // Simple quality assessment
+                                document.getElementById('trained-quality').textContent = '★★★★☆';
+                                document.getElementById('base-quality').textContent = '★★★☆☆';
+                            }
+                        } else if (data.type === 'error') {
+                            throw new Error(data.error);
+                        }
+                    } catch (e) {
+                        console.error('Error parsing stream data:', e);
+                    }
+                }
+            }
         }
 
         // Add to history
-        addToTestHistory(prompt, results);
+        if (results.trained || results.model1) {
+            addToTestHistory(prompt, results);
+        }
 
     } catch (error) {
         console.error('Comparison failed:', error);

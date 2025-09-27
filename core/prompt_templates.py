@@ -819,6 +819,10 @@ class PromptTemplate:
             logger.warning("No chat template defined for Unsloth setup")
             return tokenizer
 
+        # Store the original template if not already stored
+        if not hasattr(tokenizer, '_original_chat_template'):
+            tokenizer._original_chat_template = tokenizer.chat_template if hasattr(tokenizer, 'chat_template') else None
+
         # Prepare the chat template with embedded system prompt
         # This avoids the undefined variable issue when TRL uses the template
         chat_template = self.config.chat_template

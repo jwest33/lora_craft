@@ -73,6 +73,85 @@ system_config = SystemConfig()
 # Session registry for fast model lookup
 session_registry = SessionRegistry()
 
+# Define Popular Datasets catalog (matching the frontend catalog)
+POPULAR_DATASETS = {
+    'tatsu-lab/alpaca': {
+        'name': 'Alpaca',
+        'size': '52K samples',
+        'estimated_mb': 45,
+        'sample_count': 52000,
+        'category': 'general'
+    },
+    'openai/gsm8k': {
+        'name': 'GSM8K',
+        'size': '8.5K problems',
+        'estimated_mb': 12,
+        'sample_count': 8500,
+        'category': 'math',
+        'field_mapping': {
+            'instruction': 'question',
+            'response': 'answer'
+        }
+    },
+    'nvidia/OpenMathReasoning': {
+        'name': 'OpenMath Reasoning',
+        'size': '100K problems',
+        'estimated_mb': 200,
+        'sample_count': 100000,
+        'category': 'math',
+        'default_split': 'cot',
+        'field_mapping': {
+            'instruction': 'problem',
+            'response': 'generated_solution'
+        }
+    },
+    'sahil2801/CodeAlpaca-20k': {
+        'name': 'Code Alpaca',
+        'size': '20K examples',
+        'estimated_mb': 35,
+        'sample_count': 20000,
+        'category': 'coding',
+        'field_mapping': {
+            'instruction': 'prompt',
+            'response': 'completion'
+        }
+    },
+    'databricks/databricks-dolly-15k': {
+        'name': 'Dolly 15k',
+        'size': '15K samples',
+        'estimated_mb': 30,
+        'sample_count': 15000,
+        'category': 'general',
+        'default_split': 'train',
+        'field_mapping': {
+            'instruction': 'instruction',
+            'response': 'response'
+        }
+    },
+    'microsoft/orca-math-word-problems-200k': {
+        'name': 'Orca Math',
+        'size': '200K problems',
+        'estimated_mb': 350,
+        'sample_count': 200000,
+        'category': 'math',
+        'field_mapping': {
+            'instruction': 'question',
+            'response': 'answer'
+        }
+    },
+    'squad': {
+        'name': 'SQuAD v2',
+        'size': '130K questions',
+        'estimated_mb': 120,
+        'sample_count': 130000,
+        'category': 'qa',
+        'field_mapping': {
+            'instruction': 'question',
+            'response': 'answers'
+        }
+    }
+}
+
 
 class TrainingSession:
     """Represents a training session for a user."""
@@ -107,6 +186,8 @@ class TrainingSession:
             'samples_processed': 0
         }
         self.logs = []
+        self.metrics_history = []  # Store historical metrics for reconnection
+        self.progress = 0  # Training progress percentage
 
     def _generate_display_name(self, config):
         """Generate a display name for the model."""
@@ -153,7 +234,13 @@ def create_session_id():
 
 def emit_to_session(session_id: str, event: str, data: Any):
     """Emit event to specific session via SocketIO."""
-    socketio.emit(event, data, room=session_id)
+    # Add session_id to data for client-side filtering
+    data_with_id = data.copy() if isinstance(data, dict) else {'data': data}
+    data_with_id['session_id'] = session_id
+
+    # Broadcast to all clients (they'll filter by session_id)
+    # This ensures updates work even if room joining hasn't completed
+    socketio.emit(event, data_with_id)
 
 
 def process_training_queue(session_id: str):
@@ -172,6 +259,7 @@ def process_training_queue(session_id: str):
                 if msg_type == 'progress':
                     if session_obj:
                         session_obj.metrics['progress'] = msg_data
+                        session_obj.progress = msg_data  # Store progress for reconnection
                     emit_to_session(session_id, 'training_progress', {
                         'progress': msg_data,
                         'session_id': session_id
@@ -180,6 +268,11 @@ def process_training_queue(session_id: str):
                 elif msg_type == 'metrics':
                     if session_obj:
                         session_obj.metrics.update(msg_data)
+                        # Update current_step if present
+                        if 'step' in msg_data and msg_data['step'] > 0:
+                            session_obj.metrics['current_step'] = msg_data['step']
+                        # Store metrics history for reconnection
+                        session_obj.metrics_history.append(msg_data.copy())
                     emit_to_session(session_id, 'training_metrics', msg_data)
 
                 elif msg_type == 'log':
@@ -237,16 +330,36 @@ def run_training(session_id: str, config: Dict[str, Any]):
                 # Process complete lines
                 for line in lines[:-1]:
                     if line.strip():
-                        # Try to parse as a metrics dictionary
-                        if line.startswith('{') and ('loss' in line or 'reward' in line):
-                            try:
-                                # Use ast.literal_eval for safer parsing
-                                import ast
-                                metrics_dict = ast.literal_eval(line)
+                        # Send the line as a log message first
+                        self.queue.put(('log', line))
 
-                                # Extract key metrics
+                        # Try to parse as a metrics dictionary
+                        if '{' in line and ('loss' in line or 'reward' in line or 'step' in line):
+                            try:
+                                # Extract JSON/dict from the line (it might have other text)
+                                import re
+                                import ast
+
+                                # Try to find a dictionary pattern in the line
+                                dict_match = re.search(r'\{[^}]+\}', line)
+                                if dict_match:
+                                    dict_str = dict_match.group(0)
+                                    metrics_dict = ast.literal_eval(dict_str)
+                                else:
+                                    metrics_dict = ast.literal_eval(line)
+
+                                # Debug: Log all keys in metrics dict to find step key
+                                if 'loss' in metrics_dict or 'reward' in metrics_dict:
+                                    logger.info(f"Found metrics: {list(metrics_dict.keys())}")
+
+                                # Extract key metrics - check multiple possible key names
+                                step_value = (metrics_dict.get('step') or
+                                            metrics_dict.get('global_step') or
+                                            metrics_dict.get('iteration') or
+                                            metrics_dict.get('steps') or 0)
+
                                 processed_metrics = {
-                                    'step': metrics_dict.get('step', 0),
+                                    'step': step_value,
                                     'epoch': metrics_dict.get('epoch', 0),
                                     'loss': metrics_dict.get('loss', 0),
                                     'mean_reward': metrics_dict.get('reward', metrics_dict.get('rewards/reward_wrapper/mean', 0)),
@@ -255,11 +368,42 @@ def run_training(session_id: str, config: Dict[str, Any]):
                                     'reward_std': metrics_dict.get('reward_std', metrics_dict.get('rewards/reward_wrapper/std', 0))
                                 }
 
+                                # Log the extracted step for debugging
+                                if step_value > 0:
+                                    logger.info(f"Training step {step_value} - loss: {processed_metrics['loss']:.4f}")
+
                                 # Send metrics update
                                 self.queue.put(('metrics', processed_metrics))
-                            except Exception:
-                                # Not a valid metrics dict, ignore
-                                pass
+                            except Exception as e:
+                                # Not a valid metrics dict, but log for debugging
+                                logger.debug(f"Could not parse metrics from line: {line[:100]}... Error: {e}")
+
+                        # Also check for step information in regular log output
+                        elif 'Step' in line or 'step' in line or 'Epoch' in line:
+                            import re
+
+                            # Try to extract step number from patterns like "Step 10/100" or "step: 10"
+                            step_patterns = [
+                                r'[Ss]tep[:\s]+(\d+)',  # Step: 10 or Step 10
+                                r'[Ss]tep[:\s]+\[?(\d+)/\d+\]?',  # Step [10/100]
+                                r'\[(\d+)/\d+\]',  # [10/100] format
+                                r'global_step[:\s]+(\d+)',  # global_step: 10
+                            ]
+
+                            for pattern in step_patterns:
+                                match = re.search(pattern, line)
+                                if match:
+                                    step_num = int(match.group(1))
+                                    logger.info(f"Extracted step {step_num} from log line")
+                                    # Send a minimal metrics update with just the step
+                                    self.queue.put(('metrics', {'step': step_num}))
+                                    break
+
+                            # Also check for percentage progress
+                            progress_match = re.search(r'(\d+(?:\.\d+)?)\s*%', line)
+                            if progress_match:
+                                progress = float(progress_match.group(1))
+                                self.queue.put(('progress', progress))
 
                 # Keep the incomplete line in buffer
                 self.buffer = io.StringIO()
@@ -274,6 +418,7 @@ def run_training(session_id: str, config: Dict[str, Any]):
 
     # Capture stdout
     original_stdout = sys.stdout
+    original_stderr = sys.stderr
 
     try:
         session_obj = training_sessions[session_id]
@@ -282,8 +427,17 @@ def run_training(session_id: str, config: Dict[str, Any]):
 
         q = session_queues[session_id]
 
-        # Set up output capture
+        # Set up output capture for both stdout and stderr
         sys.stdout = OutputCapture(q, original_stdout)
+        sys.stderr = OutputCapture(q, original_stderr)
+
+        # Configure transformers logging to be more verbose
+        import transformers
+        transformers.logging.set_verbosity_info()
+
+        # Enable progress bars in transformers
+        import os
+        os.environ['TRANSFORMERS_NO_PROGRESS'] = '0'
 
         # Send initial status
         q.put(('log', f"Initializing training for session {session_id}"))
@@ -302,7 +456,7 @@ def run_training(session_id: str, config: Dict[str, Any]):
 
             # Training configuration
             num_train_epochs=config.get('num_epochs', 3),
-            per_device_train_batch_size=config.get('batch_size', 4),
+            per_device_train_batch_size=config.get('batch_size', 1),
             gradient_accumulation_steps=config.get('gradient_accumulation_steps', 1),
             learning_rate=config.get('learning_rate', 2e-4),
             warmup_steps=config.get('warmup_steps', 10),
@@ -322,8 +476,9 @@ def run_training(session_id: str, config: Dict[str, Any]):
             top_p=config.get('top_p', 0.95),
             top_k=config.get('top_k', 50),
             repetition_penalty=config.get('repetition_penalty', 1.0),
-            num_generations_per_prompt=config.get('num_generations', 4),
-            num_generations=config.get('num_generations', 4),  # For TRL compatibility
+            # Use batch_size as default for num_generations if not provided or None
+            num_generations_per_prompt=config.get('num_generations') or config.get('batch_size', 1),
+            num_generations=config.get('num_generations') or config.get('batch_size', 1),  # For TRL compatibility
 
             # GRPO/Algorithm specific
             loss_type=config.get('loss_type', 'grpo'),
@@ -523,6 +678,33 @@ def run_training(session_id: str, config: Dict[str, Any]):
 
         # GRPO/GSPO training
         q.put(('log', f"Starting {algorithm_name} training..."))
+
+        # Force flush to ensure output is captured
+        sys.stdout.flush()
+
+        # Add progress callback to trainer if possible
+        def training_callback(step, total_steps, logs):
+            """Callback to report training progress."""
+            if logs:
+                # Send metrics update
+                metrics_update = {
+                    'step': step,
+                    'total_steps': total_steps
+                }
+                # Add any available metrics from logs
+                if isinstance(logs, dict):
+                    metrics_update.update(logs)
+                q.put(('metrics', metrics_update))
+
+            # Calculate and send progress
+            if total_steps > 0:
+                progress = (step / total_steps) * 100
+                q.put(('progress', progress))
+
+        # Check if we can add a callback
+        if hasattr(trainer, 'set_callback'):
+            trainer.set_callback(training_callback)
+
         metrics = trainer.grpo_train(dataset, template, reward_builder)
 
         # Update final metrics
@@ -561,8 +743,9 @@ def run_training(session_id: str, config: Dict[str, Any]):
         if session_id in training_sessions:
             training_sessions[session_id].status = 'error'
     finally:
-        # Restore original stdout
+        # Restore original stdout and stderr
         sys.stdout = original_stdout
+        sys.stderr = original_stderr
 
         # Mark session as completed
         if session_id in training_sessions:
@@ -853,6 +1036,26 @@ def list_training_sessions():
     return jsonify(sessions)
 
 
+@app.route('/api/training/session/<session_id>/history', methods=['GET'])
+def get_training_history(session_id):
+    """Get training history for reconnection."""
+    if session_id not in training_sessions:
+        return jsonify({'error': 'Session not found'}), 404
+
+    session_obj = training_sessions[session_id]
+
+    # Gather historical data
+    history = {
+        'session_id': session_id,
+        'status': session_obj.status,
+        'progress': getattr(session_obj, 'progress', 0),
+        'logs': session_obj.logs[-100:],  # Last 100 logs
+        'metrics': getattr(session_obj, 'metrics_history', [])
+    }
+
+    return jsonify(history)
+
+
 @app.route('/api/export/<session_id>', methods=['POST'])
 def export_model(session_id):
     """Export trained model."""
@@ -996,6 +1199,90 @@ def download_export(session_id, export_path):
 
     except Exception as e:
         logger.error(f"Download error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/models/<session_id>', methods=['DELETE'])
+def delete_model(session_id):
+    """Delete a model and all its associated data."""
+    try:
+        import shutil
+
+        # Check if model is currently training
+        if session_id in training_sessions and training_sessions[session_id].get('status') == 'running':
+            return jsonify({'error': 'Cannot delete model while training is in progress'}), 400
+
+        deleted_items = []
+
+        # Delete model outputs directory
+        output_path = Path(f"./outputs/{session_id}")
+        if output_path.exists():
+            shutil.rmtree(output_path)
+            deleted_items.append(f"outputs/{session_id}")
+            logger.info(f"Deleted outputs for session {session_id}")
+
+        # Delete exports directory
+        export_path = Path(f"./exports/{session_id}")
+        if export_path.exists():
+            shutil.rmtree(export_path)
+            deleted_items.append(f"exports/{session_id}")
+            logger.info(f"Deleted exports for session {session_id}")
+
+        # Remove from training sessions if exists
+        if session_id in training_sessions:
+            del training_sessions[session_id]
+            deleted_items.append("session data")
+
+        return jsonify({
+            'success': True,
+            'message': f'Model {session_id} deleted successfully',
+            'deleted': deleted_items
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to delete model {session_id}: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/export/<session_id>/<export_format>/<export_name>', methods=['DELETE'])
+def delete_export(session_id, export_format, export_name):
+    """Delete a specific export."""
+    try:
+        import shutil
+
+        # Construct the export path
+        export_path = Path(f"./exports/{session_id}/{export_format}/{export_name}")
+
+        if not export_path.exists():
+            return jsonify({'error': 'Export not found'}), 404
+
+        # Delete the export (file or directory)
+        if export_path.is_dir():
+            shutil.rmtree(export_path)
+        else:
+            export_path.unlink()
+
+        logger.info(f"Deleted export: {export_path}")
+
+        # Check if this was the last export in the format directory
+        format_dir = export_path.parent
+        if format_dir.exists() and not any(format_dir.iterdir()):
+            format_dir.rmdir()
+            logger.info(f"Removed empty format directory: {format_dir}")
+
+        # Check if this was the last export for the session
+        session_dir = format_dir.parent
+        if session_dir.exists() and not any(session_dir.iterdir()):
+            session_dir.rmdir()
+            logger.info(f"Removed empty session directory: {session_dir}")
+
+        return jsonify({
+            'success': True,
+            'message': f'Export {export_name} deleted successfully'
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to delete export {export_name}: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -1277,6 +1564,7 @@ def download_dataset():
         dataset_name = data.get('dataset_name')
         dataset_config = data.get('config', None)  # Config for multi-config datasets
         force_download = data.get('force_download', False)
+        custom_field_mapping = data.get('field_mapping', None)  # Custom field mapping from user
 
         if not dataset_name:
             return jsonify({'error': 'Dataset name required'}), 400
@@ -1288,11 +1576,31 @@ def download_dataset():
             # Emit progress via SocketIO
             emit_to_session(session_id, 'dataset_progress', info)
 
+        # Check if dataset has a custom default split or field mapping
+        default_split = 'train'
+        dataset_info = POPULAR_DATASETS.get(dataset_name, {})
+        if 'default_split' in dataset_info:
+            default_split = dataset_info['default_split']
+
+        # Get field mappings - prefer custom, then predefined, then default
+        if custom_field_mapping:
+            # Use custom field mapping from user
+            instruction_field = custom_field_mapping.get('instruction', 'instruction')
+            response_field = custom_field_mapping.get('response', 'response')
+        else:
+            # Use predefined mapping if available
+            field_mapping = dataset_info.get('field_mapping', {})
+            instruction_field = field_mapping.get('instruction', 'instruction')
+            response_field = field_mapping.get('response', 'response')
+
         # Create dataset config
         config = DatasetConfig(
             source_type='huggingface',
             source_path=dataset_name,
+            split=default_split,  # Use custom split if specified
             subset=dataset_config,  # This maps to 'name' parameter in HF load_dataset
+            instruction_field=instruction_field,
+            response_field=response_field,
             use_cache=True,
             force_download=force_download
         )
@@ -1343,11 +1651,23 @@ def sample_dataset():
         if not dataset_name:
             return jsonify({'error': 'Dataset name required'}), 400
 
+        # Check if dataset has a custom default split or field mapping
+        default_split = 'train'
+        dataset_info = POPULAR_DATASETS.get(dataset_name, {})
+        if 'default_split' in dataset_info:
+            default_split = dataset_info['default_split']
+
+        # Get field mappings if specified
+        field_mapping = dataset_info.get('field_mapping', {})
+
         # Create config for sampling
         config = DatasetConfig(
             source_type='huggingface',
             source_path=dataset_name,
+            split=default_split,  # Use custom split if specified
             subset=dataset_config,  # This maps to 'name' parameter in HF load_dataset
+            instruction_field=field_mapping.get('instruction', 'instruction'),
+            response_field=field_mapping.get('response', 'response'),
             sample_size=sample_size,
             use_cache=True  # Use cache if available
         )
@@ -1375,6 +1695,143 @@ def sample_dataset():
 
     except Exception as e:
         logger.error(f"Failed to sample dataset: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/datasets/detect-fields', methods=['POST'])
+def detect_dataset_fields():
+    """Detect available fields in a dataset for mapping."""
+    try:
+        data = request.json
+        dataset_name = data.get('dataset_name')
+        dataset_config = data.get('config', None)
+
+        if not dataset_name:
+            return jsonify({'error': 'Dataset name required'}), 400
+
+        # Check if dataset has predefined field mapping
+        dataset_info = POPULAR_DATASETS.get(dataset_name, {})
+        default_split = dataset_info.get('default_split', 'train')
+
+        # Create minimal config to load just column names
+        config = DatasetConfig(
+            source_type='huggingface',
+            source_path=dataset_name,
+            split=default_split,
+            subset=dataset_config,
+            sample_size=1,  # Load minimal data
+            use_cache=False
+        )
+
+        try:
+            # Load a tiny sample to get column names
+            from datasets import load_dataset
+
+            # Special handling for known problematic datasets
+            if 'squad' in dataset_name.lower():
+                # Use the standard 'squad' dataset instead of variations
+                dataset_name = 'squad'
+                default_split = 'train'
+
+            kwargs = {
+                'path': dataset_name,
+                'split': f"{default_split}[:1]",  # Load just 1 sample
+                'streaming': False,
+                'trust_remote_code': False
+            }
+
+            if dataset_config:
+                kwargs['name'] = dataset_config
+
+            # Try to load
+            try:
+                dataset = load_dataset(**kwargs)
+            except Exception as load_error:
+                # If loading fails, try without the slice notation
+                kwargs['split'] = default_split
+                dataset = load_dataset(**kwargs)
+                if hasattr(dataset, 'select'):
+                    dataset = dataset.select(range(1))  # Get just one sample
+
+            # Get column names
+            columns = []
+            if hasattr(dataset, 'column_names'):
+                columns = dataset.column_names
+            elif hasattr(dataset, 'features'):
+                columns = list(dataset.features.keys())
+
+            # Suggest mappings based on common patterns
+            suggested_mappings = {
+                'instruction': None,
+                'response': None
+            }
+
+            # Check for instruction field
+            instruction_patterns = ['instruction', 'prompt', 'question', 'input', 'text', 'problem', 'query']
+            for col in columns:
+                col_lower = col.lower()
+                for pattern in instruction_patterns:
+                    if pattern in col_lower:
+                        suggested_mappings['instruction'] = col
+                        break
+                if suggested_mappings['instruction']:
+                    break
+
+            # Check for response field
+            response_patterns = ['response', 'answer', 'output', 'completion', 'label', 'generated_solution', 'solution', 'reply']
+            for col in columns:
+                col_lower = col.lower()
+                for pattern in response_patterns:
+                    if pattern in col_lower:
+                        suggested_mappings['response'] = col
+                        break
+                if suggested_mappings['response']:
+                    break
+
+            # Get a sample to show data preview
+            sample_data = {}
+            if len(dataset) > 0:
+                sample = dataset[0]
+                for col in columns[:5]:  # Show first 5 columns
+                    if col in sample:
+                        value = str(sample[col])[:100]  # Truncate long values
+                        sample_data[col] = value
+
+            return jsonify({
+                'columns': columns,
+                'suggested_mappings': suggested_mappings,
+                'sample_data': sample_data,
+                'predefined_mapping': dataset_info.get('field_mapping', {})
+            })
+
+        except ValueError as e:
+            # Handle split errors
+            error_msg = str(e)
+            if "Unknown split" in error_msg or "Should be one of" in error_msg:
+                # Try to extract available splits and retry with first one
+                import re
+                splits_match = re.search(r"Should be one of \[(.+?)\]", error_msg)
+                if splits_match:
+                    available_splits = [s.strip().strip("'") for s in splits_match.group(1).split(',')]
+                    # Retry with first available split
+                    kwargs['split'] = f"{available_splits[0]}[:1]"
+                    dataset = load_dataset(**kwargs)
+
+                    columns = []
+                    if hasattr(dataset, 'column_names'):
+                        columns = dataset.column_names
+                    elif hasattr(dataset, 'features'):
+                        columns = list(dataset.features.keys())
+
+                    return jsonify({
+                        'columns': columns,
+                        'available_splits': available_splits,
+                        'used_split': available_splits[0]
+                    })
+            raise
+
+    except Exception as e:
+        logger.error(f"Failed to detect dataset fields: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -1430,55 +1887,11 @@ def clear_dataset_cache():
 def list_popular_datasets():
     """Get list of Public Datasets with their status."""
     try:
-        # Define Public Datasets (matching the frontend catalog)
-        popular_datasets = {
-            'tatsu-lab/alpaca': {
-                'name': 'Alpaca',
-                'size': '52K samples',
-                'category': 'general'
-            },
-            'openai/gsm8k': {
-                'name': 'GSM8K',
-                'size': '8.5K problems',
-                'category': 'math'
-            },
-            'open-r1/DAPO-Math-17k-Processed': {
-                'name': 'DAPO Math 17k',
-                'size': '17K problems',
-                'category': 'math'
-            },
-            'nvidia/OpenMathReasoning': {
-                'name': 'OpenMath Reasoning',
-                'size': '100K+ problems',
-                'category': 'math'
-            },
-            'sahil2801/CodeAlpaca-20k': {
-                'name': 'Code Alpaca',
-                'size': '20K examples',
-                'category': 'coding'
-            },
-            'databricks/databricks-dolly-15k': {
-                'name': 'Dolly 15k',
-                'size': '15K samples',
-                'category': 'general'
-            },
-            'microsoft/orca-math-word-problems-200k': {
-                'name': 'Orca Math',
-                'size': '200K problems',
-                'category': 'math'
-            },
-            'squad_v2': {
-                'name': 'SQuAD v2',
-                'size': '150K questions',
-                'category': 'qa'
-            }
-        }
-
         # Check cache status for each dataset
         handler = DatasetHandler()
 
         datasets_with_status = []
-        for dataset_path, info in popular_datasets.items():
+        for dataset_path, info in POPULAR_DATASETS.items():
             is_cached = handler.is_cached(dataset_path)
             cache_info = handler.get_cache_info(dataset_path) if is_cached else None
 
@@ -1979,6 +2392,356 @@ def compare_models():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/test/compare-models', methods=['POST'])
+def compare_two_trained_models():
+    """Compare responses from two trained models."""
+    try:
+        data = request.json
+        prompt = data.get('prompt')
+        model1_session_id = data.get('model1_session_id')
+        model2_session_id = data.get('model2_session_id')
+
+        # Generation config
+        config_data = data.get('config', {})
+        config = TestConfig(
+            temperature=config_data.get('temperature', 0.7),
+            max_new_tokens=config_data.get('max_new_tokens', 512),
+            top_p=config_data.get('top_p', 0.95),
+            top_k=config_data.get('top_k', 50),
+            repetition_penalty=config_data.get('repetition_penalty', 1.0),
+            do_sample=config_data.get('do_sample', True)
+        )
+
+        use_chat_template = data.get('use_chat_template', True)
+
+        if not prompt or not model1_session_id or not model2_session_id:
+            return jsonify({'error': 'prompt, model1_session_id, and model2_session_id required'}), 400
+
+        # Load first model
+        session1_info = session_registry.get_session(model1_session_id)
+        if not session1_info:
+            return jsonify({'error': f'Session {model1_session_id} not found'}), 404
+
+        checkpoint1_path = session1_info.checkpoint_path
+        if not checkpoint1_path or not Path(checkpoint1_path).exists():
+            return jsonify({'error': f'Checkpoint for model 1 not found'}), 404
+
+        # Load second model
+        session2_info = session_registry.get_session(model2_session_id)
+        if not session2_info:
+            return jsonify({'error': f'Session {model2_session_id} not found'}), 404
+
+        checkpoint2_path = session2_info.checkpoint_path
+        if not checkpoint2_path or not Path(checkpoint2_path).exists():
+            return jsonify({'error': f'Checkpoint for model 2 not found'}), 404
+
+        # Load models if not already loaded
+        model1_cache_key = f"trained_{model1_session_id}"
+        model2_cache_key = f"trained_{model2_session_id}"
+
+        if model1_cache_key not in model_tester.loaded_models:
+            success, error = model_tester.load_trained_model(checkpoint1_path, model1_session_id)
+            if not success:
+                return jsonify({'error': f'Failed to load model 1: {error}'}), 500
+
+        if model2_cache_key not in model_tester.loaded_models:
+            success, error = model_tester.load_trained_model(checkpoint2_path, model2_session_id)
+            if not success:
+                return jsonify({'error': f'Failed to load model 2: {error}'}), 500
+
+        # Compare the two models
+        results = model_tester.compare_two_models(
+            prompt=prompt,
+            model1_session_id=model1_session_id,
+            model2_session_id=model2_session_id,
+            config=config,
+            use_chat_template=use_chat_template
+        )
+
+        # Add session info to results
+        results['model1']['session_info'] = {
+            'name': session1_info.name,
+            'model_name': session1_info.model_name,
+            'dataset_name': session1_info.dataset_name
+        }
+        results['model2']['session_info'] = {
+            'name': session2_info.name,
+            'model_name': session2_info.model_name,
+            'dataset_name': session2_info.dataset_name
+        }
+
+        return jsonify(results)
+
+    except Exception as e:
+        logger.error(f"Failed to compare two models: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/test/compare/stream', methods=['POST'])
+def compare_models_stream():
+    """Stream model comparison responses using Server-Sent Events."""
+    try:
+        data = request.json
+        prompt = data.get('prompt')
+        session_id = data.get('session_id')
+        base_model = data.get('base_model')
+        config_data = data.get('config', {})
+        use_chat_template = data.get('use_chat_template', True)
+
+        def generate():
+            try:
+                # Load models first if needed
+                checkpoint_path = Path(f"outputs/{session_id}/checkpoints/final")
+                if not checkpoint_path.exists():
+                    checkpoint_path = Path(f"outputs/{session_id}/checkpoint-final")
+
+                success, error = model_tester.load_trained_model(str(checkpoint_path), session_id)
+                if not success:
+                    yield f"data: {json.dumps({'type': 'error', 'error': error})}\n\n"
+                    return
+
+                success, error = model_tester.load_base_model(base_model)
+                if not success:
+                    yield f"data: {json.dumps({'type': 'error', 'error': error})}\n\n"
+                    return
+
+                # Generate from trained model with streaming
+                config = TestConfig(
+                    temperature=config_data.get('temperature', 0.7),
+                    max_new_tokens=config_data.get('max_new_tokens', 512),
+                    top_p=config_data.get('top_p', 0.95),
+                    top_k=config_data.get('top_k', 50),
+                    repetition_penalty=config_data.get('repetition_penalty', 1.0),
+                    do_sample=config_data.get('do_sample', True)
+                )
+
+                # Use a queue to collect streaming tokens
+                from queue import Queue
+                import threading
+                import time
+
+                trained_queue = Queue()
+                base_queue = Queue()
+
+                def trained_callback(token, is_end):
+                    trained_queue.put(('token', token))
+                    if is_end:
+                        trained_queue.put(('end', None))
+
+                def base_callback(token, is_end):
+                    base_queue.put(('token', token))
+                    if is_end:
+                        base_queue.put(('end', None))
+
+                # Start generation in threads
+                trained_result = {'success': False}
+                base_result = {'success': False}
+
+                def generate_trained():
+                    nonlocal trained_result
+                    trained_result = model_tester.generate_response(
+                        prompt=prompt,
+                        model_type="trained",
+                        model_key=session_id,
+                        config=config,
+                        use_chat_template=use_chat_template,
+                        streaming_callback=trained_callback
+                    )
+
+                def generate_base():
+                    nonlocal base_result
+                    base_result = model_tester.generate_response(
+                        prompt=prompt,
+                        model_type="base",
+                        model_key=base_model,
+                        config=config,
+                        use_chat_template=use_chat_template,
+                        streaming_callback=base_callback
+                    )
+
+                trained_thread = threading.Thread(target=generate_trained)
+                base_thread = threading.Thread(target=generate_base)
+
+                trained_thread.start()
+                base_thread.start()
+
+                # Stream tokens as they arrive
+                trained_done = False
+                base_done = False
+
+                while not (trained_done and base_done):
+                    # Check trained model queue
+                    if not trained_done and not trained_queue.empty():
+                        msg_type, token = trained_queue.get()
+                        if msg_type == 'token':
+                            yield f"data: {json.dumps({'type': 'trained', 'token': token})}\n\n"
+                        else:
+                            trained_done = True
+                            yield f"data: {json.dumps({'type': 'trained_complete'})}\n\n"
+
+                    # Check base model queue
+                    if not base_done and not base_queue.empty():
+                        msg_type, token = base_queue.get()
+                        if msg_type == 'token':
+                            yield f"data: {json.dumps({'type': 'base', 'token': token})}\n\n"
+                        else:
+                            base_done = True
+                            yield f"data: {json.dumps({'type': 'base_complete'})}\n\n"
+
+                    # Small delay to avoid busy-waiting
+                    time.sleep(0.01)
+
+                # Wait for threads to complete
+                trained_thread.join()
+                base_thread.join()
+
+                # Send final metadata
+                yield f"data: {json.dumps({'type': 'complete', 'trained': trained_result, 'base': base_result})}\n\n"
+
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+
+        return Response(generate(), mimetype='text/event-stream')
+
+    except Exception as e:
+        logger.error(f"Stream comparison failed: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/test/compare-models/stream', methods=['POST'])
+def compare_two_models_stream():
+    """Stream comparison between two trained models using SSE."""
+    try:
+        data = request.json
+        prompt = data.get('prompt')
+        model1_session_id = data.get('model1_session_id')
+        model2_session_id = data.get('model2_session_id')
+        config_data = data.get('config', {})
+        use_chat_template = data.get('use_chat_template', True)
+
+        def generate():
+            try:
+                # Load both models first if needed
+                checkpoint1_path = Path(f"outputs/{model1_session_id}/checkpoints/final")
+                if not checkpoint1_path.exists():
+                    checkpoint1_path = Path(f"outputs/{model1_session_id}/checkpoint-final")
+
+                checkpoint2_path = Path(f"outputs/{model2_session_id}/checkpoints/final")
+                if not checkpoint2_path.exists():
+                    checkpoint2_path = Path(f"outputs/{model2_session_id}/checkpoint-final")
+
+                success, error = model_tester.load_trained_model(str(checkpoint1_path), model1_session_id)
+                if not success:
+                    yield f"data: {json.dumps({'type': 'error', 'error': error})}\n\n"
+                    return
+
+                success, error = model_tester.load_trained_model(str(checkpoint2_path), model2_session_id)
+                if not success:
+                    yield f"data: {json.dumps({'type': 'error', 'error': error})}\n\n"
+                    return
+
+                config = TestConfig(
+                    temperature=config_data.get('temperature', 0.7),
+                    max_new_tokens=config_data.get('max_new_tokens', 512),
+                    top_p=config_data.get('top_p', 0.95),
+                    top_k=config_data.get('top_k', 50),
+                    repetition_penalty=config_data.get('repetition_penalty', 1.0),
+                    do_sample=config_data.get('do_sample', True)
+                )
+
+                # Use a queue to collect streaming tokens
+                from queue import Queue
+                import threading
+                import time
+
+                model1_queue = Queue()
+                model2_queue = Queue()
+
+                def model1_callback(token, is_end):
+                    model1_queue.put(('token', token))
+                    if is_end:
+                        model1_queue.put(('end', None))
+
+                def model2_callback(token, is_end):
+                    model2_queue.put(('token', token))
+                    if is_end:
+                        model2_queue.put(('end', None))
+
+                # Start generation in threads
+                model1_result = {'success': False}
+                model2_result = {'success': False}
+
+                def generate_model1():
+                    nonlocal model1_result
+                    model1_result = model_tester.generate_response(
+                        prompt=prompt,
+                        model_type="trained",
+                        model_key=model1_session_id,
+                        config=config,
+                        use_chat_template=use_chat_template,
+                        streaming_callback=model1_callback
+                    )
+
+                def generate_model2():
+                    nonlocal model2_result
+                    model2_result = model_tester.generate_response(
+                        prompt=prompt,
+                        model_type="trained",
+                        model_key=model2_session_id,
+                        config=config,
+                        use_chat_template=use_chat_template,
+                        streaming_callback=model2_callback
+                    )
+
+                model1_thread = threading.Thread(target=generate_model1)
+                model2_thread = threading.Thread(target=generate_model2)
+
+                model1_thread.start()
+                model2_thread.start()
+
+                # Stream tokens as they arrive
+                model1_done = False
+                model2_done = False
+
+                while not (model1_done and model2_done):
+                    # Check model 1 queue
+                    if not model1_done and not model1_queue.empty():
+                        msg_type, token = model1_queue.get()
+                        if msg_type == 'token':
+                            yield f"data: {json.dumps({'type': 'model1', 'token': token})}\n\n"
+                        else:
+                            model1_done = True
+                            yield f"data: {json.dumps({'type': 'model1_complete'})}\n\n"
+
+                    # Check model 2 queue
+                    if not model2_done and not model2_queue.empty():
+                        msg_type, token = model2_queue.get()
+                        if msg_type == 'token':
+                            yield f"data: {json.dumps({'type': 'model2', 'token': token})}\n\n"
+                        else:
+                            model2_done = True
+                            yield f"data: {json.dumps({'type': 'model2_complete'})}\n\n"
+
+                    # Small delay to avoid busy-waiting
+                    time.sleep(0.01)
+
+                # Wait for threads to complete
+                model1_thread.join()
+                model2_thread.join()
+
+                # Send final metadata
+                yield f"data: {json.dumps({'type': 'complete', 'model1': model1_result, 'model2': model2_result})}\n\n"
+
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+
+        return Response(generate(), mimetype='text/event-stream')
+
+    except Exception as e:
+        logger.error(f"Stream model comparison failed: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/test/chat-template', methods=['GET', 'POST'])
 def manage_chat_template():
     """Get or set the chat template for base model."""
@@ -2041,6 +2804,26 @@ def handle_connect():
 def handle_disconnect():
     """Handle client disconnection."""
     logger.info(f"Client disconnected: {request.sid}")
+
+
+@socketio.on('join_training_session')
+def handle_join_session(data):
+    """Handle client joining a training session room."""
+    session_id = data.get('session_id')
+    if session_id:
+        join_room(session_id)
+        logger.info(f"Client {request.sid} joined session {session_id}")
+        emit('joined_session', {'session_id': session_id})
+
+
+@socketio.on('leave_training_session')
+def handle_leave_session(data):
+    """Handle client leaving a training session room."""
+    session_id = data.get('session_id')
+    if session_id:
+        leave_room(session_id)
+        logger.info(f"Client {request.sid} left session {session_id}")
+        emit('left_session', {'session_id': session_id})
 
 
 @socketio.on('join_session')

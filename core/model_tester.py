@@ -94,6 +94,9 @@ You are a helpful AI assistant.
             if tokenizer.pad_token is None:
                 tokenizer.pad_token = tokenizer.eos_token
 
+            # Ensure padding side is set correctly for generation
+            tokenizer.padding_side = 'left'
+
             # Check if it's a LoRA model
             adapter_config_path = checkpoint_path / "adapter_config.json"
             if adapter_config_path.exists():
@@ -238,14 +241,21 @@ You are a helpful AI assistant.
                     formatted_prompt = self.base_chat_template.format(prompt=prompt)
                 else:
                     # Try to use model's chat template if available
-                    if hasattr(tokenizer, 'apply_chat_template'):
-                        messages = [{"role": "user", "content": prompt}]
-                        formatted_prompt = tokenizer.apply_chat_template(
-                            messages,
-                            tokenize=False,
-                            add_generation_prompt=True
-                        )
+                    if hasattr(tokenizer, 'chat_template') and tokenizer.chat_template:
+                        try:
+                            messages = [{"role": "user", "content": prompt}]
+                            formatted_prompt = tokenizer.apply_chat_template(
+                                messages,
+                                tokenize=False,
+                                add_generation_prompt=True
+                            )
+                            logger.debug(f"Applied chat template for trained model")
+                        except Exception as e:
+                            logger.warning(f"Failed to apply chat template: {e}")
+                            # Fallback to simple format
+                            formatted_prompt = prompt
                     else:
+                        logger.warning("No chat template found for trained model, using prompt as-is")
                         formatted_prompt = prompt
             else:
                 formatted_prompt = prompt
@@ -327,6 +337,87 @@ You are a helpful AI assistant.
                 "success": False,
                 "error": str(e)
             }
+
+    def compare_two_models(
+        self,
+        prompt: str,
+        model1_session_id: str,
+        model2_session_id: str,
+        config: Optional[TestConfig] = None,
+        use_chat_template: bool = True
+    ) -> Dict[str, Any]:
+        """Compare responses from two trained models.
+
+        Args:
+            prompt: Input prompt
+            model1_session_id: Session ID of first model
+            model2_session_id: Session ID of second model
+            config: Generation configuration
+            use_chat_template: Whether to apply chat template
+
+        Returns:
+            Dictionary with comparison results
+        """
+        results = {
+            "prompt": prompt,
+            "timestamp": datetime.now().isoformat(),
+            "config": config.__dict__ if config else TestConfig().__dict__,
+            "comparison_type": "model_vs_model"
+        }
+
+        # Generate from first model
+        model1_result = self.generate_response(
+            prompt=prompt,
+            model_type="trained",
+            model_key=model1_session_id,
+            config=config,
+            use_chat_template=use_chat_template
+        )
+        results["model1"] = {
+            **model1_result,
+            "session_id": model1_session_id
+        }
+
+        # Generate from second model
+        model2_result = self.generate_response(
+            prompt=prompt,
+            model_type="trained",
+            model_key=model2_session_id,
+            config=config,
+            use_chat_template=use_chat_template
+        )
+        results["model2"] = {
+            **model2_result,
+            "session_id": model2_session_id
+        }
+
+        # Calculate comparison metrics
+        if model1_result["success"] and model2_result["success"]:
+            results["metrics"] = self._calculate_comparison_metrics(
+                model1_result["response"],
+                model2_result["response"]
+            )
+
+        return results
+
+    def _calculate_comparison_metrics(self, response1: str, response2: str) -> Dict[str, Any]:
+        """Calculate comparison metrics between two model responses.
+
+        Args:
+            response1: First model's response
+            response2: Second model's response
+
+        Returns:
+            Dictionary containing comparison metrics
+        """
+        return {
+            "model1_length": len(response1),
+            "model2_length": len(response2),
+            "length_diff": len(response1) - len(response2),
+            "model1_tokens": len(response1.split()),
+            "model2_tokens": len(response2.split()),
+            "token_diff": len(response1.split()) - len(response2.split())
+        }
 
     def compare_models(
         self,

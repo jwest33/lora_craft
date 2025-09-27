@@ -22,69 +22,96 @@
     <!-- Chart.js for metrics -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.css">
 
-    <!-- Custom Styles -->
+    <!-- Style -->
     <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
 </head>
 <body>
-    <!-- Floating Icon Dock -->
-    <div class="floating-icon-dock">
-        <div class="icon-container">
-            <img src="{{ url_for('static', filename='images/lora_craft.png') }}" alt="LoRA Craft" class="app-icon">
-        </div>
-        <div class="app-title">LoRA Craft</div>
-    </div>
+    <!-- Unified Header -->
+    <header class="unified-header">
+        <!-- Main Header Row -->
+        <div class="header-main">
+            <!-- Left: Brand -->
+            <div class="header-brand">
+                <img src="{{ url_for('static', filename='images/lora_craft.png') }}" alt="LoRA Craft" class="header-icon">
+                <span class="header-title">LoRA Craft</span>
+            </div>
 
-    <!-- Compact Navigation Bar -->
-    <nav class="navbar-compact">
-        <div class="navbar-compact-content">
-            <!-- Center: Status Indicators -->
-            <div class="navbar-center">
-                <div class="status-indicators">
-                    <div class="status-indicator" data-bs-toggle="tooltip" data-bs-placement="bottom" title="GPU Status">
-                        <i class="fas fa-microchip"></i>
-                        <span class="indicator-value" id="gpu-status">--</span>
+            <!-- Center: Workflow Progress -->
+            <div class="header-progress">
+                <div class="compact-progress-steps">
+                    <div class="compact-step active" id="step-1-indicator" onclick="goToStep(1)" data-bs-toggle="tooltip" title="Model Configuration">
+                        <i class="fas fa-brain"></i>
+                        <span>Model</span>
                     </div>
-                    <div class="status-indicator" data-bs-toggle="tooltip" data-bs-placement="bottom" title="VRAM Available">
-                        <i class="fas fa-microchip"></i>
-                        <span class="indicator-value" id="vram-status">--</span>
+                    <div class="step-connector"></div>
+                    <div class="compact-step" id="step-2-indicator" onclick="goToStep(2)" data-bs-toggle="tooltip" title="Dataset & Prompts">
+                        <i class="fas fa-database"></i>
+                        <span>Dataset</span>
                     </div>
-                    <div class="status-indicator" data-bs-toggle="tooltip" data-bs-placement="bottom" title="RAM Available">
-                        <i class="fas fa-memory"></i>
-                        <span class="indicator-value" id="ram-status">--</span>
+                    <div class="step-connector"></div>
+                    <div class="compact-step" id="step-3-indicator" onclick="goToStep(3)" data-bs-toggle="tooltip" title="Training Configuration">
+                        <i class="fas fa-sliders-h"></i>
+                        <span>Training</span>
                     </div>
-                    <div class="status-indicator" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Connection Status">
-                        <i class="fas fa-wifi"></i>
-                        <span class="indicator-dot online" id="connection-indicator"></span>
+                    <div class="step-connector"></div>
+                    <div class="compact-step" id="step-4-indicator" onclick="goToStep(4)" data-bs-toggle="tooltip" title="Review & Train">
+                        <i class="fas fa-dumbbell"></i>
+                        <span>Train</span>
+                    </div>
+                    <div class="step-connector"></div>
+                    <div class="compact-step" id="step-5-indicator" onclick="goToStep(5); setTimeout(() => refreshTrainedModels(), 100);" data-bs-toggle="tooltip" title="Model Exports">
+                        <i class="fas fa-file-export"></i>
+                        <span>Export</span>
+                    </div>
+                    <div class="step-connector"></div>
+                    <div class="compact-step" id="step-6-indicator" onclick="goToStep(6); setTimeout(() => loadTestableModels(), 100);" data-bs-toggle="tooltip" title="Test Model">
+                        <i class="fas fa-vial"></i>
+                        <span>Test</span>
                     </div>
                 </div>
             </div>
 
-            <!-- Right: Actions (absolute positioned) -->
-            <div class="navbar-actions" style="position: absolute; right: 16px;">
-                <button class="action-btn" onclick="toggleTheme()" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Toggle Theme">
+            <!-- Right: Actions -->
+            <div class="header-actions">
+                <button class="action-btn" onclick="toggleTheme()" data-bs-toggle="tooltip" title="Toggle Theme">
                     <i class="fas fa-moon" id="theme-icon"></i>
                 </button>
-                <button class="action-btn" onclick="showHelp()" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Help & Documentation">
+                <button class="action-btn" onclick="showHelp()" data-bs-toggle="tooltip" title="Help">
                     <i class="fas fa-question-circle"></i>
                 </button>
-                <button class="action-btn" onclick="toggleSidebar()" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Toggle Sidebar">
+                <button class="action-btn" onclick="toggleSidebar()" data-bs-toggle="tooltip" title="Toggle Sidebar">
                     <i class="fas fa-bars"></i>
                 </button>
             </div>
         </div>
 
-        <!-- Integrated Progress Bar -->
-        <div class="navbar-progress" id="navbar-progress" style="display: none;">
-            <div class="progress-bar-thin" id="training-progress-thin" style="width: 0%"></div>
-            <span class="progress-text" id="progress-text">0%</span>
+        <!-- Status Bar Row -->
+        <div class="header-status">
+            <div class="status-indicators">
+                <div class="status-indicator" data-bs-toggle="tooltip" title="GPU Status">
+                    <i class="fas fa-microchip"></i>
+                    <span class="indicator-value" id="gpu-status">--</span>
+                </div>
+                <div class="status-indicator" data-bs-toggle="tooltip" title="VRAM Available">
+                    <i class="fas fa-microchip"></i>
+                    <span class="indicator-value" id="vram-status">--</span>
+                </div>
+                <div class="status-indicator" data-bs-toggle="tooltip" title="RAM Available">
+                    <i class="fas fa-memory"></i>
+                    <span class="indicator-value" id="ram-status">--</span>
+                </div>
+                <div class="status-indicator" data-bs-toggle="tooltip" title="Connection Status">
+                    <i class="fas fa-wifi"></i>
+                    <span class="indicator-dot online" id="connection-indicator"></span>
+                </div>
+            </div>
         </div>
-    </nav>
+    </header>
 
-    <!-- Main Container -->
-    <div class="container main-container with-compact-header">
-        <div class="row">
-            <!-- Left Sidebar - Sessions & Quick Actions -->
-            <div class="col-lg-3 col-md-4 sidebar-column" id="sidebar-column">
+    <!-- Main Wrapper with Flexbox Layout -->
+    <div class="main-wrapper">
+        <!-- Sidebar Panel -->
+        <aside class="sidebar-panel" id="sidebar-panel">
                 <div class="sidebar-card">
                     <div class="card-header">
                         <h5 class="mb-0">
@@ -125,57 +152,11 @@
                         </button>
                     </div>
                 </div>
-            </div>
+        </aside>
 
-            <!-- Main Content - Workflow Steps -->
-            <div class="col-lg-9 col-md-8">
-                <!-- Progress Indicator -->
-                <div class="workflow-progress mb-4">
-                    <div class="progress-steps">
-                        <div class="step active" id="step-1-indicator" onclick="goToStep(1)" style="cursor: pointer;">
-                            <div class="step-icon">
-                                <i class="fas fa-brain"></i>
-                            </div>
-                            <div class="step-label">Model</div>
-                        </div>
-                        <div class="step-line"></div>
-                        <div class="step" id="step-2-indicator" onclick="goToStep(2)" style="cursor: pointer;">
-                            <div class="step-icon">
-                                <i class="fas fa-database"></i>
-                            </div>
-                            <div class="step-label">Dataset</div>
-                        </div>
-                        <div class="step-line"></div>
-                        <div class="step" id="step-3-indicator" onclick="goToStep(3)" style="cursor: pointer;">
-                            <div class="step-icon">
-                                <i class="fas fa-sliders-h"></i>
-                            </div>
-                            <div class="step-label">Training</div>
-                        </div>
-                        <div class="step-line"></div>
-                        <div class="step" id="step-4-indicator" onclick="goToStep(4)" style="cursor: pointer;">
-                            <div class="step-icon">
-                                <i class="fas fa-dumbbell"></i>
-                            </div>
-                            <div class="step-label">Train</div>
-                        </div>
-                        <div class="step-line"></div>
-                        <div class="step" id="step-5-indicator" onclick="goToStep(5); setTimeout(() => refreshTrainedModels(), 100);" style="cursor: pointer;">
-                            <div class="step-icon">
-                                <i class="fas fa-file-export"></i>
-                            </div>
-                            <div class="step-label">Exports</div>
-                        </div>
-                        <div class="step-line"></div>
-                        <div class="step" id="step-6-indicator" onclick="goToStep(6); setTimeout(() => loadTestableModels(), 100);" style="cursor: pointer;">
-                            <div class="step-icon">
-                                <i class="fas fa-vial"></i>
-                            </div>
-                            <div class="step-label">Test</div>
-                        </div>
-                    </div>
-                </div>
-
+        <!-- Content Area -->
+        <main class="content-area">
+            <div class="content-container">
                 <!-- Step 1: Model Configuration -->
                 <div class="workflow-step" id="step-1">
                     <div class="step-card">
@@ -188,7 +169,7 @@
                                 </span>
                             </div>
                         </div>
-                        <div class="step-content show" id="step-1-content">
+                        <div class="step-content collapse show" id="step-1-content">
                             <!-- Quick Setup Options -->
                             <div class="quick-setup mb-4">
                                 <label class="form-label fw-bold">Quick Setup</label>
@@ -382,11 +363,16 @@
                             <!-- Dataset Source -->
                             <div class="dataset-selection mb-4">
                                 <label class="form-label fw-bold">Dataset Source</label>
-                                <div class="selection-cards cols-2">
+                                <div class="selection-cards cols-3">
                                     <div class="selection-card" onclick="selectDatasetType('popular')" id="dataset-popular">
                                         <i class="fas fa-star"></i>
                                         <span>Public Datasets</span>
                                         <small>Browse available datasets</small>
+                                    </div>
+                                    <div class="selection-card" onclick="selectDatasetType('custom')" id="dataset-custom">
+                                        <i class="fab fa-github"></i>
+                                        <span>Custom HF Dataset</span>
+                                        <small>Any HuggingFace dataset</small>
                                     </div>
                                     <div class="selection-card" onclick="selectDatasetType('upload')" id="dataset-upload">
                                         <i class="fas fa-upload"></i>
@@ -415,6 +401,39 @@
                                     <!-- Dataset Grid -->
                                     <div id="dataset-grid" class="dataset-grid">
                                         <!-- Populated by JavaScript -->
+                                    </div>
+                                </div>
+
+                                <!-- Custom HuggingFace Dataset -->
+                                <div id="dataset-custom-area" style="display: none;">
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <h5 class="card-title">
+                                                <i class="fab fa-github"></i> Custom HuggingFace Dataset
+                                            </h5>
+                                            <p class="text-muted">Enter any HuggingFace dataset name to download and use</p>
+
+                                            <div class="row g-3">
+                                                <div class="col-md-8">
+                                                    <input type="text" class="form-control" id="custom-dataset-name"
+                                                           placeholder="e.g., tatsu-lab/alpaca, openai/gsm8k">
+                                                    <small class="text-muted">Format: username/dataset-name or dataset-name</small>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <input type="text" class="form-control" id="custom-dataset-config"
+                                                           placeholder="Config (optional)">
+                                                    <small class="text-muted">For multi-config datasets</small>
+                                                </div>
+                                            </div>
+
+                                            <button class="btn btn-primary mt-3" onclick="downloadCustomDataset()">
+                                                <i class="fas fa-download"></i> Download Dataset
+                                            </button>
+
+                                            <div class="alert alert-info mt-3">
+                                                <i class="fas fa-info-circle"></i> The app will automatically detect the dataset fields and ask you to map them if needed.
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -808,7 +827,15 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                     <div class="col-md-3">
                                         <div class="form-group">
                                             <label class="form-label">Batch Size</label>
-                                            <input type="number" class="form-control" id="batch-size" value="4" min="1" max="32">
+                                            <input type="number" class="form-control" id="batch-size" value="4" min="1" max="32" onchange="updateValidGenerations()">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-group">
+                                            <label class="form-label">Generations <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Number of responses to generate per prompt (must divide batch size evenly)"></i></label>
+                                            <select class="form-select" id="num-generations">
+                                                <!-- Populated dynamically based on batch size -->
+                                            </select>
                                         </div>
                                     </div>
                                     <div class="col-md-3">
@@ -817,14 +844,14 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                             <input type="number" class="form-control" id="learning-rate" value="0.0002" step="0.00001">
                                         </div>
                                     </div>
+                                </div>
+                                <div class="row mt-3">
                                     <div class="col-md-3">
                                         <div class="form-group">
                                             <label class="form-label">Gradient Accumulation <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Accumulate gradients over multiple steps"></i></label>
                                             <input type="number" class="form-control" id="gradient-accumulation" value="1" min="1" max="32">
                                         </div>
                                     </div>
-                                </div>
-                                <div class="row mt-3">
                                     <div class="col-md-3">
                                         <div class="form-group">
                                             <label class="form-label">Max Sequence Length</label>
@@ -896,12 +923,6 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                             <div class="form-group">
                                                 <label class="form-label">Clip Range</label>
                                                 <input type="number" class="form-control" id="clip-range" value="0.2" min="0" max="1" step="0.05">
-                                            </div>
-                                        </div>
-                                        <div class="col-md-3">
-                                            <div class="form-group">
-                                                <label class="form-label">Generations</label>
-                                                <input type="number" class="form-control" id="num-generations" value="4" min="1" max="10">
                                             </div>
                                         </div>
                                         <div class="col-md-3">
@@ -1147,6 +1168,9 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                             <div id="training-monitor" class="training-monitor" style="display: none;">
                                 <h5 class="section-title">
                                     <i class="fas fa-chart-line"></i> Training Progress
+                                    <small class="text-muted ms-2" style="font-size: 0.7em; font-weight: normal;">
+                                        (Detailed metrics update every 10 steps)
+                                    </small>
                                 </h5>
 
                                 <!-- Metrics Panel -->
@@ -1353,38 +1377,88 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                     <h6 class="card-title fw-bold mb-3">
                                         <i class="fas fa-robot"></i> Model Selection
                                     </h6>
-                                    <div class="row">
-                                        <div class="col-lg-6 mb-3">
-                                            <label class="form-label">Select Trained Model</label>
-                                            <select class="form-select" id="test-model-select" onchange="updateModelInfo()">
-                                                <option value="">Loading models...</option>
-                                            </select>
-                                            <small class="text-muted">Choose from your trained models</small>
-                                        </div>
-                                        <div class="col-lg-6 mb-3">
-                                            <label class="form-label">Or Load from Path</label>
-                                            <div class="input-group">
-                                                <input type="text" class="form-control" id="custom-model-path"
-                                                       placeholder="./outputs/session_id/checkpoints/final">
-                                                <button class="btn btn-outline-secondary" type="button" onclick="loadFromPath()">
-                                                    <i class="fas fa-folder-open"></i> Load
-                                                </button>
-                                            </div>
-                                            <small class="text-muted">Enter path to model checkpoint</small>
+
+                                    <!-- Comparison Mode -->
+                                    <div class="comparison-mode mb-3">
+                                        <label class="form-label fw-semibold">Comparison Mode</label>
+                                        <div class="btn-group w-100" role="group" aria-label="Comparison mode">
+                                            <input type="radio" class="btn-check" name="comparison-mode" id="compare-base" value="base" checked onchange="toggleComparisonMode()">
+                                            <label class="btn btn-outline-primary" for="compare-base">
+                                                <i class="fas fa-cube"></i> Compare with Base Model
+                                            </label>
+                                            <input type="radio" class="btn-check" name="comparison-mode" id="compare-model" value="model" onchange="toggleComparisonMode()">
+                                            <label class="btn btn-outline-primary" for="compare-model">
+                                                <i class="fas fa-exchange-alt"></i> Compare with Another Model
+                                            </label>
                                         </div>
                                     </div>
-                                    <div class="mt-3 d-flex justify-content-between align-items-center">
-                                        <div id="model-info" class="text-muted small">
-                                            <i class="fas fa-info-circle"></i> No model selected
+
+                                    <!-- Primary Model Selection -->
+                                    <div class="primary-model-section mb-3">
+                                        <div class="row">
+                                            <div class="col-12">
+                                                <label class="form-label fw-semibold">
+                                                    <i class="fas fa-star"></i> Primary Model
+                                                </label>
+                                                <select class="form-select" id="test-model-select" onchange="updateModelInfo()">
+                                                    <option value="">Loading models...</option>
+                                                </select>
+                                                <div class="mt-2">
+                                                    <div id="model-info" class="text-muted small">
+                                                        <i class="fas fa-info-circle"></i> No model selected
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <button class="btn btn-primary me-2" onclick="loadModelsForTesting()" id="load-models-btn">
-                                                <i class="fas fa-download"></i> Load Selected
-                                            </button>
-                                            <button class="btn btn-outline-secondary" onclick="clearModelCache()">
-                                                <i class="fas fa-broom"></i> Clear Cache
-                                            </button>
+                                    </div>
+
+                                    <!-- Comparison Model Selection (for model-to-model comparison) -->
+                                    <div class="comparison-model-section mb-3" id="second-model-section" style="display: none;">
+                                        <hr class="my-3">
+                                        <div class="row">
+                                            <div class="col-12">
+                                                <label class="form-label fw-semibold">
+                                                    <i class="fas fa-exchange-alt"></i> Comparison Model
+                                                </label>
+                                                <select class="form-select" id="comparison-model-select" onchange="updateComparisonModelInfo()">
+                                                    <option value="">Select a model to compare against...</option>
+                                                </select>
+                                                <div class="mt-2">
+                                                    <div id="comparison-model-info" class="text-muted small">
+                                                        <i class="fas fa-info-circle"></i> No comparison model selected
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
+                                    </div>
+
+                                    <!-- Load from Path (Optional) -->
+                                    <div class="load-path-section border-top pt-3 mb-3">
+                                        <div class="row">
+                                            <div class="col-12">
+                                                <label class="form-label text-muted">
+                                                    <i class="fas fa-folder-open"></i> Or Load from Custom Path
+                                                </label>
+                                                <div class="input-group">
+                                                    <input type="text" class="form-control" id="custom-model-path"
+                                                           placeholder="./outputs/session_id/checkpoints/final">
+                                                    <button class="btn btn-outline-secondary" type="button" onclick="loadFromPath()">
+                                                        <i class="fas fa-folder-open"></i> Load
+                                                    </button>
+                                                </div>
+                                                <small class="text-muted">Enter path to model checkpoint</small>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Action Buttons -->
+                                    <div class="mt-3 d-flex justify-content-end">
+                                        <button class="btn btn-primary me-2" onclick="loadModelsForTesting()" id="load-models-btn">
+                                            <i class="fas fa-download"></i> Load Selected
+                                        </button>
+                                        <button class="btn btn-outline-secondary" onclick="clearModelCache()">
+                                            <i class="fas fa-broom"></i> Clear Cache
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -1446,7 +1520,7 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                     <div class="col-lg-6 mb-3">
                                         <div class="card border-success">
                                             <div class="card-header bg-success text-white">
-                                                <i class="fas fa-graduation-cap"></i> Trained Model
+                                                <i class="fas fa-graduation-cap"></i> <span id="primary-model-name">Trained Model</span>
                                                 <span class="badge bg-white text-success float-end" id="trained-time">-</span>
                                             </div>
                                             <div class="card-body">
@@ -1465,8 +1539,8 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                     <!-- Base Model Response -->
                                     <div class="col-lg-6 mb-3">
                                         <div class="card border-primary">
-                                            <div class="card-header bg-primary text-white">
-                                                <i class="fas fa-cube"></i> Base Model
+                                            <div class="card-header bg-primary text-white" id="comparison-card-header">
+                                                <i class="fas fa-cube" id="comparison-icon"></i> <span id="comparison-model-name">Base Model</span>
                                                 <span class="badge bg-white text-primary float-end" id="base-time">-</span>
                                             </div>
                                             <div class="card-body">
@@ -1529,14 +1603,15 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                         </div>
                     </div>
                 </div>
+                    </div>
+                </div>
+                <!-- End of Step 6 -->
             </div>
-            <!-- End of Step 6 -->
-        </div>
-        <!-- End of col-lg-9 main content -->
+            <!-- End of content-container -->
+        </main>
+        <!-- End of content-area -->
     </div>
-    <!-- End of row -->
-</div>
-<!-- End of container-fluid -->
+    <!-- End of main-wrapper -->
 
     <!-- Modals -->
     <!-- System Info Modal -->

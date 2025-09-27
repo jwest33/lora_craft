@@ -331,14 +331,30 @@ class GRPOModelTrainer:
         """
         logger.info("Starting pre-fine-tuning phase")
 
+        # Store original tokenizer configuration
+        original_padding_side = self.tokenizer.padding_side if hasattr(self.tokenizer, 'padding_side') else None
+
         # Ensure chat template is set on tokenizer
         if hasattr(template, 'setup_for_unsloth') and self.tokenizer:
             template.setup_for_unsloth(self.tokenizer)
             logger.info(f"Applied chat template: {template.config.model_type}")
 
+        # Set padding side to 'right' for training (required by DataCollatorForLanguageModeling)
+        self.tokenizer.padding_side = 'right'
+
         # Apply template to dataset (just format, don't tokenize yet)
         def apply_template(example):
-            formatted = template.apply(example, mode='training')
+            # Ensure we're formatting correctly with instruction and response fields
+            if 'instruction' in example:
+                # Create a proper message format for the template
+                messages = [
+                    {'role': 'user', 'content': example.get('instruction', '')},
+                    {'role': 'assistant', 'content': example.get('response', example.get('output', ''))}
+                ]
+                formatted = template.apply(messages, mode='training')
+            else:
+                # Fallback to original behavior
+                formatted = template.apply(example, mode='training')
             return {'text': formatted}
 
         formatted_dataset = dataset.map(
@@ -400,9 +416,31 @@ class GRPOModelTrainer:
         # Train
         train_result = trainer.train()
 
+        # Clear the environment variable to avoid issues with generation later
+        if 'UNSLOTH_RETURN_LOGITS' in os.environ:
+            del os.environ['UNSLOTH_RETURN_LOGITS']
+            logger.info("Cleared UNSLOTH_RETURN_LOGITS environment variable")
+
         # Save pre-trained model
         pre_trained_path = Path(self.config.checkpoint_dir) / "pre_trained"
         trainer.save_model(pre_trained_path)
+
+        # Restore original tokenizer configuration for generation
+        if original_padding_side is not None:
+            self.tokenizer.padding_side = original_padding_side
+            logger.info(f"Restored tokenizer padding_side to '{original_padding_side}' for generation")
+        else:
+            # Default to left for generation if not set
+            self.tokenizer.padding_side = 'left'
+            logger.info("Set tokenizer padding_side to 'left' for generation")
+
+        # Ensure model is in eval mode after training
+        self.model.eval()
+
+        # Clear any cached compiled functions from Unsloth
+        if hasattr(self.model, '_clear_cache'):
+            self.model._clear_cache()
+            logger.info("Cleared model compilation cache")
 
         logger.info(f"Pre-fine-tuning completed. Model saved to {pre_trained_path}")
 
@@ -512,15 +550,15 @@ class GRPOModelTrainer:
 
         # Clear Unsloth compilation cache if it exists to avoid conflicts
         cache_dir = Path("./unsloth_compiled_cache")
-        if cache_dir.exists():
-            try:
-                import shutil
+        #if cache_dir.exists():
+        #    try:
+        #        import shutil
                 # Rename instead of delete to preserve for debugging
-                backup_dir = Path(f"./unsloth_compiled_cache_backup_{int(time.time())}")
-                shutil.move(str(cache_dir), str(backup_dir))
-                logger.info(f"Moved compilation cache to {backup_dir}")
-            except Exception as e:
-                logger.warning(f"Could not move compilation cache: {e}")
+        #        backup_dir = Path(f"./unsloth_compiled_cache_backup_{int(time.time())}")
+                # shutil.move(str(cache_dir), str(backup_dir))
+                #logger.info(f"Moved compilation cache to {backup_dir}")
+        #    except Exception as e:
+        #        logger.warning(f"Could not move compilation cache: {e}")
 
         # Ensure chat template is applied to tokenizer if not already done
         if hasattr(template, 'setup_for_unsloth') and self.tokenizer and not hasattr(self.tokenizer, '_template_applied'):
@@ -617,9 +655,24 @@ class GRPOModelTrainer:
         # Custom logging callback
         original_log = trainer.log
         parent = self  # Reference to GRPOModelTrainer for callbacks
+        last_step_reported = 0  # Track last reported step
 
         def custom_log(logs, start_time=None):
+            nonlocal last_step_reported
+
             if logs and isinstance(logs, dict):
+                # Check if we have step information
+                current_step = None
+                if hasattr(trainer, 'state') and hasattr(trainer.state, 'global_step'):
+                    current_step = trainer.state.global_step
+
+                # Send lightweight step updates if step changed
+                if current_step and current_step > last_step_reported:
+                    last_step_reported = current_step
+                    # Send simple step update
+                    if parent.metrics_callback:
+                        parent.metrics_callback({'step': current_step, 'total_steps': max_steps})
+
                 # Only process logs that contain actual training metrics (not intermediate logs)
                 has_reward_data = 'reward' in logs or 'rewards/reward_wrapper/mean' in logs
 
