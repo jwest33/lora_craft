@@ -6105,7 +6105,8 @@ let selectedTestModel = null;
 let selectedComparisonModel = null;
 let testHistory = [];
 let comparisonMode = 'base';
-let batchTestData = null;
+let batchTestData = null;  // Will store the sample data array
+let batchTestMetadata = null;  // Will store the full upload response
 let batchTestColumns = [];
 
 async function loadTestableModels() {
@@ -6947,7 +6948,8 @@ async function handleBatchTestFileUpload() {
 
         const response = await fetch('/api/test/upload-file', {
             method: 'POST',
-            body: formData
+            body: formData,
+            credentials: 'include'  // Include session cookies
         });
 
         if (!response.ok) {
@@ -6957,9 +6959,10 @@ async function handleBatchTestFileUpload() {
 
         const result = await response.json();
 
-        // Store data
-        batchTestData = result;
+        // Store data properly
+        batchTestData = result.samples || [];  // Store the actual sample data
         batchTestColumns = result.columns;
+        batchTestMetadata = result;  // Store full metadata
 
         // Update UI
         fileDetails.innerHTML = `
@@ -7039,6 +7042,7 @@ function clearBatchTestFile() {
     document.getElementById('batch-test-options').style.display = 'none';
     document.getElementById('batch-results').style.display = 'none';
     batchTestData = null;
+    batchTestMetadata = null;
     batchTestColumns = [];
 }
 
@@ -7053,9 +7057,12 @@ function updateBatchCompareButton() {
 }
 
 async function runBatchComparison() {
+    console.log('Starting batch comparison...');
+
     // Check if we have a model selected
     const primarySelect = document.getElementById('batch-test-model-select');
     const sessionId = primarySelect.value;
+    console.log('Selected session ID:', sessionId);
 
     if (!sessionId) {
         showAlert('Please select a trained model', 'warning');
@@ -7074,7 +7081,9 @@ async function runBatchComparison() {
     }
 
     // Auto-load models if not already loaded
+    console.log('Current batchSelectedTestModel:', batchSelectedTestModel);
     if (!batchSelectedTestModel || batchSelectedTestModel.sessionId !== sessionId) {
+        console.log('Need to load models...');
         const compareBtn = document.getElementById('batch-compare-btn');
         compareBtn.disabled = true;
         compareBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading models...';
@@ -7095,7 +7104,8 @@ async function runBatchComparison() {
                 body: JSON.stringify({
                     session_id: sessionId,
                     base_model: baseModel
-                })
+                }),
+                credentials: 'include'  // Include session cookies
             });
 
             if (!response.ok) {
@@ -7104,6 +7114,7 @@ async function runBatchComparison() {
             }
 
             const result = await response.json();
+            console.log('Model loaded successfully:', result);
 
             // Store model info
             batchSelectedTestModel = {
@@ -7111,6 +7122,7 @@ async function runBatchComparison() {
                 baseModel: baseModel,
                 trainedModel: result.trained_model
             };
+            console.log('Stored batchSelectedTestModel:', batchSelectedTestModel);
 
             // If comparing with another model, store that too
             if (batchComparisonMode === 'model') {
@@ -7131,12 +7143,23 @@ async function runBatchComparison() {
             compareBtn.innerHTML = '<i class="fas fa-play"></i> Run Batch Comparison';
             return;
         }
+    } else {
+        console.log('Models already loaded, using existing:', batchSelectedTestModel);
     }
 
     const responseColumn = document.getElementById('batch-response-column').value;
     const sampleSize = document.getElementById('batch-sample-size').value;
     const useChatTemplate = document.getElementById('batch-use-chat-template').checked;
     const evaluateResponses = document.getElementById('batch-evaluate-responses').checked && responseColumn;
+
+    console.log('Batch comparison parameters:', {
+        instructionColumn,
+        responseColumn,
+        sampleSize,
+        useChatTemplate,
+        evaluateResponses,
+        batchComparisonMode
+    });
 
     const compareBtn = document.getElementById('batch-compare-btn');
     compareBtn.disabled = true;
@@ -7148,11 +7171,32 @@ async function runBatchComparison() {
     document.getElementById('batch-summary').style.display = 'none';
     document.getElementById('batch-results-body').innerHTML = '';
 
-    // Reset progress bar
+    // Reset progress bar and step counter
     const progressBar = document.querySelector('#batch-progress .progress-bar');
     progressBar.style.width = '0%';
 
+    // Calculate total items to process
+    // Use metadata sample_count since batchTestData only contains first 5 samples
+    const totalItems = sampleSize ? Math.min(parseInt(sampleSize), batchTestMetadata?.sample_count || 0) : (batchTestMetadata?.sample_count || 0);
+
+    // Initialize step counter
+    const stepCounter = document.getElementById('batch-step-counter');
+    const currentItemText = document.querySelector('#batch-current-item span');
+    stepCounter.textContent = `0 / ${totalItems}`;
+    currentItemText.textContent = 'Preparing batch comparison...';
+
+    // Track progress interval for cleanup
+    let progressInterval = null;
+
     try {
+        // Validate required data
+        if (!batchSelectedTestModel) {
+            throw new Error('Models not loaded properly');
+        }
+        if (!batchTestMetadata || !batchTestMetadata.sample_count) {
+            throw new Error('No test file uploaded or file has no data');
+        }
+
         // Prepare request data
         const requestData = {
             session_id: batchSelectedTestModel.sessionId,
@@ -7172,21 +7216,73 @@ async function runBatchComparison() {
             }
         };
 
-        // Simulate progress (actual progress would come from WebSocket)
-        let progress = 0;
-        const progressInterval = setInterval(() => {
-            progress = Math.min(progress + 5, 90);
-            progressBar.style.width = `${progress}%`;
-        }, 500);
+        console.log('Request data prepared:', requestData);
 
-        const response = await fetch('/api/test/batch-compare', {
+        // Log data structure for debugging
+        console.log('batchTestData structure:', {
+            samplesLength: batchTestData ? batchTestData.length : 0,
+            totalCount: batchTestMetadata?.sample_count || 0,
+            firstSample: batchTestData && batchTestData.length > 0 ? batchTestData[0] : null,
+            columns: batchTestColumns
+        });
+
+        // Start the batch comparison request immediately
+        console.log('Sending batch comparison request to server...');
+        const responsePromise = fetch('/api/test/batch-compare', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestData)
+            body: JSON.stringify(requestData),
+            credentials: 'include'  // Include session cookies - CRITICAL!
         });
+
+        // Simulate progress with step counter updates (runs alongside the request)
+        let currentStep = 0;
+        currentItemText.textContent = 'Starting batch comparison...';
+
+        progressInterval = setInterval(() => {
+            try {
+                // Update progress based on estimated time per item
+                currentStep = Math.min(currentStep + 1, Math.floor(totalItems * 0.9));
+                const progress = (currentStep / totalItems) * 100;
+                progressBar.style.width = `${Math.min(progress, 90)}%`;
+
+                // Update step counter
+                stepCounter.textContent = `${currentStep} / ${totalItems}`;
+
+                // Try to update current item text with sample instruction
+                if (currentStep > 0 && currentStep <= totalItems) {
+                    // We only have the first 5 samples in batchTestData
+                    if (batchTestData && batchTestData.length > 0 && currentStep <= batchTestData.length) {
+                        try {
+                            const itemIndex = currentStep - 1;
+                            const currentInstruction = batchTestData[itemIndex][instructionColumn];
+                            const truncatedInstruction = currentInstruction && currentInstruction.length > 50
+                                ? currentInstruction.substring(0, 50) + '...'
+                                : currentInstruction || 'Processing...';
+                            currentItemText.textContent = `Processing: "${truncatedInstruction}"`;
+                        } catch (innerError) {
+                            // If we can't get the instruction, just show a generic message
+                            currentItemText.textContent = `Processing item ${currentStep} of ${totalItems}...`;
+                        }
+                    } else {
+                        // For items beyond the sample, show generic message
+                        currentItemText.textContent = `Processing item ${currentStep} of ${totalItems}...`;
+                    }
+                }
+            } catch (intervalError) {
+                console.error('Error in progress interval:', intervalError);
+                // Don't clear the interval, just log the error and continue
+            }
+        }, 800); // Update roughly every 0.8 seconds
+
+        // Wait for the response
+        const response = await responsePromise;
+        console.log('Response received:', response.status, response.statusText);
 
         clearInterval(progressInterval);
         progressBar.style.width = '100%';
+        stepCounter.textContent = `${totalItems} / ${totalItems}`;
+        currentItemText.textContent = 'Complete!';
 
         if (!response.ok) {
             const error = await response.json();
@@ -7194,6 +7290,7 @@ async function runBatchComparison() {
         }
 
         const result = await response.json();
+        console.log('Batch comparison result:', result);
 
         // Display results
         displayBatchResults(result, evaluateResponses);
@@ -7205,9 +7302,27 @@ async function runBatchComparison() {
 
     } catch (error) {
         console.error('Batch comparison failed:', error);
+        console.error('Error details:', {
+            message: error.message,
+            stack: error.stack,
+            batchSelectedTestModel,
+            batchTestSamples: batchTestData ? `${batchTestData.length} samples` : 'null',
+            batchTestMetadata: batchTestMetadata ? `${batchTestMetadata.sample_count} total rows` : 'null'
+        });
+
+        // Clear the progress interval if it's running
+        if (progressInterval) {
+            clearInterval(progressInterval);
+            progressInterval = null;
+        }
+
         showAlert('Batch comparison failed: ' + error.message, 'danger');
         document.getElementById('batch-progress').style.display = 'none';
     } finally {
+        // Ensure interval is cleared
+        if (progressInterval) {
+            clearInterval(progressInterval);
+        }
         compareBtn.disabled = false;
         compareBtn.innerHTML = '<i class="fas fa-play"></i> Run Batch Comparison';
     }

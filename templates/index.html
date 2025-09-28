@@ -1926,8 +1926,17 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                             </h6>
 
                                             <!-- Progress Bar -->
-                                            <div class="progress mb-3" id="batch-progress" style="display: none;">
-                                                <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                                            <div id="batch-progress" style="display: none;">
+                                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                                    <span class="text-muted">Processing:</span>
+                                                    <span id="batch-step-counter" class="badge bg-info">0 / 0</span>
+                                                </div>
+                                                <div class="progress mb-2">
+                                                    <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                                                </div>
+                                                <div id="batch-current-item" class="text-center text-muted small mb-3">
+                                                    <i class="fas fa-spinner fa-spin"></i> <span>Initializing...</span>
+                                                </div>
                                             </div>
 
                                             <!-- Summary Statistics -->
