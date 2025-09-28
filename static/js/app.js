@@ -158,12 +158,8 @@ function initializeSocketIO() {
 
     // Export progress updates
     socket.on('export_progress', function(data) {
-        const progressBar = document.getElementById('export-progress-bar');
         const statusText = document.getElementById('export-status');
 
-        if (progressBar) {
-            progressBar.style.width = `${data.progress}%`;
-        }
         if (statusText) {
             statusText.textContent = data.message || 'Exporting...';
         }
@@ -303,6 +299,12 @@ function goToStep(stepNum) {
     if (stepNum === 6) {
         setTimeout(() => {
             loadTestableModels();
+        }, 100);
+    }
+    // If navigating to evaluation section (step 7), load evaluation models
+    if (stepNum === 7) {
+        setTimeout(() => {
+            loadEvaluationModels();
         }, 100);
     }
 
@@ -477,6 +479,11 @@ function updateValidGenerations() {
     const batchSize = parseInt(batchSizeInput.value) || 4;
     const generationsSelect = document.getElementById('num-generations');
 
+    // Exit if elements don't exist yet
+    if (!batchSizeInput || !generationsSelect) {
+        return;
+    }
+
     // Calculate valid divisors of batch size
     const validOptions = getDivisors(batchSize);
 
@@ -488,16 +495,11 @@ function updateValidGenerations() {
         const option = document.createElement('option');
         option.value = value;
         option.textContent = value;
-
-        // Select the batch size by default
-        if (value === batchSize) {
-            option.selected = true;
-        }
-
         generationsSelect.appendChild(option);
     });
 
-    // Explicitly set the value to ensure it's selected
+    // Always set the value to batch size (the last and largest divisor)
+    // This ensures generations matches batch size by default
     generationsSelect.value = batchSize;
 
     // Update config summary if needed
@@ -1040,10 +1042,8 @@ function createUploadProgressModal() {
 
 function updateUploadProgress(modal, message, percent) {
     const messageEl = modal.querySelector('.upload-progress-message');
-    const progressBar = modal.querySelector('.progress-bar');
 
     if (messageEl) messageEl.textContent = message;
-    if (progressBar) progressBar.style.width = `${percent}%`;
 }
 
 async function loadUploadedDatasets() {
@@ -2937,14 +2937,13 @@ function resetCharts() {
 }
 
 function updateTrainingProgress(progress) {
-    // Update main progress bar (if exists)
-    const progressBar = document.getElementById('training-progress');
-    if (progressBar) {
-        progressBar.style.width = progress + '%';
-        progressBar.textContent = progress + '%';
+    // Update training status display (if exists)
+    const statusEl = document.getElementById('training-status');
+    if (statusEl) {
+        statusEl.textContent = `Training progress: ${progress}%`;
 
         if (progress >= 100) {
-            progressBar.classList.remove('progress-bar-animated');
+            statusEl.textContent = 'Training complete!';
         }
     }
 
@@ -3961,6 +3960,40 @@ function showHelp() {
     window.open('https://github.com/jwest33/gpro_lora', '_blank');
 }
 
+function showAppInfo() {
+    const modal = new bootstrap.Modal(document.getElementById('appInfoModal'));
+    modal.show();
+}
+
+// Show styled delete confirmation modal
+function showDeleteConfirmation(title, message, onConfirm) {
+    // Set title and message
+    document.getElementById('delete-confirm-title').textContent = title;
+    document.getElementById('delete-confirm-message').innerHTML = message;
+
+    // Get modal elements
+    const modalElement = document.getElementById('deleteConfirmModal');
+    const confirmBtn = document.getElementById('delete-confirm-btn');
+
+    // Create modal instance
+    const modal = new bootstrap.Modal(modalElement);
+
+    // Remove any existing event listeners
+    const newConfirmBtn = confirmBtn.cloneNode(true);
+    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+    // Add new event listener for confirm button
+    newConfirmBtn.addEventListener('click', function() {
+        modal.hide();
+        if (onConfirm) {
+            onConfirm();
+        }
+    });
+
+    // Show the modal
+    modal.show();
+}
+
 function applyConfigToUI(config) {
     // Apply configuration values to UI elements
 
@@ -4354,7 +4387,10 @@ function setupEventListeners() {
     document.getElementById('model-family')?.addEventListener('change', updateConfigSummary);
     document.getElementById('dataset-path')?.addEventListener('input', updateConfigSummary);
     document.getElementById('num-epochs')?.addEventListener('input', updateConfigSummary);
-    document.getElementById('batch-size')?.addEventListener('input', updateConfigSummary);
+    document.getElementById('batch-size')?.addEventListener('input', () => {
+        updateConfigSummary();
+        updateValidGenerations();  // Update generations dropdown when batch size changes
+    });
     document.getElementById('learning-rate')?.addEventListener('input', updateConfigSummary);
 
     // Model configuration mode handlers
@@ -5447,61 +5483,230 @@ async function generateExportName(sessionId) {
         if (response.ok) {
             const session = await response.json();
 
-            // Try to get dataset name from multiple sources
-            let datasetName = 'dataset';
-
-            // Priority 1: Check session.dataset_name or session.dataset
-            if (session.dataset_name) {
-                datasetName = session.dataset_name;
-            } else if (session.dataset) {
-                datasetName = session.dataset;
-            }
-            // Priority 2: Check config.dataset_name or config.dataset_path
-            else if (session.config?.dataset_name) {
-                datasetName = session.config.dataset_name;
-            } else if (session.config?.dataset_path) {
-                datasetName = session.config.dataset_path;
-            }
-            // Priority 3: Check config.dataset_source
-            else if (session.config?.dataset_source === 'popular' && session.config?.dataset_config) {
-                // Try to extract from dataset config
-                const configData = typeof session.config.dataset_config === 'string'
-                    ? JSON.parse(session.config.dataset_config)
-                    : session.config.dataset_config;
-                if (configData?.name) {
-                    datasetName = configData.name;
-                }
-            }
-
-            // Clean up dataset name - remove paths and special chars
-            datasetName = datasetName.split('/').pop().replace(/[^a-zA-Z0-9]/g, '_');
-
-            // Use display_name if available and includes dataset
-            if (session.display_name && session.display_name.toLowerCase().includes(datasetName.toLowerCase())) {
+            // Use display_name if it's custom (not auto-generated)
+            if (session.display_name && session.config?.display_name) {
                 const cleanName = session.display_name.replace(/[^a-zA-Z0-9]/g, '_');
                 const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-                return `${cleanName}_${timestamp}`;
+                return `${cleanName}_export_${timestamp}`;
             }
 
-            // Otherwise generate from model and dataset names
-            const modelName = (session.model || session.config?.model_name || 'model').split('/').pop().replace(/[^a-zA-Z0-9]/g, '_');
+            // Get model name and dataset name from session
+            let modelName = session.model_name || 'model';
+            let datasetName = session.dataset_path || 'dataset';
+
+            // Clean up names - remove special chars
+            modelName = modelName.replace(/[^a-zA-Z0-9]/g, '_');
+            datasetName = datasetName.replace(/[^a-zA-Z0-9]/g, '_');
+
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
 
-            // Always include dataset name in export
-            return `${modelName}_${datasetName}_${timestamp}`;
+            // Generate name with model and dataset
+            return `${modelName}_${datasetName}_export_${timestamp}`;
         }
     } catch (error) {
         console.error('Failed to fetch session data for export name:', error);
     }
 
-    // Fallback name if API call fails - try to get dataset from current form
-    const datasetPath = document.getElementById('dataset-path')?.value;
-    const datasetName = datasetPath ? datasetPath.split('/').pop().replace(/[^a-zA-Z0-9]/g, '_') : 'dataset';
+    // Fallback name if API call fails
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-    return `model_${datasetName}_${timestamp}`;
+    return `model_export_${timestamp}`;
 }
 
 
+
+// Evaluation Module Functions
+let evalTestData = null;
+let evalResults = null;
+
+async function loadEvaluationModels() {
+    try {
+        const response = await fetch('/api/test/models');
+        const data = await response.json();
+        const models = data.models || [];
+
+        const select = document.getElementById('eval-model-select');
+        if (!select) return;
+
+        select.innerHTML = '<option value="">Select a model...</option>';
+        models.forEach(model => {
+            const option = document.createElement('option');
+            option.value = model.session_id;
+            option.textContent = model.name || `Model ${model.session_id.slice(0, 8)}`;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Failed to load models for evaluation:', error);
+    }
+}
+
+function updateEvalModelInfo() {
+    const select = document.getElementById('eval-model-select');
+    const infoDiv = document.getElementById('eval-model-info');
+
+    if (select.value) {
+        infoDiv.innerHTML = `<i class="fas fa-check-circle text-success"></i> Model selected`;
+        checkEvalReadiness();
+    } else {
+        infoDiv.innerHTML = '';
+    }
+}
+
+function handleEvalFileUpload() {
+    const fileInput = document.getElementById('eval-test-file');
+    const file = fileInput.files[0];
+
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            // Parse CSV
+            const lines = e.target.result.split('\n');
+            const headers = lines[0].split(',').map(h => h.trim());
+
+            evalTestData = {
+                headers: headers,
+                rows: []
+            };
+
+            for (let i = 1; i < lines.length; i++) {
+                if (lines[i].trim()) {
+                    const values = lines[i].split(',').map(v => v.trim());
+                    const row = {};
+                    headers.forEach((h, idx) => {
+                        row[h] = values[idx] || '';
+                    });
+                    evalTestData.rows.push(row);
+                }
+            }
+
+            // Update UI
+            document.getElementById('eval-file-info').innerHTML =
+                `<i class="fas fa-check-circle text-success"></i> Loaded ${evalTestData.rows.length} test cases`;
+
+            checkEvalReadiness();
+        } catch (error) {
+            console.error('Error parsing CSV:', error);
+            showAlert('Failed to parse CSV file', 'danger');
+        }
+    };
+    reader.readAsText(file);
+}
+
+function checkEvalReadiness() {
+    const modelSelected = document.getElementById('eval-model-select').value;
+    const fileUploaded = evalTestData !== null;
+
+    const runBtn = document.getElementById('run-eval-btn');
+    runBtn.disabled = !(modelSelected && fileUploaded);
+}
+
+async function runEvaluation() {
+    const modelId = document.getElementById('eval-model-select').value;
+    const inputCol = document.getElementById('eval-input-column').value;
+    const outputCol = document.getElementById('eval-output-column').value;
+    const maxSamples = parseInt(document.getElementById('eval-max-samples').value);
+    const promptTemplate = document.getElementById('eval-prompt-template').value;
+
+    if (!evalTestData) {
+        showAlert('Please upload test data', 'warning');
+        return;
+    }
+
+    // Prepare test cases
+    const testCases = evalTestData.rows.slice(0, maxSamples).map(row => ({
+        input: row[inputCol] || '',
+        expected: row[outputCol] || ''
+    }));
+
+    const runBtn = document.getElementById('run-eval-btn');
+    runBtn.disabled = true;
+    runBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running Evaluation...';
+
+    try {
+        const response = await fetch('/api/evaluate', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                session_id: modelId,
+                test_cases: testCases,
+                prompt_template: promptTemplate,
+                config: {
+                    temperature: 0.1,
+                    max_new_tokens: 256,
+                    top_p: 0.95
+                }
+            })
+        });
+
+        if (!response.ok) throw new Error('Evaluation failed');
+
+        evalResults = await response.json();
+        displayEvaluationResults(evalResults);
+
+    } catch (error) {
+        console.error('Evaluation error:', error);
+        showAlert('Failed to run evaluation', 'danger');
+    } finally {
+        runBtn.disabled = false;
+        runBtn.innerHTML = '<i class="fas fa-play"></i> Run Evaluation';
+    }
+}
+
+function displayEvaluationResults(results) {
+    // Show results section
+    document.getElementById('eval-results').style.display = 'block';
+
+    // Update metrics
+    document.getElementById('eval-accuracy').textContent =
+        (results.metrics.accuracy * 100).toFixed(1) + '%';
+    document.getElementById('eval-precision').textContent =
+        (results.metrics.precision * 100).toFixed(1) + '%';
+    document.getElementById('eval-recall').textContent =
+        (results.metrics.recall * 100).toFixed(1) + '%';
+    document.getElementById('eval-f1').textContent =
+        results.metrics.f1_score.toFixed(3);
+
+    // Update details table
+    const tbody = document.getElementById('eval-details-body');
+    tbody.innerHTML = '';
+
+    results.details.forEach(detail => {
+        const row = tbody.insertRow();
+        row.innerHTML = `
+            <td class="text-truncate" style="max-width: 200px;" title="${detail.input}">${detail.input}</td>
+            <td class="text-truncate" style="max-width: 200px;" title="${detail.expected}">${detail.expected}</td>
+            <td class="text-truncate" style="max-width: 200px;" title="${detail.output}">${detail.output}</td>
+            <td>${detail.match ?
+                '<i class="fas fa-check text-success"></i>' :
+                '<i class="fas fa-times text-danger"></i>'}</td>
+        `;
+    });
+}
+
+function exportEvalResults() {
+    if (!evalResults) return;
+
+    // Convert results to CSV
+    const csv = [
+        ['Input', 'Expected', 'Model Output', 'Match'],
+        ...evalResults.details.map(d => [
+            d.input,
+            d.expected,
+            d.output,
+            d.match ? 'Yes' : 'No'
+        ])
+    ].map(row => row.join(',')).join('\n');
+
+    // Download CSV
+    const blob = new Blob([csv], {type: 'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'evaluation_results.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+}
 
 // Make functions globally accessible
 // (Removed references to deleted Quick Actions functions)
@@ -5879,59 +6084,70 @@ async function deleteModel(sessionId) {
     const model = trainedModels.find(m => m.session_id === sessionId);
     const modelName = model ? generateModelDisplayName(model) : sessionId.substring(0, 8) + '...';
 
-    if (!confirm(`Are you sure you want to delete this model?\n\n${modelName}\n\nThis will permanently delete:\n• All model checkpoints\n• All exports\n• Training history\n\nThis action cannot be undone!`)) {
-        return;
-    }
+    const message = `
+        <h6 class="mb-3">${modelName}</h6>
+        <p>This will permanently delete:</p>
+        <ul class="text-start">
+            <li>All model checkpoints</li>
+            <li>All exports</li>
+            <li>Training history</li>
+        </ul>
+    `;
 
-    try {
-        const response = await fetch(`/api/models/${sessionId}`, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' }
-        });
+    showDeleteConfirmation('Delete Model', message, async () => {
+        try {
+            const response = await fetch(`/api/models/${sessionId}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' }
+            });
 
-        const result = await response.json();
+            const result = await response.json();
 
-        if (response.ok) {
-            showAlert(`Model deleted successfully`, 'success');
-            // Refresh the models list
-            refreshTrainedModels();
-            // Also refresh export history
-            refreshExportHistory();
-        } else {
-            showAlert(`Failed to delete model: ${result.error}`, 'danger');
+            if (response.ok) {
+                showAlert(`Model deleted successfully`, 'success');
+                // Refresh the models list
+                refreshTrainedModels();
+                // Also refresh export history
+                refreshExportHistory();
+            } else {
+                showAlert(`Failed to delete model: ${result.error}`, 'danger');
+            }
+        } catch (error) {
+            console.error('Delete model error:', error);
+            showAlert('Failed to delete model: ' + error.message, 'danger');
         }
-    } catch (error) {
-        console.error('Delete model error:', error);
-        showAlert('Failed to delete model: ' + error.message, 'danger');
-    }
+    });
 }
 
 async function deleteExport(sessionId, exportFormat, exportName) {
     const displayName = `${exportFormat.toUpperCase()} - ${exportName}`;
 
-    if (!confirm(`Are you sure you want to delete this export?\n\n${displayName}\n\nThis action cannot be undone!`)) {
-        return;
-    }
+    const message = `
+        <h6 class="mb-3">${displayName}</h6>
+        <p>Are you sure you want to delete this export?</p>
+    `;
 
-    try {
-        const response = await fetch(`/api/export/${sessionId}/${exportFormat}/${exportName}`, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' }
-        });
+    showDeleteConfirmation('Delete Export', message, async () => {
+        try {
+            const response = await fetch(`/api/export/${sessionId}/${exportFormat}/${exportName}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' }
+            });
 
-        const result = await response.json();
+            const result = await response.json();
 
-        if (response.ok) {
-            showAlert(`Export deleted successfully`, 'success');
-            // Refresh export history
-            refreshExportHistory();
-        } else {
-            showAlert(`Failed to delete export: ${result.error}`, 'danger');
+            if (response.ok) {
+                showAlert(`Export deleted successfully`, 'success');
+                // Refresh export history
+                refreshExportHistory();
+            } else {
+                showAlert(`Failed to delete export: ${result.error}`, 'danger');
+            }
+        } catch (error) {
+            console.error('Delete export error:', error);
+            showAlert('Failed to delete export: ' + error.message, 'danger');
         }
-    } catch (error) {
-        console.error('Delete export error:', error);
-        showAlert('Failed to delete export: ' + error.message, 'danger');
-    }
+    });
 }
 
 // Initialize export formats on page load
@@ -6357,6 +6573,24 @@ async function compareModels() {
     // Show results section
     document.getElementById('comparison-results').style.display = 'block';
 
+    // Update model names in the comparison cards
+    const primaryModelNameElement = document.getElementById('primary-model-name');
+    const comparisonModelNameElement = document.getElementById('comparison-model-name');
+
+    // Set primary model name
+    if (primaryModelNameElement && selectedTestModel) {
+        primaryModelNameElement.textContent = selectedTestModel.name || 'Trained Model';
+    }
+
+    // Set comparison model name based on mode
+    if (comparisonModelNameElement) {
+        if (comparisonMode === 'base') {
+            comparisonModelNameElement.textContent = 'Base Model';
+        } else if (selectedComparisonModel) {
+            comparisonModelNameElement.textContent = selectedComparisonModel.name || 'Comparison Model';
+        }
+    }
+
     // Reset results for streaming
     const trainedResponseDiv = document.getElementById('trained-response');
     const baseResponseDiv = document.getElementById('base-response');
@@ -6550,21 +6784,23 @@ function viewTestResult(index) {
 }
 
 async function clearModelCache() {
-    if (!confirm('Clear all loaded models from memory?')) {
-        return;
-    }
+    const message = `
+        <p>This will clear all loaded models from memory.</p>
+        <p class="mt-2">You'll need to reload models before testing again.</p>
+    `;
 
-    try {
-        const response = await fetch('/api/test/clear-cache', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({})
-        });
+    showDeleteConfirmation('Clear Model Cache', message, async () => {
+        try {
+            const response = await fetch('/api/test/clear-cache', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
 
-        const result = await response.json();
-        if (result.success) {
-            showAlert('Model cache cleared', 'success');
-            selectedTestModel = null;
+            const result = await response.json();
+            if (result.success) {
+                showAlert('Model cache cleared', 'success');
+                selectedTestModel = null;
             document.getElementById('compare-btn').disabled = true;
 
             // Reset load button to default state
@@ -6582,11 +6818,11 @@ async function clearModelCache() {
                 statusDiv.style.display = 'none';
             }
         }
-
-    } catch (error) {
-        console.error('Failed to clear cache:', error);
-        showAlert('Failed to clear cache', 'danger');
-    }
+        } catch (error) {
+            console.error('Failed to clear cache:', error);
+            showAlert('Failed to clear cache', 'danger');
+        }
+    });
 }
 
 // Update range sliders

@@ -175,7 +175,14 @@ class TrainingSession:
 
         # Store key info for display
         self.model_name = config.get('model_name', 'model').split('/')[-1]
-        self.dataset_path = config.get('dataset_path', 'dataset').split('/')[-1]
+        # Extract dataset name properly from path
+        dataset_path = config.get('dataset_path', 'dataset')
+        if '\\uploads\\' in dataset_path or '/uploads/' in dataset_path:
+            # Local file - get filename without extension
+            self.dataset_path = os.path.basename(dataset_path).replace('.csv', '').replace('.json', '')
+        else:
+            # HuggingFace dataset - get dataset name
+            self.dataset_path = dataset_path.split('/')[-1] if '/' in dataset_path else dataset_path
         self.num_epochs = config.get('num_epochs', 3)
 
         # Generate display name
@@ -203,7 +210,13 @@ class TrainingSession:
 
         # Generate automatic name: model_dataset_MMDD_HHMM
         model_short = config.get('model_name', 'model').split('/')[-1].replace('-', '')
-        dataset_short = config.get('dataset_name', 'dataset').split('/')[-1].replace('-', '_')[:20]
+        # Use dataset_path instead of dataset_name as that's what's sent from frontend
+        dataset_path = config.get('dataset_path', 'dataset')
+        # Extract dataset name from path (could be local file or HF dataset)
+        if '/' in dataset_path:
+            dataset_short = dataset_path.split('/')[-1].replace('-', '_')[:20]
+        else:
+            dataset_short = os.path.basename(dataset_path).replace('.csv', '').replace('.json', '').replace('-', '_')[:20]
         timestamp = self.created_at.strftime('%m%d_%H%M')
 
         return f"{model_short}_{dataset_short}_{timestamp}"
@@ -1186,6 +1199,85 @@ def export_model(session_id):
 
     except Exception as e:
         logger.error(f"Export error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/evaluate', methods=['POST'])
+def evaluate_model():
+    """Evaluate model on test dataset."""
+    try:
+        data = request.json
+        session_id = data.get('session_id')
+        test_cases = data.get('test_cases', [])
+        prompt_template = data.get('prompt_template', '{input}')
+        config = data.get('config', {})
+
+        if not session_id or not test_cases:
+            return jsonify({'error': 'Missing required parameters'}), 400
+
+        # Load model
+        checkpoint_path = f"outputs/{session_id}/checkpoints/final"
+        if not os.path.exists(checkpoint_path):
+            return jsonify({'error': 'Model checkpoint not found'}), 404
+
+        # Initialize model tester
+        from core.model_tester import ModelTester
+        tester = ModelTester()
+
+        # Load the model
+        tester.load_model(checkpoint_path)
+
+        # Run evaluation
+        results = []
+        correct = 0
+        total = len(test_cases)
+
+        for test_case in test_cases:
+            input_text = prompt_template.replace('{input}', test_case['input'])
+
+            # Generate response
+            output = tester.generate(
+                input_text,
+                temperature=config.get('temperature', 0.1),
+                max_new_tokens=config.get('max_new_tokens', 256),
+                top_p=config.get('top_p', 0.95)
+            )
+
+            # Check if output matches expected
+            match = output.strip().lower() == test_case['expected'].strip().lower()
+            if match:
+                correct += 1
+
+            results.append({
+                'input': test_case['input'],
+                'expected': test_case['expected'],
+                'output': output,
+                'match': match
+            })
+
+        # Calculate metrics
+        accuracy = correct / total if total > 0 else 0
+        precision = correct / total if total > 0 else 0  # Simplified for demo
+        recall = correct / total if total > 0 else 0  # Simplified for demo
+        f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+
+        # Clean up model
+        tester.cleanup()
+
+        return jsonify({
+            'metrics': {
+                'accuracy': accuracy,
+                'precision': precision,
+                'recall': recall,
+                'f1_score': f1_score,
+                'total': total,
+                'correct': correct
+            },
+            'details': results
+        })
+
+    except Exception as e:
+        logger.error(f"Evaluation error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 

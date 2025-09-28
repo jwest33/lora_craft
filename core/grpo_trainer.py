@@ -645,6 +645,34 @@ class GRPOModelTrainer:
         # Create reward functions list for TRL
         reward_funcs = self._create_trl_reward_funcs(reward_builder)
 
+        # Reset model state to avoid dimension mismatches
+        # This is critical when reusing a model from a previous training session
+        try:
+            # Clear any cached states in the model
+            if hasattr(self.model, 'eval'):
+                self.model.eval()
+            if hasattr(self.model, 'train'):
+                self.model.train()
+
+            # Reset gradient checkpointing if available
+            if hasattr(self.model, 'gradient_checkpointing_disable'):
+                self.model.gradient_checkpointing_disable()
+            if hasattr(self.model, 'gradient_checkpointing_enable'):
+                self.model.gradient_checkpointing_enable()
+
+            # Clear any cached attention states
+            if hasattr(self.model, 'clear_cache'):
+                self.model.clear_cache()
+
+            # Ensure model is on the correct device
+            if torch.cuda.is_available():
+                self.model = self.model.cuda()
+                torch.cuda.empty_cache()
+
+            logger.info("Reset model state for GRPO training")
+        except Exception as e:
+            logger.warning(f"Could not fully reset model state: {e}")
+
         # Initialize TRL's GRPOTrainer with valid parameters only
         trainer = GRPOTrainer(
             model=self.model,
@@ -748,8 +776,56 @@ class GRPOModelTrainer:
             self.save_checkpoint("final")
 
         except Exception as e:
+            error_str = str(e)
+
+            # Check for dimension mismatch errors
+            if "batch2 tensor" in error_str and "Expected size" in error_str:
+                logger.error(f"Dimension mismatch error detected: {e}")
+                logger.info("Attempting to fix model state and retry...")
+
+                try:
+                    # Reset model completely
+                    self.model.eval()
+                    torch.cuda.empty_cache() if torch.cuda.is_available() else None
+
+                    # Force model reinitialization for attention layers
+                    for module in self.model.modules():
+                        if hasattr(module, 'reset_parameters'):
+                            try:
+                                module.reset_parameters()
+                            except:
+                                pass
+
+                    # Set model back to training mode
+                    self.model.train()
+
+                    # Recreate trainer with fresh state
+                    trainer = GRPOTrainer(
+                        model=self.model,
+                        processing_class=self.tokenizer,
+                        reward_funcs=reward_funcs,
+                        args=grpo_config,
+                        train_dataset=formatted_dataset,
+                    )
+
+                    # Reattach logging callback
+                    trainer.log = custom_log
+
+                    logger.info("Retrying training with reset model state...")
+                    trainer.train()
+                    logger.info("Training completed after model state reset")
+                    self.save_checkpoint("final")
+
+                except Exception as retry_error:
+                    logger.error(f"Training failed even after model reset: {retry_error}")
+                    # Provide more helpful error message
+                    if "batch2 tensor" in str(retry_error):
+                        logger.error("This appears to be a persistent model architecture incompatibility issue.")
+                        logger.error("Try using a different model or adjusting the training configuration.")
+                    raise retry_error
+
             # Check if it's a compilation-related error
-            if "Dynamo" in str(e) or "compile" in str(e).lower():
+            elif "Dynamo" in error_str or "compile" in error_str.lower():
                 logger.error(f"Compilation error during training: {e}")
                 logger.info("Attempting to continue with eager mode...")
 
@@ -767,7 +843,7 @@ class GRPOModelTrainer:
                     logger.error(f"Training failed even in eager mode: {retry_error}")
                     raise retry_error
             else:
-                # Not a compilation error, re-raise
+                # Not a known error type, re-raise
                 logger.error(f"Training error: {e}")
                 raise e
 

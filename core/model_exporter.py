@@ -338,8 +338,10 @@ tokenizer = AutoTokenizer.from_pretrained("{export_path}")
             if progress_callback:
                 progress_callback(f"Converting to GGUF {actual_quantization.upper()} format...", 50)
 
-            # Convert to GGUF
-            output_file = export_path / f"model-{actual_quantization}.gguf"
+            # Convert to GGUF - use the export name for the file
+            # Get the export name from the path (it's the last part of export_path)
+            export_name_clean = export_path.name
+            output_file = export_path / f"{export_name_clean}-{actual_quantization}.gguf"
             success, error = self.gguf_converter.convert_with_llama_cpp(
                 hf_path,
                 output_file,
