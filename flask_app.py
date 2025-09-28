@@ -890,13 +890,21 @@ def save_config():
         config = request.json
         filename = config.get('filename', f"config_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
 
-        filepath = Path('configs') / filename
-        filepath.parent.mkdir(exist_ok=True)
+        configs_dir = Path(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'configs'))
+        configs_dir.mkdir(exist_ok=True)
+        filepath = configs_dir / filename
 
+        logger.info(f"Saving config to: {filepath}")
         with open(filepath, 'w') as f:
             json.dump(config, f, indent=2)
+        logger.info(f"Config saved successfully: {filename}")
 
-        return jsonify({'success': True, 'filename': filename, 'path': str(filepath)})
+        return jsonify({
+            'success': True,
+            'filename': filename,
+            'path': str(filepath),
+            'message': f'Configuration saved as {filename}'
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -905,7 +913,8 @@ def save_config():
 def load_config(filename):
     """Load configuration from file."""
     try:
-        filepath = Path('configs') / filename
+        configs_dir = Path(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'configs'))
+        filepath = configs_dir / filename
 
         if not filepath.exists():
             return jsonify({'error': 'Configuration file not found'}), 404
@@ -922,7 +931,7 @@ def load_config(filename):
 def list_configs():
     """List all saved configurations."""
     try:
-        configs_dir = Path('configs')
+        configs_dir = Path(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'configs'))
         configs = []
 
         if configs_dir.exists():
@@ -948,7 +957,8 @@ def list_configs():
 def delete_config(filename):
     """Delete a configuration file."""
     try:
-        filepath = Path('configs') / filename
+        configs_dir = Path(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'configs'))
+        filepath = configs_dir / filename
 
         if not filepath.exists():
             return jsonify({'error': 'Configuration file not found'}), 404
@@ -2146,6 +2156,7 @@ def list_uploaded_datasets():
                     file_info = {
                         'filename': filepath.name,
                         'filepath': str(filepath),
+                        'relative_path': f"uploads/{filepath.name}",
                         'size_mb': round(filepath.stat().st_size / 1024 / 1024, 2),
                         'uploaded_at': datetime.fromtimestamp(filepath.stat().st_mtime).isoformat(),
                         'extension': filepath.suffix[1:]
@@ -2244,10 +2255,10 @@ def save_chat_template():
         safe_name = "".join(c for c in name if c.isalnum() or c in (' ', '-', '_')).rstrip()
 
         # Save template to file
-        chat_templates_dir = Path('./chat_templates')
-        chat_templates_dir.mkdir(exist_ok=True)
+        configs_dir = Path(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'configs'))
+        configs_dir.mkdir(exist_ok=True)
 
-        template_path = chat_templates_dir / f"{safe_name}.json"
+        template_path = configs_dir / f"chat_template_{safe_name}.json"
         with open(template_path, 'w') as f:
             json.dump({
                 'name': name,
@@ -2361,13 +2372,16 @@ def get_templates():
 
         # Load custom templates from file storage
         custom_templates = {}
-        templates_dir = Path('./templates')
-        if templates_dir.exists():
-            for template_file in templates_dir.glob('*.json'):
+        configs_dir = Path(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'configs'))
+        if configs_dir.exists():
+            # Look for template files (those with template_ prefix)
+            for template_file in configs_dir.glob('template_*.json'):
                 try:
                     with open(template_file, 'r') as f:
                         template_data = json.load(f)
-                        custom_templates[template_file.stem] = template_data
+                        # Remove the 'template_' prefix from the key
+                        template_key = template_file.stem.replace('template_', '')
+                        custom_templates[template_key] = template_data
                 except:
                     pass
 
@@ -2393,10 +2407,10 @@ def save_template():
         safe_name = "".join(c for c in template_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
 
         # Save template to file
-        templates_dir = Path('./templates')
-        templates_dir.mkdir(exist_ok=True)
+        configs_dir = Path(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'configs'))
+        configs_dir.mkdir(exist_ok=True)
 
-        template_path = templates_dir / f"{safe_name}.json"
+        template_path = configs_dir / f"template_{safe_name}.json"
         with open(template_path, 'w') as f:
             json.dump(template_data, f, indent=2)
 

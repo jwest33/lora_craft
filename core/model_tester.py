@@ -9,6 +9,9 @@ from typing import Dict, Any, Optional, Tuple, List
 from dataclasses import dataclass
 from datetime import datetime
 
+# Disable torch.compile/dynamo to avoid FX tracing issues
+os.environ["TORCHDYNAMO_DISABLE"] = "1"
+
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -194,13 +197,29 @@ You are a helpful AI assistant.
             if tokenizer.pad_token is None:
                 tokenizer.pad_token = tokenizer.eos_token
 
-            # Load model
-            model = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-                device_map="auto" if self.device == "cuda" else None,
-                low_cpu_mem_usage=True
-            )
+            # Load model with explicit configuration to avoid optimization issues
+            model_kwargs = {
+                "torch_dtype": torch.float16 if self.device == "cuda" else torch.float32,
+                "device_map": "auto" if self.device == "cuda" else None,
+                "low_cpu_mem_usage": True,
+                "use_cache": True,  # Explicitly enable cache
+                "trust_remote_code": False,  # Avoid custom optimized code
+                "attn_implementation": "eager"  # Use eager mode instead of optimized implementations
+            }
+
+            try:
+                model = AutoModelForCausalLM.from_pretrained(
+                    model_name,
+                    **model_kwargs
+                )
+            except Exception as e:
+                # Fallback without attn_implementation if not supported
+                logger.warning(f"Failed with attn_implementation=eager, retrying without: {e}")
+                del model_kwargs["attn_implementation"]
+                model = AutoModelForCausalLM.from_pretrained(
+                    model_name,
+                    **model_kwargs
+                )
 
             # Ensure consistent dtype for CUDA
             if self.device == "cuda":
@@ -358,19 +377,58 @@ You are a helpful AI assistant.
 
                 streamer = CustomStreamer(tokenizer, streaming_callback)
 
-            # Generate response
+            # Generate response with fallback for FX tracing errors
             start_time = datetime.now()
+            outputs = None
+            generation_error = None
 
-            with torch.no_grad():
-                generation_config = config.to_generation_config()
-                outputs = model.generate(
-                    **inputs,
-                    generation_config=generation_config,
-                    streamer=streamer
-                )
+            try:
+                with torch.no_grad():
+                    generation_config = config.to_generation_config()
+                    outputs = model.generate(
+                        **inputs,
+                        generation_config=generation_config,
+                        streamer=streamer
+                    )
+            except Exception as e:
+                if "FX" in str(e) or "dynamo" in str(e) or "symbolically trace" in str(e):
+                    logger.warning(f"FX tracing error detected: {e}")
+                    logger.info("Attempting generation with simplified config...")
+
+                    # Try with simplified generation without advanced features
+                    try:
+                        with torch.no_grad():
+                            # Use simpler generation parameters
+                            outputs = model.generate(
+                                **inputs,
+                                max_new_tokens=config.max_new_tokens,
+                                temperature=config.temperature,
+                                do_sample=config.do_sample,
+                                top_p=config.top_p,
+                                pad_token_id=tokenizer.pad_token_id,
+                                eos_token_id=tokenizer.eos_token_id,
+                                use_cache=True
+                            )
+                    except Exception as e2:
+                        logger.error(f"Failed even with simplified generation: {e2}")
+                        generation_error = str(e2)
+                else:
+                    logger.error(f"Generation error: {e}")
+                    generation_error = str(e)
 
             end_time = datetime.now()
             generation_time = (end_time - start_time).total_seconds()
+
+            if outputs is None:
+                # Return error if generation completely failed
+                return {
+                    "success": False,
+                    "error": f"Generation failed: {generation_error}",
+                    "metadata": {
+                        "model_type": model_type,
+                        "model_key": model_key
+                    }
+                }
 
             # Decode response
             response = tokenizer.decode(outputs[0], skip_special_tokens=True)

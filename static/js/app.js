@@ -1108,38 +1108,52 @@ function displayUploadedDatasets(files) {
     }
 
     // Create cards for each uploaded dataset
-    container.innerHTML = files.map(file => `
-        <div class="uploaded-dataset-card card mb-2" data-filepath="${file.filepath}" data-filename="${file.filename}">
-            <div class="card-body p-3">
-                <div class="row align-items-center">
-                    <div class="col-md-6">
-                        <h6 class="mb-1">${file.filename}</h6>
-                        <small class="text-muted">
-                            <i class="fas fa-file"></i> ${file.extension.toUpperCase()} •
-                            <i class="fas fa-database"></i> ${file.size_mb} MB •
-                            <i class="fas fa-clock"></i> ${new Date(file.uploaded_at).toLocaleDateString()}
-                        </small>
-                    </div>
-                    <div class="col-md-6 text-end">
-                        <button class="btn btn-sm btn-outline-primary me-2" onclick="selectUploadedDataset('${file.filename}', '${file.filepath}')">
-                            <i class="fas fa-check"></i> Select
-                        </button>
-                        <button class="btn btn-sm btn-outline-info me-2" onclick="configureDatasetFields('${file.filename}', '${file.filepath}')">
-                            <i class="fas fa-cog"></i> Configure Fields
-                        </button>
-                        <button class="btn btn-sm btn-outline-danger" onclick="deleteUploadedDataset('${file.filename}')">
-                            <i class="fas fa-trash"></i> Delete
-                        </button>
+    container.innerHTML = files.map(file => {
+        // Use relative path if available, otherwise use filepath
+        const datasetPath = file.relative_path || file.filepath;
+        // Escape paths for use in onclick attributes
+        const escapedPath = datasetPath.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const escapedFilename = file.filename.replace(/'/g, "\\'");
+
+        return `
+            <div class="uploaded-dataset-card card mb-2" data-filepath="${datasetPath}" data-filename="${file.filename}">
+                <div class="card-body p-3">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <h6 class="mb-1">${file.filename}</h6>
+                            <small class="text-muted">
+                                <i class="fas fa-file"></i> ${file.extension.toUpperCase()} •
+                                <i class="fas fa-database"></i> ${file.size_mb} MB •
+                                <i class="fas fa-clock"></i> ${new Date(file.uploaded_at).toLocaleDateString()}
+                            </small>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <button class="btn btn-sm btn-outline-primary me-2" onclick="selectUploadedDataset('${escapedFilename}', '${escapedPath}')">
+                                <i class="fas fa-check"></i> Select
+                            </button>
+                            <button class="btn btn-sm btn-outline-info me-2" onclick="configureDatasetFields('${escapedFilename}', '${escapedPath}')">
+                                <i class="fas fa-cog"></i> Configure Fields
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteUploadedDataset('${escapedFilename}')">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 async function selectUploadedDataset(filename, filepath) {
+    // If filepath is relative (starts with 'uploads/'), prepend './' for proper resolution
+    let datasetPath = filepath;
+    if (filepath.startsWith('uploads/')) {
+        datasetPath = `./${filepath}`;
+    }
+
     // Update dataset path
-    document.getElementById('dataset-path').value = filepath;
+    document.getElementById('dataset-path').value = datasetPath;
     document.getElementById('dataset-path').setAttribute('data-upload-filename', filename);
     document.getElementById('dataset-path').setAttribute('data-source-type', 'upload');
 
@@ -1173,12 +1187,18 @@ async function selectUploadedDataset(filename, filepath) {
 
 async function configureDatasetFields(filename, filepath) {
     try {
+        // If filepath is relative (starts with 'uploads/'), prepend './' for proper resolution
+        let datasetPath = filepath;
+        if (filepath.startsWith('uploads/')) {
+            datasetPath = `./${filepath}`;
+        }
+
         // Fetch dataset fields
         const response = await fetch('/api/datasets/detect-fields', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                dataset_name: filepath,
+                dataset_name: datasetPath,
                 is_local: true
             })
         });
@@ -1338,9 +1358,56 @@ function loadSavedFieldMapping(filename) {
     return savedMappings[filename];
 }
 
-async function deleteUploadedDataset(filename) {
-    if (!confirm(`Are you sure you want to delete "${filename}"? This action cannot be undone.`)) {
-        return;
+function deleteUploadedDataset(filename) {
+    showDeleteDatasetModal(filename);
+}
+
+function showDeleteDatasetModal(filename) {
+    // Remove any existing delete modal
+    const existingModal = document.getElementById('deleteDatasetModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // Create modal
+    const modalDiv = document.createElement('div');
+    modalDiv.className = 'modal fade';
+    modalDiv.id = 'deleteDatasetModal';
+    modalDiv.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-exclamation-triangle text-warning"></i> Delete Dataset
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete <strong>"${filename}"</strong>?</p>
+                    <p class="text-danger mb-0">
+                        <i class="fas fa-exclamation-circle"></i> This action cannot be undone.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger" onclick="performDatasetDelete('${filename.replace(/'/g, "\\'")}')">
+                        <i class="fas fa-trash"></i> Delete Dataset
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modalDiv);
+    const deleteModal = new bootstrap.Modal(modalDiv);
+    deleteModal.show();
+}
+
+async function performDatasetDelete(filename) {
+    // Close the modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('deleteDatasetModal'));
+    if (modal) {
+        modal.hide();
     }
 
     try {
@@ -1487,20 +1554,14 @@ function updateTemplatePreview() {
     const solutionStart = document.getElementById('solution-start').value;
     const solutionEnd = document.getElementById('solution-end').value;
     const systemPrompt = document.getElementById('system-prompt').value;
-    
+
     const preview = `System Prompt:
-${systemPrompt}
+${systemPrompt}`;
 
-User: [Your instruction here]
-
-Assistant: ${reasoningStart}
-[Model reasoning/working out]
-${reasoningEnd}
-${solutionStart}
-[Model solution]
-${solutionEnd}`;
-    
     document.getElementById('template-preview').textContent = preview;
+
+    // Also update the chat template preview
+    updateChatTemplatePreview();
 }
 
 // Template mode handlers
@@ -1604,12 +1665,26 @@ async function testTemplate() {
 }
 
 async function saveCustomTemplate() {
-    const name = prompt('Enter a name for this template:');
-    if (!name) return;
+    // Show the save template modal instead of using prompt
+    const modal = new bootstrap.Modal(document.getElementById('saveTemplateModal'));
+    modal.show();
+}
+
+async function saveTemplateFromModal() {
+    const nameInput = document.getElementById('template-name-input');
+    const descriptionInput = document.getElementById('template-description-input');
+
+    const name = nameInput?.value?.trim();
+    if (!name) {
+        showAlert('Please enter a template name', 'warning');
+        return;
+    }
+
+    const description = descriptionInput?.value?.trim() || `Custom template created ${new Date().toLocaleDateString()}`;
 
     const templateData = {
         name: name,
-        description: `Custom template created ${new Date().toLocaleDateString()}`,
+        description: description,
         reasoning_start: document.getElementById('custom-reasoning-start').value,
         reasoning_end: document.getElementById('custom-reasoning-end').value,
         solution_start: document.getElementById('custom-solution-start').value,
@@ -1626,6 +1701,16 @@ async function saveCustomTemplate() {
 
         const result = await response.json();
         if (result.success) {
+            // Close the modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('saveTemplateModal'));
+            if (modal) {
+                modal.hide();
+            }
+
+            // Clear the inputs
+            nameInput.value = '';
+            descriptionInput.value = '';
+
             showAlert(result.message, 'success');
             loadSavedTemplatesList(); // Refresh the list
         } else {
@@ -1642,6 +1727,11 @@ async function loadSavedTemplatesList() {
         const templates = await response.json();
 
         const select = document.getElementById('saved-templates-list');
+        if (!select) {
+            console.warn('saved-templates-list element not found, skipping template list update');
+            return;
+        }
+
         select.innerHTML = '<option value="">Select a saved template...</option>';
 
         // Add custom templates
@@ -1884,31 +1974,111 @@ function updateChatTemplatePreview() {
 }
 
 function saveChatTemplate() {
+    // Show modal for saving chat template
+    showSaveChatTemplateModal();
+}
+
+function showSaveChatTemplateModal() {
+    // Remove any existing save chat template modal
+    const existingModal = document.getElementById('saveChatTemplateModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // Create modal
+    const modalDiv = document.createElement('div');
+    modalDiv.className = 'modal fade';
+    modalDiv.id = 'saveChatTemplateModal';
+    modalDiv.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-save"></i> Save Chat Template
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="chat-template-name-input" class="form-label">Template Name</label>
+                        <input type="text" class="form-control" id="chat-template-name-input"
+                               placeholder="Enter template name..." autofocus>
+                        <small class="text-muted">This name will be used to identify your chat template</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="chat-template-desc-input" class="form-label">Description (optional)</label>
+                        <textarea class="form-control" id="chat-template-desc-input" rows="2"
+                                  placeholder="Enter template description..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="performChatTemplateSave()">
+                        <i class="fas fa-save"></i> Save Template
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modalDiv);
+    const saveModal = new bootstrap.Modal(modalDiv);
+
+    // Add event listener for Enter key
+    const input = modalDiv.querySelector('#chat-template-name-input');
+    input.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            performChatTemplateSave();
+        }
+    });
+
+    // Focus input when modal is shown
+    modalDiv.addEventListener('shown.bs.modal', () => {
+        input.focus();
+    });
+
+    saveModal.show();
+}
+
+async function performChatTemplateSave() {
+    const nameInput = document.getElementById('chat-template-name-input');
+    const descInput = document.getElementById('chat-template-desc-input');
     const template = document.getElementById('custom-chat-template').value;
-    const name = prompt('Enter a name for this chat template:');
 
-    if (!name) return;
+    const name = nameInput?.value?.trim();
+    if (!name) {
+        showAlert('Please enter a template name', 'warning');
+        return;
+    }
 
-    fetch('/api/templates/chat-template/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            name: name,
-            template: template,
-            description: 'Custom chat template'
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
+    const description = descInput?.value?.trim() || 'Custom chat template';
+
+    // Close the modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('saveChatTemplateModal'));
+    if (modal) {
+        modal.hide();
+    }
+
+    try {
+        const response = await fetch('/api/templates/chat-template/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: name,
+                template: template,
+                description: description
+            })
+        });
+
+        const data = await response.json();
         if (data.success) {
             showAlert('Chat template saved successfully', 'success');
         } else {
             showAlert('Failed to save chat template', 'error');
         }
-    })
-    .catch(error => {
+    } catch (error) {
         showAlert('Error saving chat template', 'error');
-    });
+    }
 }
 
 function loadChatTemplate() {
@@ -3707,13 +3877,59 @@ async function updateSystemStatus() {
 // ============================================================================
 
 function showAlert(message, type) {
-    // TODO: Implement better alert system
     console.log(`[${type}] ${message}`);
 
-    // For now, use basic alert
-    if (type === 'danger' || type === 'warning') {
-        alert(message);
-    }
+    // Create styled Bootstrap toast notification
+    const toastContainer = document.getElementById('toast-container') || createToastContainer();
+
+    // Map alert types to Bootstrap classes
+    const typeMap = {
+        'success': 'bg-success text-white',
+        'danger': 'bg-danger text-white',
+        'warning': 'bg-warning text-dark',
+        'info': 'bg-info text-white',
+        'primary': 'bg-primary text-white'
+    };
+
+    const bgClass = typeMap[type] || 'bg-secondary text-white';
+
+    // Create toast element
+    const toastId = 'toast-' + Date.now();
+    const toastHtml = `
+        <div id="${toastId}" class="toast align-items-center ${bgClass} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body">
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    `;
+
+    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+
+    // Initialize and show the toast
+    const toastElement = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastElement, {
+        autohide: true,
+        delay: type === 'danger' || type === 'warning' ? 5000 : 3000
+    });
+
+    toast.show();
+
+    // Remove the element after it's hidden
+    toastElement.addEventListener('hidden.bs.toast', () => {
+        toastElement.remove();
+    });
+}
+
+function createToastContainer() {
+    const container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container position-fixed top-0 end-0 p-3';
+    container.style.zIndex = '9999';
+    document.body.appendChild(container);
+    return container;
 }
 
 function updateValue(inputId, value) {
@@ -4115,6 +4331,24 @@ function setupEventListeners() {
     document.getElementById('reward-preset-select')?.addEventListener('change', updateRecommendedIfActive);
     document.getElementById('reasoning-start')?.addEventListener('input', debounce(updateRecommendedIfActive, 1000));
     document.getElementById('reasoning-end')?.addEventListener('input', debounce(updateRecommendedIfActive, 1000));
+
+    // Update chat template preview when system prompt or template fields change
+    document.getElementById('system-prompt')?.addEventListener('input', updateChatTemplatePreview);
+    document.getElementById('custom-system-prompt')?.addEventListener('input', function() {
+        updateTemplatePreview(); // This now also calls updateChatTemplatePreview
+    });
+    document.getElementById('custom-reasoning-start')?.addEventListener('input', function() {
+        updateTemplatePreview();
+    });
+    document.getElementById('custom-reasoning-end')?.addEventListener('input', function() {
+        updateTemplatePreview();
+    });
+    document.getElementById('custom-solution-start')?.addEventListener('input', function() {
+        updateTemplatePreview();
+    });
+    document.getElementById('custom-solution-end')?.addEventListener('input', function() {
+        updateTemplatePreview();
+    });
 
     // Update configuration summary when key fields change
     document.getElementById('model-family')?.addEventListener('change', updateConfigSummary);
