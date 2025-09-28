@@ -2138,88 +2138,11 @@ function selectAlgorithm(algorithm) {
 // ============================================================================
 // Reward Function Configuration
 // ============================================================================
-
-function selectRewardType(type) {
-    // Remove active class from reward type cards
-    document.querySelectorAll('#reward-preset, #reward-custom').forEach(card => {
-        card.classList.remove('active');
-    });
-
-    // Add active class to selected type
-    document.getElementById(`reward-${type}`).classList.add('active');
-
-    // Show/hide relevant sections
-    const presetRewards = document.getElementById('preset-rewards');
-    const customBuilder = document.getElementById('custom-reward-builder');
-
-    if (type === 'preset') {
-        presetRewards.style.display = 'block';
-        customBuilder.style.display = 'none';
-    } else {
-        presetRewards.style.display = 'none';
-        customBuilder.style.display = 'block';
-        // Initialize with one component if empty
-        if (document.getElementById('reward-components').children.length === 0) {
-            addRewardComponent();
-        }
-    }
-}
-
-function addRewardComponent() {
-    const componentsDiv = document.getElementById('reward-components');
-    const componentId = `component-${Date.now()}`;
-
-    const componentHtml = `
-        <div class="reward-component card mb-2" id="${componentId}">
-            <div class="card-body p-2">
-                <div class="row align-items-center">
-                    <div class="col-md-3">
-                        <select class="form-select form-select-sm" onchange="updateComponentType('${componentId}', this.value)">
-                            <option value="binary">Binary Match</option>
-                            <option value="numerical">Numerical</option>
-                            <option value="length">Length</option>
-                            <option value="format">Format</option>
-                        </select>
-                    </div>
-                    <div class="col-md-6" id="${componentId}-params">
-                        <input type="text" class="form-control form-control-sm" placeholder="Regex pattern (optional)">
-                    </div>
-                    <div class="col-md-2">
-                        <input type="number" class="form-control form-control-sm" placeholder="Weight" value="1.0" step="0.1" min="0">
-                    </div>
-                    <div class="col-md-1">
-                        <button class="btn btn-sm btn-danger" onclick="removeRewardComponent('${componentId}')">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-
-    componentsDiv.insertAdjacentHTML('beforeend', componentHtml);
-}
-
-function removeRewardComponent(componentId) {
-    const component = document.getElementById(componentId);
-    if (component) {
-        component.remove();
-    }
-}
-
-function updateComponentType(componentId, type) {
-    const paramsDiv = document.getElementById(`${componentId}-params`);
-
-    const paramInputs = {
-        'binary': '<input type="text" class="form-control form-control-sm" placeholder="Regex pattern (optional)">',
-        'numerical': '<input type="number" class="form-control form-control-sm" placeholder="Tolerance" value="0.000001" step="0.000001">',
-        'length': '<div class="d-flex gap-1"><input type="number" class="form-control form-control-sm" placeholder="Min" min="0"><input type="number" class="form-control form-control-sm" placeholder="Max" min="0"></div>',
-        'format': '<input type="text" class="form-control form-control-sm" placeholder="Regex pattern (required)">'
-    };
-
-    paramsDiv.innerHTML = paramInputs[type] || '';
-}
-
+// Reward Configuration - All functions moved to enhanced_rewards.js
+// ============================================================================
+// The following functions are now available via window object from enhanced_rewards.js:
+// - gatherRewardConfig(), selectRewardType(), addRewardComponent()
+// - removeRewardComponent(), updateComponentType(), and all enhanced reward functions
 // ============================================================================
 // Training Presets
 // ============================================================================
@@ -2636,8 +2559,8 @@ function gatherConfig() {
         bnb_4bit_quant_type: document.getElementById('bnb-4bit-quant-type')?.value || 'nf4',
         use_nested_quant: document.getElementById('use-nested-quant')?.checked || false,
 
-        // Reward configuration
-        reward_config: gatherRewardConfig(),
+        // Reward configuration (using function from enhanced_rewards.js)
+        reward_config: window.gatherRewardConfig ? window.gatherRewardConfig() : { type: 'preset', preset: 'math' },
 
         // Optimization flags
         use_flash_attention: document.getElementById('use-flash-attention').checked,
@@ -2652,59 +2575,6 @@ function getSelectedAlgorithm() {
     if (document.getElementById('algo-gspo').classList.contains('active')) return 'gspo';
     if (document.getElementById('algo-dr_grpo').classList.contains('active')) return 'dr_grpo';
     return 'grpo'; // default
-}
-
-function gatherRewardConfig() {
-    const isPreset = document.getElementById('reward-preset').classList.contains('active');
-
-    if (isPreset) {
-        const presetValue = document.getElementById('reward-preset-select').value;
-        return {
-            type: 'preset',
-            preset: presetValue
-        };
-    } else {
-        // Gather custom reward components
-        const components = [];
-        const componentDivs = document.querySelectorAll('.reward-component');
-
-        componentDivs.forEach(div => {
-            const typeSelect = div.querySelector('select');
-            const paramsDiv = div.querySelector('[id$="-params"]');
-            const weightInput = div.querySelectorAll('input[type="number"]')[div.querySelectorAll('input[type="number"]').length - 1];
-
-            const component = {
-                type: typeSelect.value,
-                weight: parseFloat(weightInput.value) || 1.0
-            };
-
-            // Get type-specific parameters
-            if (typeSelect.value === 'binary' || typeSelect.value === 'format') {
-                const patternInput = paramsDiv.querySelector('input[type="text"]');
-                if (patternInput && patternInput.value) {
-                    component.pattern = patternInput.value;
-                }
-            } else if (typeSelect.value === 'numerical') {
-                const toleranceInput = paramsDiv.querySelector('input[type="number"]');
-                if (toleranceInput) {
-                    component.tolerance = parseFloat(toleranceInput.value) || 0.000001;
-                }
-            } else if (typeSelect.value === 'length') {
-                const inputs = paramsDiv.querySelectorAll('input[type="number"]');
-                if (inputs.length >= 2) {
-                    component.min_length = parseInt(inputs[0].value) || null;
-                    component.max_length = parseInt(inputs[1].value) || null;
-                }
-            }
-
-            components.push(component);
-        });
-
-        return {
-            type: 'custom',
-            components: components
-        };
-    }
 }
 
 async function startTraining() {

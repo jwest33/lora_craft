@@ -24,6 +24,7 @@
 
     <!-- Style -->
     <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/rewards.css') }}" rel="stylesheet">
 </head>
 <body>
     <!-- Unified Header -->
@@ -787,44 +788,182 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                 </div>
                             </div>
 
-                            <!-- Reward Function Configuration -->
+                            <!-- Enhanced Reward Function Configuration -->
                             <div class="reward-configuration mb-4">
-                                <label class="form-label fw-bold">Reward Function</label>
-                                <div class="selection-cards cols-2">
-                                    <div class="selection-card active" onclick="selectRewardType('preset')" id="reward-preset">
-                                        <i class="fas fa-list-ul"></i>
-                                        <span>Preset Rewards</span>
-                                        <small>Pre-configured functions</small>
-                                    </div>
-                                    <div class="selection-card" onclick="selectRewardType('custom')" id="reward-custom">
-                                        <i class="fas fa-code"></i>
-                                        <span>Custom Reward</span>
-                                        <small>Build your own</small>
-                                    </div>
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <label class="form-label fw-bold mb-0">
+                                        <i class="fas fa-trophy text-warning"></i> Reward Function
+                                    </label>
+                                    <button class="btn btn-sm btn-outline-info" onclick="showRewardHelp()">
+                                        <i class="fas fa-question-circle"></i> Help
+                                    </button>
                                 </div>
 
-                                <!-- Preset Rewards -->
-                                <div id="preset-rewards" class="mt-3">
-                                    <select class="form-select" id="reward-preset-select">
-                                        <option value="binary">Binary Match - Exact or pattern matching</option>
-                                        <option value="numerical">Numerical - Compare numerical answers</option>
-                                        <option value="length">Length-Based - Optimize response length</option>
-                                        <option value="format">Format Compliance - Match specific formats</option>
-                                        <option value="math" selected>Math Problems - Numerical + format rewards</option>
-                                        <option value="code">Code Generation - Code blocks + comments</option>
-                                    </select>
-                                </div>
+                                <!-- Reward Mode Tabs -->
+                                <ul class="nav nav-tabs" role="tablist">
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#reward-templates-tab"
+                                                type="button" role="tab">
+                                            <i class="fas fa-rocket"></i> Quick Start
+                                        </button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#reward-presets-tab"
+                                                type="button" role="tab">
+                                            <i class="fas fa-list-alt"></i> Preset Library
+                                        </button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#reward-custom-tab"
+                                                type="button" role="tab">
+                                            <i class="fas fa-tools"></i> Custom Builder
+                                        </button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#reward-test-tab"
+                                                type="button" role="tab">
+                                            <i class="fas fa-flask"></i> Test Reward
+                                        </button>
+                                    </li>
+                                </ul>
 
-                                <!-- Custom Reward Builder -->
-                                <div id="custom-reward-builder" class="mt-3" style="display: none;">
-                                    <div class="card">
-                                        <div class="card-body">
-                                            <h6>Custom Reward Components</h6>
-                                            <div id="reward-components">
-                                                <!-- Components will be added here dynamically -->
+                                <!-- Tab Content -->
+                                <div class="tab-content p-3 border border-top-0">
+                                    <!-- Quick Start Templates Tab -->
+                                    <div class="tab-pane fade show active" id="reward-templates-tab" role="tabpanel">
+                                        <div class="row" id="reward-templates-grid">
+                                            <!-- Templates will be loaded dynamically -->
+                                            <div class="col-md-4 mb-3">
+                                                <div class="card template-card h-100" onclick="selectTemplate('math_problem_solving')">
+                                                    <div class="card-body">
+                                                        <h6 class="card-title">
+                                                            <i class="fas fa-calculator text-primary"></i> Math Problems
+                                                        </h6>
+                                                        <p class="card-text small">Train models to solve mathematical problems with step-by-step solutions</p>
+                                                        <div class="mt-auto">
+                                                            <span class="badge bg-success">Popular</span>
+                                                            <span class="badge bg-info">Beginner</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <button class="btn btn-sm btn-outline-primary mt-2" onclick="addRewardComponent()">
-                                                <i class="fas fa-plus"></i> Add Component
+                                            <div class="col-md-4 mb-3">
+                                                <div class="card template-card h-100" onclick="selectTemplate('code_generation')">
+                                                    <div class="card-body">
+                                                        <h6 class="card-title">
+                                                            <i class="fas fa-code text-success"></i> Code Generation
+                                                        </h6>
+                                                        <p class="card-text small">Generate clean, well-documented code with proper formatting</p>
+                                                        <div class="mt-auto">
+                                                            <span class="badge bg-success">Popular</span>
+                                                            <span class="badge bg-warning">Intermediate</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4 mb-3">
+                                                <div class="card template-card h-100" onclick="selectTemplate('question_answering')">
+                                                    <div class="card-body">
+                                                        <h6 class="card-title">
+                                                            <i class="fas fa-comments text-info"></i> Q&A
+                                                        </h6>
+                                                        <p class="card-text small">Train models to provide accurate, concise answers to questions</p>
+                                                        <div class="mt-auto">
+                                                            <span class="badge bg-info">Beginner</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Preset Library Tab -->
+                                    <div class="tab-pane fade" id="reward-presets-tab" role="tabpanel">
+                                        <div class="row">
+                                            <div class="col-md-3">
+                                                <h6>Categories</h6>
+                                                <div class="list-group" id="preset-categories">
+                                                    <!-- Categories will be loaded dynamically -->
+                                                </div>
+                                            </div>
+                                            <div class="col-md-9">
+                                                <div class="row" id="preset-list">
+                                                    <!-- Presets will be loaded dynamically -->
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Custom Builder Tab -->
+                                    <div class="tab-pane fade" id="reward-custom-tab" role="tabpanel">
+                                        <div class="alert alert-info">
+                                            <i class="fas fa-info-circle"></i> Build a custom reward by combining components. Each component evaluates a different aspect of the generated output.
+                                        </div>
+                                        <div id="reward-components-advanced">
+                                            <!-- Components will be added here -->
+                                        </div>
+                                        <button class="btn btn-primary mt-3" onclick="addAdvancedComponent()">
+                                            <i class="fas fa-plus"></i> Add Component
+                                        </button>
+                                        <button class="btn btn-success mt-3 ms-2" onclick="saveCustomReward()">
+                                            <i class="fas fa-save"></i> Save Configuration
+                                        </button>
+                                    </div>
+
+                                    <!-- Test Reward Tab -->
+                                    <div class="tab-pane fade" id="reward-test-tab" role="tabpanel">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <h6>Test Input</h6>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Instruction</label>
+                                                    <textarea class="form-control" id="test-instruction" rows="2"
+                                                              placeholder="e.g., Solve: 2x + 5 = 13"></textarea>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Generated Response</label>
+                                                    <textarea class="form-control" id="test-generated" rows="3"
+                                                              placeholder="e.g., x = 4"></textarea>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Reference (Optional)</label>
+                                                    <textarea class="form-control" id="test-reference" rows="3"
+                                                              placeholder="e.g., To solve: 2x = 8, x = 4\n\\boxed{4}"></textarea>
+                                                </div>
+                                                <button class="btn btn-primary" onclick="testReward()">
+                                                    <i class="fas fa-play"></i> Test Reward
+                                                </button>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <h6>Test Results</h6>
+                                                <div id="test-results" class="p-3 bg-light rounded">
+                                                    <p class="text-muted">Run a test to see results...</p>
+                                                </div>
+                                                <div id="reward-visualization" class="mt-3">
+                                                    <!-- Chart will appear here -->
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Enhanced Selected Reward Display Panel -->
+                                <div class="selected-reward-panel">
+                                    <div class="selected-reward-header">
+                                        <i class="fas fa-check-circle text-success"></i>
+                                        <strong>Currently Selected:</strong>
+                                    </div>
+                                    <div class="selected-reward-content">
+                                        <h5 id="selected-reward-name">Mathematical Problem Solving</h5>
+                                        <p id="selected-reward-description" class="text-muted small">
+                                            Rewards accurate numerical answers with proper formatting (e.g., \boxed{} notation)
+                                        </p>
+                                        <div class="selected-reward-actions">
+                                            <button class="btn btn-sm btn-outline-primary" onclick="viewRewardDetails()">
+                                                <i class="fas fa-info-circle"></i> View Details
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-secondary" onclick="testSelectedReward()">
+                                                <i class="fas fa-flask"></i> Test
                                             </button>
                                         </div>
                                     </div>
@@ -1948,7 +2087,7 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                         <div class="col-md-12 text-center mb-4">
                             <img src="{{ url_for('static', filename='images/lora_craft.png') }}" alt="LoRA Craft" style="width: 100px; height: 100px;">
                             <h3 class="mt-3">LoRA Craft</h3>
-                            <p class="text-muted">Professional LoRA Fine-Tuning Interface</p>
+                            <p class="text-muted">GPRO/GSPO LoRA Fine-Tuning Crafting Interface</p>
                         </div>
                     </div>
                     <div class="row">
@@ -1966,19 +2105,13 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                         <div class="col-md-6">
                             <h6><i class="fas fa-cog"></i> System Info</h6>
                             <ul class="small">
-                                <li>Version: 1.0.0</li>
+                                <li>Version: 2025.09.28</li>
                                 <li>Framework: Flask + Socket.IO</li>
                                 <li>ML Backend: Transformers + Unsloth</li>
                                 <li>GPU Support: CUDA-enabled</li>
                                 <li>License: MIT</li>
                             </ul>
                         </div>
-                    </div>
-                    <hr>
-                    <div class="text-center">
-                        <p class="small text-muted mb-0">
-                            Built with ❤️ for the AI community
-                        </p>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -1993,5 +2126,6 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
     <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/enhanced_rewards.js') }}"></script>
 </body>
 </html>

@@ -1,0 +1,1178 @@
+// ============================================================================
+// Enhanced Reward System Functions
+// ============================================================================
+
+let rewardPresets = {};
+let rewardTemplates = {};
+// Make selectedRewardConfig global for integration with app.js
+window.selectedRewardConfig = { type: 'preset', preset: 'math' };
+let currentlySelectedCard = null;
+let selectedRewardName = null;
+let selectedRewardType = null;
+
+// Compatibility function for notifications
+function showNotification(message, type = 'info') {
+    // Use showAlert if available, otherwise console.log
+    if (typeof showAlert === 'function') {
+        showAlert(message, type === 'error' ? 'danger' : type);
+    } else {
+        console.log(`[${type}] ${message}`);
+    }
+}
+
+// View reward details function
+function viewRewardDetails() {
+    if (!selectedRewardName || !selectedRewardType) {
+        alert("Please select a reward first");
+        return;
+    }
+
+    // Get the selected item from the cached data
+    const items = selectedRewardType === 'preset' ? rewardPresets : rewardTemplates;
+    const selected = Object.values(items).find(item => item.name === selectedRewardName);
+
+    if (selected) {
+        showRewardDetailsModal(selected);
+    }
+}
+
+// Show reward details in a modal
+function showRewardDetailsModal(reward) {
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('rewardDetailsModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'rewardDetailsModal';
+        modal.className = 'modal fade';
+        modal.innerHTML = `
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Reward Details</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body" id="rewardDetailsBody">
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    // Populate modal body
+    const body = document.getElementById('rewardDetailsBody');
+    body.innerHTML = `
+        <h5>${reward.name}</h5>
+        <p class="text-muted">${reward.description}</p>
+
+        <div class="mb-3">
+            <strong>Category:</strong> ${reward.category || 'N/A'}
+        </div>
+
+        <div class="mb-3">
+            <strong>Difficulty:</strong>
+            <span class="badge bg-${reward.difficulty === 'beginner' ? 'success' : reward.difficulty === 'intermediate' ? 'warning' : 'danger'}">
+                ${reward.difficulty || 'N/A'}
+            </span>
+        </div>
+
+        ${reward.tags ? `
+        <div class="mb-3">
+            <strong>Tags:</strong>
+            ${reward.tags.map(tag => `<span class="badge bg-secondary me-1">${tag}</span>`).join('')}
+        </div>
+        ` : ''}
+
+        ${reward.example_input ? `
+        <div class="mb-3">
+            <strong>Example Input:</strong>
+            <pre class="bg-light p-2 rounded" style="white-space: pre-wrap;">${reward.example_input}</pre>
+        </div>
+        ` : ''}
+
+        ${reward.example_output ? `
+        <div class="mb-3">
+            <strong>Example Output:</strong>
+            <pre class="bg-light p-2 rounded" style="white-space: pre-wrap;">${reward.example_output}</pre>
+        </div>
+        ` : ''}
+
+        ${reward.reward_preset ? `
+        <div class="mb-3">
+            <strong>Uses Preset:</strong> ${reward.reward_preset}
+        </div>
+        ` : ''}
+
+        ${reward.recommended_settings ? `
+        <div class="mb-3">
+            <strong>Recommended Settings:</strong>
+            <ul>
+                ${Object.entries(reward.recommended_settings).map(([key, value]) =>
+                    `<li>${key}: ${value}</li>`
+                ).join('')}
+            </ul>
+        </div>
+        ` : ''}
+    `;
+
+    // Show modal
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+}
+
+// Initialize reward system
+async function initializeRewardSystem() {
+    try {
+        // Load presets
+        const presetsResponse = await fetch('/api/rewards/presets');
+        const presetsData = await presetsResponse.json();
+        rewardPresets = presetsData.presets || {};
+
+        // Load templates
+        const templatesResponse = await fetch('/api/rewards/templates');
+        const templatesData = await templatesResponse.json();
+        rewardTemplates = templatesData.templates || {};
+
+        // Populate UI if elements exist
+        if (document.getElementById('preset-categories')) {
+            populatePresetCategories();
+        }
+        if (document.getElementById('reward-templates-grid')) {
+            populateTemplates();
+        }
+
+        // Initialize first category
+        if (Object.keys(rewardPresets).length > 0) {
+            filterPresetsByCategory('all');
+        }
+    } catch (error) {
+        console.error('Failed to initialize reward system:', error);
+        // Fallback to existing system
+    }
+}
+
+function populatePresetCategories() {
+    const categoriesDiv = document.getElementById('preset-categories');
+    if (!categoriesDiv) return;
+
+    const categories = [...new Set(Object.values(rewardPresets).map(p => p.category))];
+    categoriesDiv.innerHTML = '';
+
+    // Add "All" category
+    categoriesDiv.innerHTML += `
+        <a href="#" class="list-group-item list-group-item-action active"
+           onclick="filterPresetsByCategory('all'); return false;">
+            <i class="fas fa-th"></i> All Presets
+        </a>
+    `;
+
+    categories.forEach(category => {
+        categoriesDiv.innerHTML += `
+            <a href="#" class="list-group-item list-group-item-action"
+               onclick="filterPresetsByCategory('${category}'); return false;">
+                <i class="fas fa-folder"></i> ${category}
+            </a>
+        `;
+    });
+}
+
+function filterPresetsByCategory(category) {
+    const presetListDiv = document.getElementById('preset-list');
+    if (!presetListDiv) return;
+
+    // Update active category
+    document.querySelectorAll('#preset-categories .list-group-item').forEach(item => {
+        item.classList.remove('active');
+        if (category === 'all' && item.textContent.includes('All Presets')) {
+            item.classList.add('active');
+        } else if (item.textContent.includes(category)) {
+            item.classList.add('active');
+        }
+    });
+
+    // Filter and display presets
+    presetListDiv.innerHTML = '';
+
+    Object.entries(rewardPresets).forEach(([name, preset]) => {
+        if (category === 'all' || preset.category === category) {
+            const difficultyColor = {
+                'beginner': 'success',
+                'intermediate': 'warning',
+                'advanced': 'danger'
+            }[preset.difficulty] || 'secondary';
+
+            presetListDiv.innerHTML += `
+                <div class="col-md-6 mb-3">
+                    <div class="card preset-card h-100" onclick="selectPresetByName('${name}')">
+                        <div class="card-body">
+                            <h6 class="card-title">${preset.name}</h6>
+                            <p class="card-text small text-muted">${preset.description}</p>
+                            <div class="mt-2">
+                                <span class="badge bg-${difficultyColor}">${preset.difficulty}</span>
+                                ${preset.tags.map(tag => `<span class="badge bg-light text-dark ms-1">${tag}</span>`).join('')}
+                            </div>
+                            <div class="mt-2">
+                                <button class="btn btn-sm btn-outline-info"
+                                        onclick="event.stopPropagation(); showPresetExample('${name}')">
+                                    <i class="fas fa-eye"></i> Example
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    });
+}
+
+function selectPresetByName(presetName) {
+    const preset = rewardPresets[presetName];
+    if (!preset) return;
+
+    // Update internal state
+    window.selectedRewardConfig = {
+        type: 'preset',
+        preset_name: presetName
+    };
+    selectedRewardName = preset.name;
+    selectedRewardType = 'preset';
+
+    // Clear previous selection
+    document.querySelectorAll('.preset-card, .template-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+
+    // Mark new selection
+    if (event && event.currentTarget) {
+        event.currentTarget.classList.add('selected');
+        currentlySelectedCard = event.currentTarget;
+    } else {
+        // Find and mark the card if not triggered by event
+        const cards = document.querySelectorAll('.preset-card');
+        cards.forEach(card => {
+            if (card.textContent.includes(preset.name)) {
+                card.classList.add('selected');
+                currentlySelectedCard = card;
+            }
+        });
+    }
+
+    // Update display panel
+    const nameElement = document.getElementById('selected-reward-name');
+    const descElement = document.getElementById('selected-reward-description');
+    if (nameElement) nameElement.textContent = preset.name;
+    if (descElement) descElement.textContent = preset.description;
+
+    // Visual feedback
+    showNotification(`✓ Selected: ${preset.name}`, 'success');
+
+    // Animate the selection
+    if (currentlySelectedCard) {
+        currentlySelectedCard.classList.add('selecting');
+        setTimeout(() => {
+            if (currentlySelectedCard) {
+                currentlySelectedCard.classList.remove('selecting');
+            }
+        }, 500);
+    }
+
+    // Store selection in localStorage for persistence
+    localStorage.setItem('selectedReward', JSON.stringify(selectedRewardConfig));
+}
+
+function showPresetExample(presetName) {
+    const preset = rewardPresets[presetName];
+    if (!preset) return;
+
+    const difficultyColor = {
+        'beginner': 'success',
+        'intermediate': 'warning',
+        'advanced': 'danger'
+    }[preset.difficulty] || 'secondary';
+
+    const modalHtml = `
+        <div class="modal fade" id="exampleModal" tabindex="-1">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fas fa-trophy text-warning"></i>
+                            ${preset.name}
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body" style="min-height: 400px;">
+                        <div class="row">
+                            <div class="col-lg-6">
+                                <h6 class="text-primary mb-3">Example Input:</h6>
+                                <pre class="example-pre">${preset.example_input}</pre>
+                            </div>
+                            <div class="col-lg-6">
+                                <h6 class="text-success mb-3">Expected Output (High Reward):</h6>
+                                <pre class="example-pre">${preset.example_output}</pre>
+                            </div>
+                        </div>
+                        <hr class="my-4">
+                        <div class="preset-details">
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <p><strong>Description:</strong> ${preset.description}</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p><strong>Difficulty:</strong>
+                                        <span class="badge bg-${difficultyColor}">${preset.difficulty}</span>
+                                    </p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p><strong>Category:</strong>
+                                        <span class="badge bg-info">${preset.category}</span>
+                                    </p>
+                                </div>
+                                <div class="col-md-12">
+                                    <p><strong>Tags:</strong>
+                                        ${preset.tags.map(tag =>
+                                            `<span class="badge bg-secondary me-1">${tag}</span>`
+                                        ).join('')}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="fas fa-times"></i> Cancel
+                        </button>
+                        <button type="button" class="btn btn-primary"
+                                onclick="confirmPresetSelection('${presetName}')">
+                            <i class="fas fa-check"></i> Select This Preset
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Remove any existing modal
+    const existingModal = document.getElementById('exampleModal');
+    if (existingModal) existingModal.remove();
+
+    // Add new modal to body
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('exampleModal'));
+    modal.show();
+}
+
+function populateTemplates() {
+    const templatesGrid = document.getElementById('reward-templates-grid');
+    if (!templatesGrid || !rewardTemplates) return;
+
+    templatesGrid.innerHTML = '';
+
+    Object.entries(rewardTemplates).forEach(([key, template]) => {
+        const iconMap = {
+            'Math Problem Solving': 'fa-calculator text-primary',
+            'Code Generation': 'fa-code text-success',
+            'Question Answering': 'fa-comments text-info'
+        };
+
+        const icon = iconMap[template.name] || 'fa-star text-warning';
+
+        templatesGrid.innerHTML += `
+            <div class="col-md-4 mb-3">
+                <div class="card template-card h-100" onclick="selectTemplate('${key}')">
+                    <div class="card-body">
+                        <h6 class="card-title">
+                            <i class="fas ${icon}"></i> ${template.name}
+                        </h6>
+                        <p class="card-text small">${template.description}</p>
+                        <div class="mt-3">
+                            ${template.tips.slice(0, 2).map(tip =>
+                                `<small class="d-block text-muted mb-1">• ${tip}</small>`
+                            ).join('')}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+}
+
+function selectTemplate(templateKey) {
+    const template = rewardTemplates[templateKey];
+    if (!template) return;
+
+    // Clear previous selection
+    document.querySelectorAll('.preset-card, .template-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+
+    // Mark template card as selected
+    if (event && event.currentTarget) {
+        event.currentTarget.classList.add('selected');
+        currentlySelectedCard = event.currentTarget;
+    }
+
+    // Set the reward configuration
+    window.selectedRewardConfig = {
+        type: 'preset',
+        preset_name: template.reward_preset
+    };
+    selectedRewardName = template.name;
+    selectedRewardType = 'template';
+
+    // Update display panel
+    const nameElement = document.getElementById('selected-reward-name');
+    const descElement = document.getElementById('selected-reward-description');
+    if (nameElement) nameElement.textContent = template.name + ' Template';
+    if (descElement) descElement.textContent = template.description;
+
+    // Animate selection
+    if (currentlySelectedCard) {
+        currentlySelectedCard.classList.add('selecting');
+        setTimeout(() => {
+            if (currentlySelectedCard) {
+                currentlySelectedCard.classList.remove('selecting');
+            }
+        }, 500);
+    }
+
+    // Apply recommended settings if user confirms
+    if (confirm('Apply recommended settings for this template?')) {
+        Object.entries(template.recommended_settings).forEach(([key, value]) => {
+            const elementId = key.replace(/_/g, '-');
+            const element = document.getElementById(elementId);
+            if (element) element.value = value;
+        });
+    }
+
+    // Show tips
+    showTemplateTips(template);
+
+    // Store selection
+    localStorage.setItem('selectedReward', JSON.stringify(selectedRewardConfig));
+}
+
+function showTemplateTips(template) {
+    const tipsHtml = template.tips.map(tip => `<li>${tip}</li>`).join('');
+    showNotification(
+        `<strong>${template.name} Tips:</strong><ul class="mb-0 mt-2">${tipsHtml}</ul>`,
+        'info',
+        10000  // Show for 10 seconds
+    );
+}
+
+// Advanced component builder
+function addAdvancedComponent() {
+    const componentsDiv = document.getElementById('reward-components-advanced');
+    if (!componentsDiv) return;
+
+    const componentId = `adv-component-${Date.now()}`;
+    const componentHtml = `
+        <div class="card mb-3" id="${componentId}">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <label class="form-label">Component Type</label>
+                        <select class="form-select" onchange="updateAdvancedComponentType('${componentId}', this.value)">
+                            <option value="binary">Binary Match</option>
+                            <option value="numerical">Numerical</option>
+                            <option value="length">Length</option>
+                            <option value="format">Format</option>
+                            <option value="template">Template Validation</option>
+                            <option value="multi_choice">Multi-Choice</option>
+                            <option value="section_content">Section Content</option>
+                            <option value="sequential">Sequential Pattern</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6" id="${componentId}-params">
+                        <label class="form-label">Pattern/Parameters</label>
+                        <input type="text" class="form-control" placeholder="Enter regex pattern">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Weight</label>
+                        <input type="number" class="form-control" value="1.0" step="0.1" min="0">
+                    </div>
+                    <div class="col-md-1">
+                        <label class="form-label">&nbsp;</label>
+                        <button class="btn btn-danger btn-sm form-control" onclick="removeComponent('${componentId}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-12" id="${componentId}-help">
+                        <small class="text-muted">Select a component type to see configuration options</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    componentsDiv.insertAdjacentHTML('beforeend', componentHtml);
+}
+
+function updateAdvancedComponentType(componentId, type) {
+    const paramsDiv = document.getElementById(`${componentId}-params`);
+    const helpDiv = document.getElementById(`${componentId}-help`);
+    if (!paramsDiv) return;
+
+    let paramsHtml = '';
+    let helpText = '';
+
+    switch (type) {
+        case 'binary':
+            paramsHtml = `
+                <label class="form-label">Regex Pattern</label>
+                <input type="text" class="form-control" placeholder="e.g., \\\\boxed\\\\{.*\\\\}">
+            `;
+            helpText = 'Binary reward: Returns 1 if pattern matches, 0 otherwise';
+            break;
+
+        case 'format':
+            paramsHtml = `
+                <label class="form-label">Regex Pattern</label>
+                <input type="text" class="form-control" placeholder="e.g., \\\\boxed\\\\{.*\\\\}">
+            `;
+            helpText = 'Format reward: Validates specific formatting patterns';
+            break;
+
+        case 'numerical':
+            paramsHtml = `
+                <label class="form-label">Tolerance</label>
+                <input type="number" class="form-control" value="0.000001" step="0.000001">
+            `;
+            helpText = 'Numerical reward: Compares numeric values within tolerance';
+            break;
+
+        case 'length':
+            paramsHtml = `
+                <div class="row">
+                    <div class="col-4">
+                        <label class="form-label">Min</label>
+                        <input type="number" class="form-control" placeholder="10">
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label">Max</label>
+                        <input type="number" class="form-control" placeholder="200">
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label">Optimal</label>
+                        <input type="number" class="form-control" placeholder="50">
+                    </div>
+                </div>
+            `;
+            helpText = 'Length reward: Scores based on response length (in words)';
+            break;
+
+        case 'template':
+            paramsHtml = `
+                <div class="mb-2">
+                    <label class="form-label">Section Tags (comma-separated)</label>
+                    <input type="text" class="form-control" placeholder="e.g., analysis,signal,confidence" data-param="section_tags">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Required Sections (comma-separated)</label>
+                    <input type="text" class="form-control" placeholder="e.g., analysis,signal" data-param="required_sections">
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" class="form-check-input" id="${componentId}-order" data-param="order_matters">
+                    <label class="form-check-label" for="${componentId}-order">Order matters</label>
+                </div>
+            `;
+            helpText = 'Template validation: Ensures output follows a specific template structure with required sections';
+            break;
+
+        case 'multi_choice':
+            paramsHtml = `
+                <div class="mb-2">
+                    <label class="form-label">Valid Choices (comma-separated)</label>
+                    <input type="text" class="form-control" placeholder="e.g., STRONG_BUY,WEAK_BUY,HOLD,WEAK_SELL,STRONG_SELL" data-param="valid_choices">
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" class="form-check-input" id="${componentId}-case" checked data-param="case_sensitive">
+                    <label class="form-check-label" for="${componentId}-case">Case sensitive</label>
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" class="form-check-input" id="${componentId}-exact" checked data-param="exact_match">
+                    <label class="form-check-label" for="${componentId}-exact">Exact match (word boundaries)</label>
+                </div>
+            `;
+            helpText = 'Multi-choice validation: Ensures output contains exactly one of the valid choices';
+            break;
+
+        case 'section_content':
+            paramsHtml = `
+                <div class="mb-2">
+                    <label class="form-label">Section Tag</label>
+                    <input type="text" class="form-control" placeholder="e.g., analysis" data-param="section_tag">
+                </div>
+                <div class="row mb-2">
+                    <div class="col-6">
+                        <label class="form-label">Min Words</label>
+                        <input type="number" class="form-control" placeholder="20" data-param="min_words">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Max Words</label>
+                        <input type="number" class="form-control" placeholder="200" data-param="max_words">
+                    </div>
+                </div>
+                <div>
+                    <label class="form-label">Required Keywords (comma-separated)</label>
+                    <input type="text" class="form-control" placeholder="e.g., RSI,MACD,trend" data-param="required_keywords">
+                </div>
+            `;
+            helpText = 'Section content: Validates content within a specific section tag';
+            break;
+
+        case 'sequential':
+            paramsHtml = `
+                <div class="mb-2">
+                    <label class="form-label">Patterns (one per line, regex supported)</label>
+                    <textarea class="form-control" rows="3" placeholder="First pattern\nSecond pattern\nThird pattern" data-param="patterns"></textarea>
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" class="form-check-input" id="${componentId}-strict" checked data-param="strict_order">
+                    <label class="form-check-label" for="${componentId}-strict">Strict order required</label>
+                </div>
+            `;
+            helpText = 'Sequential pattern: Validates that patterns appear in a specific order';
+            break;
+    }
+
+    paramsDiv.innerHTML = paramsHtml;
+    if (helpDiv) {
+        helpDiv.innerHTML = `<small class="text-muted">${helpText}</small>`;
+    }
+}
+
+function removeComponent(componentId) {
+    const component = document.getElementById(componentId);
+    if (component) component.remove();
+}
+
+// Test reward functionality
+async function testReward() {
+    const instruction = document.getElementById('test-instruction').value;
+    const generated = document.getElementById('test-generated').value;
+    const reference = document.getElementById('test-reference').value;
+
+    if (!instruction || !generated) {
+        showNotification('Please provide instruction and generated response', 'warning');
+        return;
+    }
+
+    // Get current reward config
+    const rewardConfig = gatherRewardConfig();
+
+    const testData = {
+        reward_config: rewardConfig,
+        test_cases: [{
+            instruction: instruction,
+            generated: generated,
+            reference: reference || null
+        }]
+    };
+
+    try {
+        const response = await fetch('/api/rewards/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(testData)
+        });
+
+        const result = await response.json();
+
+        if (result.error) {
+            showNotification(`Error: ${result.error}`, 'error');
+            return;
+        }
+
+        // Display results
+        displayTestResults(result);
+    } catch (error) {
+        console.error('Test error:', error);
+        showNotification('Failed to test reward', 'error');
+    }
+}
+
+function displayTestResults(result) {
+    const resultsDiv = document.getElementById('test-results');
+    const vizDiv = document.getElementById('reward-visualization');
+
+    if (!resultsDiv) return;
+
+    const testResult = result.results[0];
+    const totalReward = testResult.total_reward.toFixed(3);
+    const components = testResult.components;
+
+    // Build results HTML
+    let html = `
+        <h5>Total Reward: <span class="badge bg-primary fs-6">${totalReward}</span></h5>
+        <hr>
+        <h6>Component Breakdown:</h6>
+        <div class="component-scores">
+    `;
+
+    // Add component scores
+    Object.entries(components).forEach(([name, value]) => {
+        const percentage = (value * 100).toFixed(1);
+        const barClass = value > 0.7 ? 'bg-success' : value > 0.4 ? 'bg-warning' : 'bg-danger';
+        html += `
+            <div class="mb-2">
+                <div class="d-flex justify-content-between">
+                    <small>${name}</small>
+                    <small>${value.toFixed(3)}</small>
+                </div>
+                <div class="progress" style="height: 20px;">
+                    <div class="progress-bar ${barClass}" style="width: ${percentage}%">${percentage}%</div>
+                </div>
+            </div>
+        `;
+    });
+
+    html += '</div>';
+    resultsDiv.innerHTML = html;
+
+    // Create visualization if Chart.js is available
+    if (vizDiv && typeof Chart !== 'undefined') {
+        createRewardChart(vizDiv, components);
+    }
+}
+
+function createRewardChart(container, components) {
+    // Clear existing chart
+    container.innerHTML = '<canvas id="rewardChart"></canvas>';
+    const ctx = document.getElementById('rewardChart').getContext('2d');
+
+    new Chart(ctx, {
+        type: 'radar',
+        data: {
+            labels: Object.keys(components),
+            datasets: [{
+                label: 'Component Scores',
+                data: Object.values(components),
+                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                borderColor: 'rgb(54, 162, 235)',
+                pointBackgroundColor: 'rgb(54, 162, 235)',
+                pointBorderColor: '#fff',
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: 'rgb(54, 162, 235)'
+            }]
+        },
+        options: {
+            elements: {
+                line: {
+                    borderWidth: 3
+                }
+            },
+            scales: {
+                r: {
+                    angleLines: {
+                        display: false
+                    },
+                    suggestedMin: 0,
+                    suggestedMax: 1
+                }
+            }
+        }
+    });
+}
+
+function showRewardHelp() {
+    const helpModal = `
+        <div class="modal fade" id="rewardHelpModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Understanding Reward Functions</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <h6>What are Reward Functions?</h6>
+                        <p>Reward functions evaluate how well a model's output matches your expectations. They assign scores (0-1) to generated responses, guiding the training process.</p>
+
+                        <h6>Choosing the Right Reward:</h6>
+                        <ul>
+                            <li><strong>Quick Start:</strong> Use templates for common tasks with pre-configured settings</li>
+                            <li><strong>Preset Library:</strong> Browse categorized presets for specific use cases</li>
+                            <li><strong>Custom Builder:</strong> Combine components for unique requirements</li>
+                        </ul>
+
+                        <h6>Testing Your Reward:</h6>
+                        <p>Always test your reward function before training to ensure it scores outputs correctly. Use the Test tab to verify behavior with sample inputs.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Remove existing modal if present
+    const existing = document.getElementById('rewardHelpModal');
+    if (existing) existing.remove();
+
+    document.body.insertAdjacentHTML('beforeend', helpModal);
+    const modal = new bootstrap.Modal(document.getElementById('rewardHelpModal'));
+    modal.show();
+}
+
+function viewRewardDetails() {
+    // Show details about the selected reward
+    const config = gatherRewardConfig();
+    console.log('Current reward configuration:', config);
+
+    // You can extend this to show a modal with full details
+    showNotification('Reward details logged to console', 'info');
+}
+
+function gatherCustomRewardConfig() {
+    // Gather components from the advanced builder UI
+    const components = [];
+    const componentCards = document.querySelectorAll('#reward-components-advanced .card');
+
+    componentCards.forEach(card => {
+        const typeSelect = card.querySelector('select');
+        const weightInput = card.querySelector('input[type="number"][step="0.1"]');
+        const paramsDiv = card.querySelector('[id$="-params"]');
+
+        if (!typeSelect) return;
+
+        const component = {
+            type: typeSelect.value,
+            weight: parseFloat(weightInput?.value) || 1.0
+        };
+
+        // Gather parameters based on component type
+        const inputs = paramsDiv?.querySelectorAll('input, textarea');
+        if (inputs) {
+            inputs.forEach(input => {
+                const param = input.dataset.param;
+                if (param) {
+                    if (input.type === 'checkbox') {
+                        component[param] = input.checked;
+                    } else if (input.type === 'number') {
+                        component[param] = parseFloat(input.value) || 0;
+                    } else {
+                        component[param] = input.value;
+                    }
+                }
+            });
+        }
+
+        components.push(component);
+    });
+
+    return {
+        type: 'custom',
+        components: components
+    };
+}
+
+function updateCustomRewardConfig() {
+    // Update the global config when using custom builder
+    window.selectedRewardConfig = gatherCustomRewardConfig();
+    selectedRewardName = 'Custom Configuration';
+    selectedRewardType = 'custom';
+}
+
+function saveCustomReward() {
+    const name = prompt('Enter a name for this reward configuration:');
+    if (!name) return;
+
+    const config = gatherCustomRewardConfig();
+
+    // Update global config
+    window.selectedRewardConfig = config;
+
+    fetch('/api/rewards/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name, config: config })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.error) {
+            showNotification(`Error: ${result.error}`, 'error');
+        } else {
+            showNotification(`Reward configuration saved as ${name}`, 'success');
+        }
+    })
+    .catch(error => {
+        console.error('Save error:', error);
+        showNotification('Failed to save reward configuration', 'error');
+    });
+}
+
+// Add confirmation function for preset selection from modal
+function confirmPresetSelection(presetName) {
+    // Close the modal first
+    const modal = bootstrap.Modal.getInstance(document.getElementById('exampleModal'));
+    if (modal) modal.hide();
+
+    // Select the preset
+    selectPresetByName(presetName);
+
+    // Find and highlight the card in the grid
+    const cards = document.querySelectorAll('.preset-card');
+    cards.forEach(card => {
+        if (card.querySelector('.card-title')?.textContent.includes(rewardPresets[presetName].name)) {
+            card.classList.add('selected');
+            currentlySelectedCard = card;
+            // Scroll to the selected card
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    });
+}
+
+// Function to test the selected reward
+function testSelectedReward() {
+    // Switch to test tab
+    const testTab = document.querySelector('[data-bs-target="#reward-test-tab"]');
+    if (testTab) {
+        const tab = new bootstrap.Tab(testTab);
+        tab.show();
+    }
+}
+
+// Load saved selection on page load
+function loadSavedSelection() {
+    const saved = localStorage.getItem('selectedReward');
+    if (saved) {
+        try {
+            const config = JSON.parse(saved);
+            if (config.preset_name) {
+                // Wait for presets to load, then select
+                setTimeout(() => {
+                    selectPresetByName(config.preset_name);
+                }, 500);
+            }
+        } catch (e) {
+            console.error('Failed to load saved reward selection:', e);
+        }
+    }
+}
+
+// ============================================================================
+// Legacy Reward Functions (for backward compatibility)
+// ============================================================================
+
+function selectRewardType(type) {
+    // Remove active class from reward type cards
+    document.querySelectorAll('#reward-preset, #reward-custom').forEach(card => {
+        card.classList.remove('active');
+    });
+
+    // Add active class to selected type
+    document.getElementById(`reward-${type}`).classList.add('active');
+
+    // Show/hide relevant sections
+    const presetRewards = document.getElementById('preset-rewards');
+    const customBuilder = document.getElementById('custom-reward-builder');
+
+    if (type === 'preset') {
+        presetRewards.style.display = 'block';
+        customBuilder.style.display = 'none';
+    } else {
+        presetRewards.style.display = 'none';
+        customBuilder.style.display = 'block';
+        // Initialize with one component if empty
+        if (document.getElementById('reward-components').children.length === 0) {
+            addRewardComponent();
+        }
+    }
+}
+
+function addRewardComponent() {
+    const componentsDiv = document.getElementById('reward-components');
+    const componentId = `component-${Date.now()}`;
+
+    const componentHtml = `
+        <div class="reward-component card mb-2" id="${componentId}">
+            <div class="card-body p-2">
+                <div class="row align-items-center">
+                    <div class="col-md-3">
+                        <select class="form-select form-select-sm" onchange="updateComponentType('${componentId}', this.value)">
+                            <option value="binary">Binary Match</option>
+                            <option value="numerical">Numerical</option>
+                            <option value="length">Length</option>
+                            <option value="format">Format</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6" id="${componentId}-params">
+                        <input type="text" class="form-control form-control-sm" placeholder="Regex pattern (optional)">
+                    </div>
+                    <div class="col-md-2">
+                        <input type="number" class="form-control form-control-sm" placeholder="Weight" value="1.0" step="0.1" min="0">
+                    </div>
+                    <div class="col-md-1">
+                        <button class="btn btn-sm btn-danger" onclick="removeRewardComponent('${componentId}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    componentsDiv.insertAdjacentHTML('beforeend', componentHtml);
+}
+
+function removeRewardComponent(componentId) {
+    const component = document.getElementById(componentId);
+    if (component) {
+        component.remove();
+    }
+}
+
+function updateComponentType(componentId, type) {
+    const paramsDiv = document.getElementById(`${componentId}-params`);
+
+    const paramInputs = {
+        'binary': '<input type="text" class="form-control form-control-sm" placeholder="Regex pattern (optional)">',
+        'numerical': '<input type="number" class="form-control form-control-sm" placeholder="Tolerance" value="0.000001" step="0.000001">',
+        'length': '<div class="d-flex gap-1"><input type="number" class="form-control form-control-sm" placeholder="Min" min="0"><input type="number" class="form-control form-control-sm" placeholder="Max" min="0"></div>',
+        'format': '<input type="text" class="form-control form-control-sm" placeholder="Regex pattern (required)">'
+    };
+
+    paramsDiv.innerHTML = paramInputs[type] || '';
+}
+
+// Setup tab change listeners
+function setupTabListeners() {
+    // Listen for tab changes to update config accordingly
+    const customBuilderTab = document.querySelector('[data-bs-target="#reward-custom-tab"]');
+    if (customBuilderTab) {
+        customBuilderTab.addEventListener('shown.bs.tab', () => {
+            updateCustomRewardConfig();
+        });
+    }
+
+    // Also listen for changes to components
+    const observer = new MutationObserver(() => {
+        const activeTab = document.querySelector('#reward-custom-tab.active');
+        if (activeTab) {
+            updateCustomRewardConfig();
+        }
+    });
+
+    const componentsDiv = document.getElementById('reward-components-advanced');
+    if (componentsDiv) {
+        observer.observe(componentsDiv, { childList: true, subtree: true });
+    }
+}
+
+// ============================================================================
+// Main Configuration Gathering Function
+// ============================================================================
+
+function gatherRewardConfig() {
+    // Check if using the new enhanced reward system
+    if (window.selectedRewardConfig) {
+        return window.selectedRewardConfig;
+    }
+
+    // Fallback to old system for backward compatibility
+    const rewardPresetElement = document.getElementById('reward-preset');
+    if (!rewardPresetElement) {
+        // If old elements don't exist, return default config
+        return {
+            type: 'preset',
+            preset: 'math'
+        };
+    }
+
+    const isPreset = rewardPresetElement.classList.contains('active');
+
+    if (isPreset) {
+        const presetSelectElement = document.getElementById('reward-preset-select');
+        const presetValue = presetSelectElement ? presetSelectElement.value : 'math';
+        return {
+            type: 'preset',
+            preset: presetValue
+        };
+    } else {
+        // Gather custom reward components
+        const components = [];
+        const componentDivs = document.querySelectorAll('.reward-component');
+
+        componentDivs.forEach(div => {
+            const typeSelect = div.querySelector('select');
+            const paramsDiv = div.querySelector('[id$="-params"]');
+            const weightInput = div.querySelectorAll('input[type="number"]')[div.querySelectorAll('input[type="number"]').length - 1];
+
+            if (!typeSelect) return;
+
+            const component = {
+                type: typeSelect.value,
+                weight: parseFloat(weightInput?.value) || 1.0
+            };
+
+            // Get type-specific parameters
+            if (typeSelect.value === 'binary' || typeSelect.value === 'format') {
+                const patternInput = paramsDiv?.querySelector('input[type="text"]');
+                if (patternInput && patternInput.value) {
+                    component.pattern = patternInput.value;
+                }
+            } else if (typeSelect.value === 'numerical') {
+                const toleranceInput = paramsDiv?.querySelector('input[type="number"]');
+                if (toleranceInput) {
+                    component.tolerance = parseFloat(toleranceInput.value) || 0.000001;
+                }
+            } else if (typeSelect.value === 'length') {
+                const inputs = paramsDiv?.querySelectorAll('input[type="number"]');
+                if (inputs && inputs.length >= 2) {
+                    component.min_length = parseInt(inputs[0].value) || null;
+                    component.max_length = parseInt(inputs[1].value) || null;
+                }
+            }
+
+            components.push(component);
+        });
+
+        return {
+            type: 'custom',
+            components: components
+        };
+    }
+}
+
+// ============================================================================
+// Export Functions Globally for App.js Integration
+// ============================================================================
+
+// Export all reward functions to window object for global access
+window.gatherRewardConfig = gatherRewardConfig;
+window.selectRewardType = selectRewardType;
+window.addRewardComponent = addRewardComponent;
+window.removeRewardComponent = removeRewardComponent;
+window.updateComponentType = updateComponentType;
+window.selectPresetByName = selectPresetByName;
+window.selectTemplate = selectTemplate;
+window.addAdvancedComponent = addAdvancedComponent;
+window.updateAdvancedComponentType = updateAdvancedComponentType;
+window.removeComponent = removeComponent;
+window.testSelectedReward = testSelectedReward;
+window.saveCustomReward = saveCustomReward;
+window.viewRewardDetails = viewRewardDetails;
+window.confirmPresetSelection = confirmPresetSelection;
+window.loadSavedSelection = loadSavedSelection;
+window.filterPresetsByCategory = filterPresetsByCategory;
+
+// Initialize reward system when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        initializeRewardSystem();
+        loadSavedSelection();
+        setupTabListeners();
+    });
+} else {
+    initializeRewardSystem();
+    loadSavedSelection();
+    setupTabListeners();
+}

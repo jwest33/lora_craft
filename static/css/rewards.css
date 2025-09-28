@@ -1,0 +1,549 @@
+/* ============================================================================ */
+/* Reward System Styling - Light and Dark Mode Support */
+/* ============================================================================ */
+
+/* Base Reward Configuration Container */
+.reward-configuration {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: var(--shadow-md);
+    margin-bottom: 2rem;
+    transition: all 0.3s ease;
+}
+
+[data-theme="dark"] .reward-configuration {
+    background: var(--bg-card);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* Tab Navigation Styling */
+.reward-configuration .nav-tabs {
+    border-bottom: 2px solid var(--border-color);
+    margin-bottom: 0;
+}
+
+.reward-configuration .nav-link {
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    padding: 0.75rem 1.25rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.reward-configuration .nav-link:hover {
+    color: var(--primary);
+    background: var(--bg-secondary);
+    border-bottom-color: var(--primary-light);
+}
+
+.reward-configuration .nav-link.active {
+    color: var(--primary);
+    background: var(--bg-primary);
+    border-bottom-color: var(--primary);
+    font-weight: 600;
+}
+
+[data-theme="dark"] .reward-configuration .nav-link {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .reward-configuration .nav-link:hover {
+    background: rgba(75, 85, 99, 0.2);
+}
+
+[data-theme="dark"] .reward-configuration .nav-link.active {
+    color: var(--primary-light);
+    background: rgba(99, 102, 241, 0.1);
+    border-bottom-color: var(--primary-light);
+}
+
+/* Tab Content Panel */
+.reward-configuration .tab-content {
+    background: transparent;
+    border: none;
+    border-radius: 0 0 12px 12px;
+    min-height: 400px;
+    padding: 1.5rem;
+}
+
+[data-theme="dark"] .reward-configuration .tab-content {
+    background: transparent;
+    border: none;
+}
+
+/* ============================================================================ */
+/* Preset and Template Cards */
+/* ============================================================================ */
+
+.preset-card,
+.template-card {
+    background: var(--bg-card);
+    border: 2px solid var(--border-color);
+    border-radius: 10px;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.preset-card:hover,
+.template-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--primary);
+}
+
+[data-theme="dark"] .preset-card,
+[data-theme="dark"] .template-card {
+    background: var(--bg-tertiary);
+    border-color: #475569;
+}
+
+[data-theme="dark"] .preset-card:hover,
+[data-theme="dark"] .template-card:hover {
+    background: #334155;
+    border-color: var(--primary-light);
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.2);
+}
+
+/* Selected State for Cards */
+.preset-card.selected,
+.template-card.selected {
+    border: 3px solid var(--primary);
+    background: linear-gradient(135deg,
+        rgba(99, 102, 241, 0.05) 0%,
+        rgba(139, 92, 246, 0.05) 100%);
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
+    transform: translateY(-2px);
+}
+
+[data-theme="dark"] .preset-card.selected,
+[data-theme="dark"] .template-card.selected {
+    border-color: var(--primary-light);
+    background: linear-gradient(135deg,
+        rgba(168, 85, 247, 0.15) 0%,
+        rgba(196, 181, 253, 0.15) 100%);
+    box-shadow: 0 0 25px rgba(168, 85, 247, 0.35);
+}
+
+/* Selected Indicator Badge */
+.preset-card.selected::after,
+.template-card.selected::after {
+    content: '✓ Selected';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: var(--success);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    animation: fadeInScale 0.3s ease;
+    z-index: 10;
+}
+
+@keyframes fadeInScale {
+    from {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Card Title */
+.preset-card .card-title,
+.template-card .card-title {
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+/* Card Description */
+.preset-card .card-text,
+.template-card .card-text {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    flex-grow: 1;
+}
+
+/* Difficulty Badges */
+.preset-card .badge,
+.template-card .badge {
+    font-size: 0.7rem;
+    padding: 3px 8px;
+    margin-right: 4px;
+    font-weight: 500;
+}
+
+/* ============================================================================ */
+/* Selected Reward Display Panel */
+/* ============================================================================ */
+
+.selected-reward-panel {
+    background: linear-gradient(135deg,
+        rgba(99, 102, 241, 0.08) 0%,
+        rgba(139, 92, 246, 0.08) 100%);
+    border: 2px solid var(--primary);
+    border-radius: 10px;
+    padding: 1.25rem;
+    margin-top: 1rem;
+    transition: all 0.3s ease;
+}
+
+[data-theme="dark"] .selected-reward-panel {
+    background: linear-gradient(135deg,
+        rgba(168, 85, 247, 0.12) 0%,
+        rgba(196, 181, 253, 0.12) 100%);
+    border-color: var(--primary-light);
+}
+
+.selected-reward-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 0.75rem;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.selected-reward-header i {
+    color: var(--success);
+    font-size: 1.1rem;
+}
+
+.selected-reward-content h5 {
+    color: var(--primary);
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+[data-theme="dark"] .selected-reward-content h5 {
+    color: var(--primary-light);
+}
+
+.selected-reward-content p {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+}
+
+.selected-reward-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.selected-reward-actions .btn {
+    font-size: 0.8rem;
+    padding: 4px 12px;
+}
+
+/* ============================================================================ */
+/* Category List */
+/* ============================================================================ */
+
+#preset-categories .list-group-item {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.25rem;
+}
+
+#preset-categories .list-group-item:hover {
+    background: var(--bg-secondary);
+    border-color: var(--primary);
+    transform: translateX(4px);
+}
+
+#preset-categories .list-group-item.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+    font-weight: 500;
+}
+
+[data-theme="dark"] #preset-categories .list-group-item {
+    background: var(--bg-tertiary);
+    border-color: #475569;
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] #preset-categories .list-group-item:hover {
+    background: #334155;
+    border-color: var(--primary-light);
+}
+
+[data-theme="dark"] #preset-categories .list-group-item.active {
+    background: var(--primary);
+    border-color: var(--primary);
+}
+
+/* ============================================================================ */
+/* Custom Reward Builder */
+/* ============================================================================ */
+
+#reward-components-advanced .card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    margin-bottom: 1rem;
+    transition: all 0.3s ease;
+}
+
+#reward-components-advanced .card:hover {
+    box-shadow: var(--shadow-md);
+}
+
+[data-theme="dark"] #reward-components-advanced .card {
+    background: var(--bg-tertiary);
+    border-color: #475569;
+}
+
+#reward-components-advanced .form-control,
+#reward-components-advanced .form-select {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+[data-theme="dark"] #reward-components-advanced .form-control,
+[data-theme="dark"] #reward-components-advanced .form-select {
+    background: var(--bg-secondary);
+    border-color: #475569;
+    color: var(--text-primary);
+}
+
+#reward-components-advanced .form-control:focus,
+#reward-components-advanced .form-select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
+}
+
+/* ============================================================================ */
+/* Test Panel */
+/* ============================================================================ */
+
+#reward-test-tab textarea {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    font-family: 'Fira Code', 'Monaco', monospace;
+    font-size: 0.9rem;
+}
+
+[data-theme="dark"] #reward-test-tab textarea {
+    background: var(--bg-tertiary);
+    border-color: #475569;
+}
+
+#test-results {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+[data-theme="dark"] #test-results {
+    background: var(--bg-tertiary);
+    border-color: #475569;
+}
+
+.component-scores .progress {
+    height: 20px;
+    background: var(--bg-tertiary);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+[data-theme="dark"] .component-scores .progress {
+    background: var(--bg-primary);
+}
+
+.component-scores .progress-bar {
+    font-size: 0.75rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ============================================================================ */
+/* Modals */
+/* ============================================================================ */
+
+#exampleModal .modal-dialog,
+#rewardSelectionModal .modal-dialog {
+    max-width: 900px;
+}
+
+#exampleModal .modal-content,
+#rewardSelectionModal .modal-content {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] #exampleModal .modal-content,
+[data-theme="dark"] #rewardSelectionModal .modal-content {
+    background: var(--bg-secondary);
+    border-color: #475569;
+}
+
+.example-pre {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1rem;
+    min-height: 120px;
+    max-height: 300px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: 'Fira Code', 'Monaco', monospace;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .example-pre {
+    background: #0f172a;
+    border-color: #334155;
+    color: #f1f5f9;
+}
+
+.preset-details {
+    padding: 1rem;
+    background: var(--bg-primary);
+    border-radius: 8px;
+    margin-top: 1rem;
+}
+
+[data-theme="dark"] .preset-details {
+    background: var(--bg-tertiary);
+}
+
+/* ============================================================================ */
+/* Animations and Transitions */
+/* ============================================================================ */
+
+@keyframes selectPulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7);
+    }
+    50% {
+        transform: scale(1.02);
+        box-shadow: 0 0 0 10px rgba(99, 102, 241, 0);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+    }
+}
+
+.selecting {
+    animation: selectPulse 0.5s ease;
+}
+
+/* ============================================================================ */
+/* Alert Info Styling in Reward Tabs */
+/* ============================================================================ */
+
+.reward-configuration .alert-info {
+    background: linear-gradient(135deg,
+        rgba(59, 130, 246, 0.1) 0%,
+        rgba(99, 102, 241, 0.1) 100%);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .reward-configuration .alert-info {
+    background: linear-gradient(135deg,
+        rgba(59, 130, 246, 0.15) 0%,
+        rgba(99, 102, 241, 0.15) 100%);
+    border-color: rgba(59, 130, 246, 0.4);
+}
+
+/* ============================================================================ */
+/* Responsive Design */
+/* ============================================================================ */
+
+@media (max-width: 768px) {
+    .reward-configuration {
+        padding: 1rem;
+    }
+
+    .reward-configuration .nav-link {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.85rem;
+    }
+
+    .preset-card,
+    .template-card {
+        margin-bottom: 1rem;
+    }
+
+    #exampleModal .modal-dialog,
+    #rewardSelectionModal .modal-dialog {
+        max-width: 95%;
+        margin: 0.5rem;
+    }
+
+    .selected-reward-actions {
+        flex-direction: column;
+    }
+
+    .selected-reward-actions .btn {
+        width: 100%;
+    }
+}
+
+/* ============================================================================ */
+/* Button Styling in Reward Context */
+/* ============================================================================ */
+
+.reward-configuration .btn-primary {
+    background: var(--gradient-primary);
+    border: none;
+    color: white;
+    transition: all 0.3s ease;
+}
+
+.reward-configuration .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.reward-configuration .btn-outline-info {
+    color: var(--info);
+    border-color: var(--info);
+}
+
+.reward-configuration .btn-outline-info:hover {
+    background: var(--info);
+    color: white;
+    transform: translateY(-1px);
+}
+
+[data-theme="dark"] .reward-configuration .btn-outline-info {
+    color: #06b6d4;
+    border-color: #06b6d4;
+}
+
+[data-theme="dark"] .reward-configuration .btn-outline-info:hover {
+    background: #06b6d4;
+    color: white;
+}

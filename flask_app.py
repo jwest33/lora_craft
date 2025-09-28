@@ -44,6 +44,11 @@ from core import (
     ModelTester,
     TestConfig
 )
+from core.custom_rewards import (
+    RewardPresetLibrary,
+    RewardTester,
+    RewardTemplateLibrary
+)
 from utils.logging_config import setup_logging, get_logger
 from utils.validators import validate_training_config
 
@@ -3170,6 +3175,295 @@ def clear_model_cache():
 
     except Exception as e:
         logger.error(f"Failed to clear cache: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ============================================================================
+# Reward System API Routes
+# ============================================================================
+
+@app.route('/api/rewards/presets', methods=['GET'])
+def get_reward_presets():
+    """Get all available reward presets with metadata."""
+    try:
+        library = RewardPresetLibrary()
+        return jsonify(library.to_dict())
+    except Exception as e:
+        logger.error(f"Failed to load reward presets: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/rewards/templates', methods=['GET'])
+def get_reward_templates():
+    """Get all reward templates for quick start."""
+    try:
+        library = RewardTemplateLibrary()
+        templates = {
+            name: template.to_dict()
+            for name, template in library.get_all_templates().items()
+        }
+        return jsonify({'templates': templates})
+    except Exception as e:
+        logger.error(f"Failed to load reward templates: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/rewards/test', methods=['POST'])
+def test_reward():
+    """Test a reward configuration with sample inputs."""
+    try:
+        data = request.get_json()
+        reward_config = data.get('reward_config')
+        test_cases = data.get('test_cases', [])
+
+        if not reward_config:
+            return jsonify({'error': 'No reward configuration provided'}), 400
+
+        if not test_cases:
+            return jsonify({'error': 'No test cases provided'}), 400
+
+        # Build the reward from configuration
+        reward_builder = CustomRewardBuilder()
+
+        if reward_config.get('type') == 'preset':
+            # Use preset
+            library = RewardPresetLibrary()
+            preset_name = reward_config.get('preset_name')
+            preset = library.get_preset(preset_name)
+
+            if not preset:
+                return jsonify({'error': f'Unknown preset: {preset_name}'}), 400
+
+            reward_builder = preset.create_builder()
+        else:
+            # Build custom reward
+            components = reward_config.get('components', [])
+
+            for comp in components:
+                comp_type = comp.get('type')
+                weight = comp.get('weight', 1.0)
+
+                if comp_type == 'binary':
+                    pattern = comp.get('pattern')
+                    reward_builder.add_binary_reward(
+                        f"binary_{len(components)}",
+                        regex_pattern=pattern,
+                        weight=weight
+                    )
+                elif comp_type == 'numerical':
+                    tolerance = comp.get('tolerance', 1e-6)
+                    reward_builder.add_numerical_reward(
+                        f"numerical_{len(components)}",
+                        tolerance=tolerance,
+                        weight=weight
+                    )
+                elif comp_type == 'length':
+                    min_len = comp.get('min_length')
+                    max_len = comp.get('max_length')
+                    optimal_len = comp.get('optimal_length')
+                    reward_builder.add_length_reward(
+                        f"length_{len(components)}",
+                        min_length=min_len,
+                        max_length=max_len,
+                        optimal_length=optimal_len,
+                        weight=weight
+                    )
+                elif comp_type == 'format':
+                    pattern = comp.get('pattern', r".*")
+                    reward_builder.add_format_reward(
+                        f"format_{len(components)}",
+                        pattern=pattern,
+                        weight=weight
+                    )
+
+        # Test the reward
+        tester = RewardTester(reward_builder)
+
+        # Run batch test if multiple cases
+        if len(test_cases) > 1:
+            results = tester.test_batch(test_cases)
+        else:
+            # Single test
+            case = test_cases[0]
+            result = tester.test_single(
+                case.get('instruction', ''),
+                case.get('generated', ''),
+                case.get('reference')
+            )
+            results = {
+                'results': [result],
+                'statistics': {
+                    'mean': result['total_reward'],
+                    'std': 0,
+                    'min': result['total_reward'],
+                    'max': result['total_reward'],
+                    'median': result['total_reward']
+                }
+            }
+
+        return jsonify(results)
+
+    except Exception as e:
+        logger.error(f"Failed to test reward: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/rewards/compare', methods=['POST'])
+def compare_rewards():
+    """Compare multiple responses using a reward function."""
+    try:
+        data = request.get_json()
+        reward_config = data.get('reward_config')
+        instruction = data.get('instruction')
+        responses = data.get('responses', [])
+        reference = data.get('reference')
+
+        if not reward_config or not instruction or not responses:
+            return jsonify({'error': 'Missing required parameters'}), 400
+
+        # Build the reward
+        reward_builder = CustomRewardBuilder()
+
+        if reward_config.get('type') == 'preset':
+            library = RewardPresetLibrary()
+            preset_name = reward_config.get('preset_name')
+            preset = library.get_preset(preset_name)
+
+            if not preset:
+                return jsonify({'error': f'Unknown preset: {preset_name}'}), 400
+
+            reward_builder = preset.create_builder()
+        else:
+            # Build custom reward (similar to test_reward)
+            components = reward_config.get('components', [])
+            for comp in components:
+                comp_type = comp.get('type')
+                weight = comp.get('weight', 1.0)
+
+                if comp_type == 'binary':
+                    pattern = comp.get('pattern')
+                    reward_builder.add_binary_reward(
+                        f"binary_{len(components)}",
+                        regex_pattern=pattern,
+                        weight=weight
+                    )
+                elif comp_type == 'numerical':
+                    tolerance = comp.get('tolerance', 1e-6)
+                    reward_builder.add_numerical_reward(
+                        f"numerical_{len(components)}",
+                        tolerance=tolerance,
+                        weight=weight
+                    )
+                elif comp_type == 'length':
+                    min_len = comp.get('min_length')
+                    max_len = comp.get('max_length')
+                    optimal_len = comp.get('optimal_length')
+                    reward_builder.add_length_reward(
+                        f"length_{len(components)}",
+                        min_length=min_len,
+                        max_length=max_len,
+                        optimal_length=optimal_len,
+                        weight=weight
+                    )
+                elif comp_type == 'format':
+                    pattern = comp.get('pattern', r".*")
+                    reward_builder.add_format_reward(
+                        f"format_{len(components)}",
+                        pattern=pattern,
+                        weight=weight
+                    )
+
+        # Compare responses
+        tester = RewardTester(reward_builder)
+        results = tester.compare_responses(instruction, responses, reference)
+
+        return jsonify({'comparisons': results})
+
+    except Exception as e:
+        logger.error(f"Failed to compare responses: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/rewards/visualize', methods=['POST'])
+def visualize_reward():
+    """Get visualization data for a reward test result."""
+    try:
+        data = request.get_json()
+        test_result = data.get('test_result')
+
+        if not test_result:
+            return jsonify({'error': 'No test result provided'}), 400
+
+        # Create visualization
+        tester = RewardTester(CustomRewardBuilder())  # Dummy builder for viz
+        visualization = tester.visualize_components(test_result)
+
+        return jsonify({
+            'visualization': visualization,
+            'chart_data': {
+                'labels': list(test_result.get('components', {}).keys()),
+                'values': list(test_result.get('components', {}).values())
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to visualize reward: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/rewards/recommend', methods=['POST'])
+def recommend_reward():
+    """Recommend a reward configuration based on task description."""
+    try:
+        data = request.get_json()
+        task_description = data.get('task_description', '')
+        example_input = data.get('example_input', '')
+        example_output = data.get('example_output', '')
+
+        # Simple keyword-based recommendation
+        library = RewardPresetLibrary()
+
+        # Search for matching presets
+        keywords = task_description.lower().split()
+        recommendations = []
+
+        for preset_name, preset in library.presets.items():
+            score = 0
+
+            # Check for keyword matches
+            for keyword in keywords:
+                if keyword in preset.name.lower():
+                    score += 2
+                if keyword in preset.description.lower():
+                    score += 1
+                if any(keyword in tag.lower() for tag in preset.tags):
+                    score += 1
+
+            if score > 0:
+                recommendations.append({
+                    'preset': preset.to_dict(),
+                    'score': score,
+                    'reason': f"Matches {score} keywords from your description"
+                })
+
+        # Sort by score
+        recommendations.sort(key=lambda x: x['score'], reverse=True)
+
+        # Also recommend templates
+        template_library = RewardTemplateLibrary()
+        template_recommendations = []
+
+        for template_name, template in template_library.templates.items():
+            if any(keyword in template.description.lower() for keyword in keywords):
+                template_recommendations.append(template.to_dict())
+
+        return jsonify({
+            'preset_recommendations': recommendations[:5],  # Top 5
+            'template_recommendations': template_recommendations[:3]  # Top 3
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to recommend reward: {e}")
         return jsonify({'error': str(e)}), 500
 
 
