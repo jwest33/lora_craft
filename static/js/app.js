@@ -440,9 +440,7 @@ function updateStepIndicators() {
             const stepElement = indicator.classList.contains('step') ? indicator :
                                 indicator.classList.contains('compact-step') ? indicator : null;
 
-            if (i < currentStep && stepValidation[i]) {
-                indicator.classList.add('completed');
-            } else if (i === currentStep) {
+            if (i === currentStep) {
                 indicator.classList.add('active');
             }
         }
