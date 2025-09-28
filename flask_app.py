@@ -794,17 +794,47 @@ def run_training(session_id: str, config: Dict[str, Any]):
         sys.stdout = original_stdout
         sys.stderr = original_stderr
 
-        # Mark session as completed
+        # Mark session as completed and clean up resources
         if session_id in training_sessions:
             session_obj = training_sessions[session_id]
+
             # Clean up the trainer model from memory after training
             # The trained model is saved to disk and can be loaded separately for testing
-            if session_obj.trainer:
+            if hasattr(session_obj, 'trainer') and session_obj.trainer:
                 try:
-                    session_obj.trainer.cleanup()
-                    logger.info(f"Cleaned up trainer resources for session {session_id}")
+                    # Call cleanup method if available
+                    if hasattr(session_obj.trainer, 'cleanup'):
+                        session_obj.trainer.cleanup()
+                        logger.info(f"Cleaned up trainer resources for session {session_id}")
+
+                    # Delete the trainer object reference
+                    del session_obj.trainer
+                    session_obj.trainer = None
+                    logger.info(f"Deleted trainer reference for session {session_id}")
+
                 except Exception as e:
                     logger.warning(f"Error cleaning up trainer: {e}")
+                finally:
+                    # Ensure trainer is set to None even if cleanup fails
+                    session_obj.trainer = None
+
+            # Force garbage collection and CUDA cache clearing
+            import gc
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                logger.info(f"Cleared CUDA cache after training session {session_id}")
+
+            # Clear the session queue to prevent memory leaks
+            if session_id in session_queues:
+                q = session_queues[session_id]
+                # Empty the queue
+                while not q.empty():
+                    try:
+                        q.get_nowait()
+                    except:
+                        break
+                logger.info(f"Cleared session queue for {session_id}")
 
             session_obj.completed_at = datetime.now()
             if session_obj.status == 'running':
@@ -998,6 +1028,27 @@ def start_training():
         valid, errors = validate_training_config(config)
         if not valid:
             return jsonify({'error': 'Invalid configuration', 'errors': errors}), 400
+
+        # Clean up any stale training sessions before starting new one
+        # This helps prevent the hanging issue when training multiple models
+        import gc
+        for sid, session in list(training_sessions.items()):
+            if session.status in ['completed', 'error', 'stopped']:
+                # Clean up trainer if it exists
+                if hasattr(session, 'trainer') and session.trainer:
+                    try:
+                        if hasattr(session.trainer, 'cleanup'):
+                            session.trainer.cleanup()
+                        del session.trainer
+                    except:
+                        pass
+                    finally:
+                        session.trainer = None
+
+        # Force garbage collection before starting new training
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         # Create new session
         session_id = create_session_id()
@@ -3175,6 +3226,281 @@ def clear_model_cache():
 
     except Exception as e:
         logger.error(f"Failed to clear cache: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/test/upload-file', methods=['POST'])
+def upload_test_file():
+    """Upload and analyze a test file for batch testing."""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+
+        # Check file extension
+        filename = secure_filename(file.filename)
+        ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+
+        if ext not in ['csv', 'json', 'jsonl']:
+            return jsonify({'error': 'Invalid file format. Supported: CSV, JSON, JSONL'}), 400
+
+        # Save file temporarily
+        import tempfile
+        import pandas as pd
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{ext}') as tmp_file:
+            file.save(tmp_file.name)
+            temp_path = tmp_file.name
+
+        try:
+            # Parse file based on extension
+            if ext == 'csv':
+                df = pd.read_csv(temp_path)
+                columns = df.columns.tolist()
+                sample_count = len(df)
+                samples = df.head(5).to_dict('records')
+            elif ext == 'json':
+                with open(temp_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                if isinstance(data, list):
+                    df = pd.DataFrame(data)
+                    columns = df.columns.tolist()
+                    sample_count = len(data)
+                    samples = data[:5]
+                else:
+                    return jsonify({'error': 'JSON file must contain an array of objects'}), 400
+            elif ext == 'jsonl':
+                with open(temp_path, 'r', encoding='utf-8') as f:
+                    data = [json.loads(line) for line in f]
+                df = pd.DataFrame(data)
+                columns = df.columns.tolist()
+                sample_count = len(data)
+                samples = data[:5]
+
+            # Store file data in session for later use
+            session['batch_test_file'] = {
+                'path': temp_path,
+                'format': ext,
+                'columns': columns,
+                'sample_count': sample_count
+            }
+
+            return jsonify({
+                'success': True,
+                'columns': columns,
+                'sample_count': sample_count,
+                'samples': samples,
+                'filename': filename
+            })
+
+        except Exception as e:
+            # Clean up temp file on error
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+            raise e
+
+    except Exception as e:
+        logger.error(f"Failed to process test file: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/test/batch-compare', methods=['POST'])
+def batch_compare_models():
+    """Run batch comparison between trained and base/comparison models."""
+    try:
+        data = request.json
+
+        # Get file data from session
+        if 'batch_test_file' not in session:
+            return jsonify({'error': 'No test file uploaded'}), 400
+
+        file_info = session['batch_test_file']
+        temp_path = file_info['path']
+
+        if not os.path.exists(temp_path):
+            return jsonify({'error': 'Test file no longer available. Please upload again.'}), 400
+
+        # Extract parameters
+        session_id = data.get('session_id')
+        base_model = data.get('base_model')
+        instruction_column = data.get('instruction_column')
+        response_column = data.get('response_column')  # Optional
+        sample_size = data.get('sample_size')  # None means all
+        use_chat_template = data.get('use_chat_template', True)
+        compare_mode = data.get('compare_mode', 'base')  # 'base' or 'model'
+        comparison_session_id = data.get('comparison_session_id')  # For model vs model
+
+        # Validate required parameters
+        if not session_id or not instruction_column:
+            return jsonify({'error': 'Missing required parameters'}), 400
+
+        if compare_mode == 'base' and not base_model:
+            return jsonify({'error': 'Base model required for comparison'}), 400
+        elif compare_mode == 'model' and not comparison_session_id:
+            return jsonify({'error': 'Comparison model required'}), 400
+
+        # Load test data
+        import pandas as pd
+
+        if file_info['format'] == 'csv':
+            df = pd.read_csv(temp_path)
+        elif file_info['format'] == 'json':
+            with open(temp_path, 'r', encoding='utf-8') as f:
+                df = pd.DataFrame(json.load(f))
+        elif file_info['format'] == 'jsonl':
+            with open(temp_path, 'r', encoding='utf-8') as f:
+                df = pd.DataFrame([json.loads(line) for line in f])
+
+        # Apply sample size limit if specified
+        if sample_size:
+            df = df.head(sample_size)
+
+        # Validate columns exist
+        if instruction_column not in df.columns:
+            return jsonify({'error': f'Instruction column "{instruction_column}" not found'}), 400
+
+        if response_column and response_column not in df.columns:
+            return jsonify({'error': f'Response column "{response_column}" not found'}), 400
+
+        # Get checkpoint path from registry
+        session_info = session_registry.get_session(session_id)
+        if not session_info:
+            return jsonify({'error': f'Session {session_id} not found'}), 404
+
+        checkpoint_path = session_info.checkpoint_path
+        if not checkpoint_path or not Path(checkpoint_path).exists():
+            return jsonify({'error': f'Checkpoint not found for session {session_id}'}), 404
+
+        # Load trained model
+        success, error = model_tester.load_trained_model(checkpoint_path, session_id)
+        if not success:
+            return jsonify({'error': f'Failed to load trained model: {error}'}), 500
+
+        # Load comparison model
+        if compare_mode == 'base':
+            success, error = model_tester.load_base_model(base_model)
+            if not success:
+                return jsonify({'error': f'Failed to load base model: {error}'}), 500
+        else:
+            # Load another trained model for comparison
+            comp_session_info = session_registry.get_session(comparison_session_id)
+            if not comp_session_info:
+                return jsonify({'error': f'Comparison session {comparison_session_id} not found'}), 404
+
+            comp_checkpoint = comp_session_info.checkpoint_path
+            if not comp_checkpoint or not Path(comp_checkpoint).exists():
+                return jsonify({'error': f'Checkpoint not found for comparison session {comparison_session_id}'}), 404
+
+            success, error = model_tester.load_trained_model(comp_checkpoint, comparison_session_id)
+            if not success:
+                return jsonify({'error': f'Failed to load comparison model: {error}'}), 500
+
+        # Generation config
+        config_data = data.get('config', {})
+        config = TestConfig(
+            temperature=config_data.get('temperature', 0.7),
+            max_new_tokens=config_data.get('max_new_tokens', 512),
+            top_p=config_data.get('top_p', 0.95),
+            top_k=config_data.get('top_k', 50),
+            repetition_penalty=config_data.get('repetition_penalty', 1.0),
+            do_sample=config_data.get('do_sample', True)
+        )
+
+        # Process batch
+        results = []
+        for idx, row in df.iterrows():
+            instruction = str(row[instruction_column])
+            expected = str(row[response_column]) if response_column else None
+
+            # Generate from trained model
+            trained_response = model_tester.generate_response(
+                prompt=instruction,
+                model_type="trained",
+                model_key=session_id,
+                config=config,
+                use_chat_template=use_chat_template
+            )
+
+            # Generate from comparison model
+            if compare_mode == 'base':
+                comparison_response = model_tester.generate_response(
+                    prompt=instruction,
+                    model_type="base",
+                    model_key=base_model,
+                    config=config,
+                    use_chat_template=use_chat_template
+                )
+            else:
+                comparison_response = model_tester.generate_response(
+                    prompt=instruction,
+                    model_type="trained",
+                    model_key=comparison_session_id,
+                    config=config,
+                    use_chat_template=use_chat_template
+                )
+
+            result_item = {
+                'index': idx,
+                'instruction': instruction,
+                'trained_response': trained_response.get('response', '') if trained_response.get('success') else 'ERROR',
+                'comparison_response': comparison_response.get('response', '') if comparison_response.get('success') else 'ERROR',
+                'trained_time': trained_response.get('metadata', {}).get('generation_time', 0),
+                'comparison_time': comparison_response.get('metadata', {}).get('generation_time', 0)
+            }
+
+            # Add expected response and calculate match if available
+            if expected:
+                result_item['expected'] = expected
+                result_item['trained_match'] = result_item['trained_response'].strip().lower() == expected.strip().lower()
+                result_item['comparison_match'] = result_item['comparison_response'].strip().lower() == expected.strip().lower()
+
+            results.append(result_item)
+
+        # Calculate summary statistics
+        total_samples = len(results)
+        avg_trained_time = sum(r['trained_time'] for r in results) / total_samples if total_samples > 0 else 0
+        avg_comparison_time = sum(r['comparison_time'] for r in results) / total_samples if total_samples > 0 else 0
+        avg_trained_length = sum(len(r['trained_response']) for r in results) / total_samples if total_samples > 0 else 0
+        avg_comparison_length = sum(len(r['comparison_response']) for r in results) / total_samples if total_samples > 0 else 0
+
+        summary = {
+            'total_samples': total_samples,
+            'avg_trained_time': round(avg_trained_time, 3),
+            'avg_comparison_time': round(avg_comparison_time, 3),
+            'avg_trained_length': round(avg_trained_length, 1),
+            'avg_comparison_length': round(avg_comparison_length, 1)
+        }
+
+        # Add accuracy metrics if expected responses provided
+        if response_column:
+            trained_matches = sum(1 for r in results if r.get('trained_match', False))
+            comparison_matches = sum(1 for r in results if r.get('comparison_match', False))
+            summary['trained_accuracy'] = round(trained_matches / total_samples * 100, 1) if total_samples > 0 else 0
+            summary['comparison_accuracy'] = round(comparison_matches / total_samples * 100, 1) if total_samples > 0 else 0
+
+        # Clean up temp file
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+        session.pop('batch_test_file', None)
+
+        return jsonify({
+            'success': True,
+            'results': results,
+            'summary': summary,
+            'compare_mode': compare_mode
+        })
+
+    except Exception as e:
+        logger.error(f"Batch comparison failed: {str(e)}")
+        # Clean up on error
+        if 'batch_test_file' in session:
+            temp_path = session['batch_test_file'].get('path')
+            if temp_path and os.path.exists(temp_path):
+                os.unlink(temp_path)
+            session.pop('batch_test_file', None)
         return jsonify({'error': str(e)}), 500
 
 

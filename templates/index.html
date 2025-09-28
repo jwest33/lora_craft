@@ -225,18 +225,6 @@
                                 </div>
                             </div>
 
-                            <!-- Model Display Name -->
-                            <div class="row mt-3">
-                                <div class="col-12">
-                                    <div class="form-group">
-                                        <label class="form-label">Model Name (Optional)</label>
-                                        <input type="text" class="form-control" id="model-display-name"
-                                               placeholder="e.g., Math Solver v2 (auto-generated if empty)">
-                                        <small class="text-muted">Give your trained model a memorable name for easy identification</small>
-                                    </div>
-                                </div>
-                            </div>
-
                             <!-- LoRA Configuration (Hidden for Recommended mode) -->
                             <div class="config-section mt-4" id="lora-config-section" style="display: none;">
                                 <h5 class="section-title">
@@ -1270,6 +1258,18 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                             </div>
                         </div>
                         <div class="step-content collapse" id="step-4-content">
+                            <!-- Model Display Name -->
+                            <div class="mb-4">
+                                <h5 class="section-title">
+                                    <i class="fas fa-tag"></i> Model Name
+                                </h5>
+                                <div class="form-group">
+                                    <input type="text" class="form-control" id="model-display-name"
+                                           placeholder="e.g., Math Solver v2 (auto-generated if empty)">
+                                    <small class="text-muted">Give your trained model a memorable name for easy identification. This name will be used for both training and exports.</small>
+                                </div>
+                            </div>
+
                             <!-- Configuration Summary -->
                             <div class="config-summary">
                                 <h5 class="section-title">
@@ -1301,16 +1301,6 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                         <span class="summary-value" id="summary-batch">--</span>
                                     </div>
                                 </div>
-                            </div>
-
-                            <!-- Config Actions -->
-                            <div class="config-actions mt-4">
-                                <button class="btn btn-outline-secondary" onclick="saveCurrentConfig()">
-                                    <i class="fas fa-save"></i> Save Config
-                                </button>
-                                <button class="btn btn-outline-secondary" onclick="exportConfig()">
-                                    <i class="fas fa-download"></i> Export
-                                </button>
                             </div>
 
                             <!-- Train Button -->
@@ -1529,6 +1519,24 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                 <i class="fas fa-balance-scale"></i> Model Comparison
                             </h5>
 
+                            <!-- Tab Navigation -->
+                            <ul class="nav nav-tabs mb-4" id="testModeTabs" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active" id="single-test-tab" data-bs-toggle="tab" data-bs-target="#single-test" type="button" role="tab">
+                                        <i class="fas fa-comment"></i> Single Test
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="batch-test-tab" data-bs-toggle="tab" data-bs-target="#batch-test" type="button" role="tab">
+                                        <i class="fas fa-file-csv"></i> Batch Test
+                                    </button>
+                                </li>
+                            </ul>
+
+                            <!-- Tab Content -->
+                            <div class="tab-content" id="testModeContent">
+                                <!-- Single Test Tab -->
+                                <div class="tab-pane fade show active" id="single-test" role="tabpanel">
                             <!-- Model Selection -->
                             <div class="card mb-4">
                                 <div class="card-body">
@@ -1622,12 +1630,9 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                             </div>
                                         </div>
 
-                                        <!-- Buttons -->
+                                        <!-- Clear Cache Button -->
                                         <div class="d-flex">
-                                            <button class="btn btn-primary me-2" onclick="loadModelsForTesting()" id="load-models-btn">
-                                                <i class="fas fa-download"></i> <span id="load-btn-text">Load Selected</span>
-                                            </button>
-                                            <button class="btn btn-outline-secondary" onclick="clearModelCache()">
+                                            <button class="btn btn-outline-secondary w-100" onclick="clearModelCache()">
                                                 <i class="fas fa-broom"></i> Clear Cache
                                             </button>
                                         </div>
@@ -1772,9 +1777,219 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                     </div>
                                 </div>
                             </div>
+                                </div>
+                                <!-- End Single Test Tab -->
+
+                                <!-- Batch Test Tab -->
+                                <div class="tab-pane fade" id="batch-test" role="tabpanel">
+                                    <!-- Model Selection for Batch Test -->
+                                    <div class="card mb-4">
+                                        <div class="card-body">
+                                            <h6 class="card-title fw-bold mb-3">
+                                                <i class="fas fa-robot"></i> Model Selection
+                                            </h6>
+
+                                            <!-- Primary Model Selection -->
+                                            <div class="mb-3">
+                                                <label class="form-label">Primary Model (Trained)</label>
+                                                <select class="form-select" id="batch-test-model-select" onchange="updateBatchModelSelection()">
+                                                    <option value="">Select a trained model...</option>
+                                                </select>
+                                                <small class="text-muted">Select the trained model to test</small>
+                                            </div>
+
+                                            <!-- Comparison Mode -->
+                                            <div class="mb-3">
+                                                <label class="form-label">Comparison Mode</label>
+                                                <div class="btn-group w-100" role="group">
+                                                    <input type="radio" class="btn-check" name="batch-compare-mode" id="batch-compare-base" value="base" checked>
+                                                    <label class="btn btn-outline-primary" for="batch-compare-base">
+                                                        <i class="fas fa-cube"></i> Compare with Base Model
+                                                    </label>
+                                                    <input type="radio" class="btn-check" name="batch-compare-mode" id="batch-compare-model" value="model">
+                                                    <label class="btn btn-outline-primary" for="batch-compare-model">
+                                                        <i class="fas fa-layer-group"></i> Compare with Another Model
+                                                    </label>
+                                                </div>
+                                            </div>
+
+                                            <!-- Base Model Selection (shown when comparing with base) -->
+                                            <div class="mb-3" id="batch-base-model-group">
+                                                <label class="form-label">Base Model</label>
+                                                <input type="text" class="form-control" id="batch-base-model-input" readonly>
+                                                <small class="text-muted">Automatically set from selected trained model</small>
+                                            </div>
+
+                                            <!-- Comparison Model Selection (shown when comparing with another model) -->
+                                            <div class="mb-3" id="batch-comparison-model-group" style="display: none;">
+                                                <label class="form-label">Comparison Model</label>
+                                                <select class="form-select" id="batch-comparison-model-select">
+                                                    <option value="">Select another trained model...</option>
+                                                </select>
+                                                <small class="text-muted">Select another trained model for comparison</small>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- File Upload Section -->
+                                    <div class="card mb-4">
+                                        <div class="card-body">
+                                            <h6 class="card-title fw-bold mb-3">
+                                                <i class="fas fa-file-upload"></i> Upload Test File
+                                            </h6>
+                                            <div class="mb-3">
+                                                <input type="file" class="form-control" id="batch-test-file" accept=".csv,.json,.jsonl" onchange="handleBatchTestFileUpload()">
+                                                <small class="text-muted">Supported formats: CSV, JSON, JSONL</small>
+                                            </div>
+                                            <div id="batch-file-info" class="alert alert-info" style="display: none;">
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <span id="batch-file-details"></span>
+                                                    <button class="btn btn-sm btn-outline-danger" onclick="clearBatchTestFile()">
+                                                        <i class="fas fa-times"></i> Clear
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Column Configuration -->
+                                    <div class="card mb-4" id="batch-column-config" style="display: none;">
+                                        <div class="card-body">
+                                            <h6 class="card-title fw-bold mb-3">
+                                                <i class="fas fa-columns"></i> Column Configuration
+                                            </h6>
+                                            <div class="row">
+                                                <div class="col-md-4">
+                                                    <label class="form-label">Instruction Column</label>
+                                                    <select class="form-select" id="batch-instruction-column">
+                                                        <option value="">Select column...</option>
+                                                    </select>
+                                                    <small class="text-muted">Column containing test prompts</small>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label class="form-label">Expected Response Column (Optional)</label>
+                                                    <select class="form-select" id="batch-response-column">
+                                                        <option value="">None - Just compare models</option>
+                                                    </select>
+                                                    <small class="text-muted">For evaluation against expected outputs</small>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label class="form-label">Sample Size</label>
+                                                    <div class="input-group">
+                                                        <input type="number" class="form-control" id="batch-sample-size" min="1" placeholder="All">
+                                                        <span class="input-group-text" id="batch-total-samples">of 0</span>
+                                                    </div>
+                                                    <small class="text-muted">Leave empty to use all samples</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Test Options -->
+                                    <div class="card mb-4" id="batch-test-options" style="display: none;">
+                                        <div class="card-body">
+                                            <h6 class="card-title fw-bold mb-3">
+                                                <i class="fas fa-cog"></i> Test Options
+                                            </h6>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" id="batch-use-chat-template" checked>
+                                                        <label class="form-check-label" for="batch-use-chat-template">
+                                                            Use chat template
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" id="batch-evaluate-responses">
+                                                        <label class="form-check-label" for="batch-evaluate-responses">
+                                                            Calculate evaluation metrics
+                                                        </label>
+                                                        <small class="text-muted d-block">Requires expected response column</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="mt-3">
+                                                <button class="btn btn-success btn-lg w-100" onclick="runBatchComparison()" id="batch-compare-btn" disabled>
+                                                    <i class="fas fa-play"></i> Run Batch Comparison
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Batch Results -->
+                                    <div class="card" id="batch-results" style="display: none;">
+                                        <div class="card-body">
+                                            <h6 class="card-title fw-bold mb-3">
+                                                <i class="fas fa-chart-bar"></i> Batch Test Results
+                                            </h6>
+
+                                            <!-- Progress Bar -->
+                                            <div class="progress mb-3" id="batch-progress" style="display: none;">
+                                                <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                                            </div>
+
+                                            <!-- Summary Statistics -->
+                                            <div class="row mb-4" id="batch-summary" style="display: none;">
+                                                <div class="col-md-3">
+                                                    <div class="text-center">
+                                                        <h4 id="batch-accuracy">-</h4>
+                                                        <small class="text-muted">Accuracy</small>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="text-center">
+                                                        <h4 id="batch-avg-length">-</h4>
+                                                        <small class="text-muted">Avg Response Length</small>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="text-center">
+                                                        <h4 id="batch-avg-time">-</h4>
+                                                        <small class="text-muted">Avg Time (s)</small>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="text-center">
+                                                        <h4 id="batch-total-samples">-</h4>
+                                                        <small class="text-muted">Samples Tested</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Results Table -->
+                                            <div class="table-responsive">
+                                                <table class="table table-sm" id="batch-results-table">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>#</th>
+                                                            <th>Instruction</th>
+                                                            <th>Trained Model</th>
+                                                            <th>Comparison Model</th>
+                                                            <th id="expected-header">Expected Response</th>
+                                                            <th id="match-header">Match</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody id="batch-results-body">
+                                                        <!-- Results will be populated here -->
+                                                    </tbody>
+                                                </table>
+                                            </div>
+
+                                            <!-- Export Button -->
+                                            <div class="mt-3">
+                                                <button class="btn btn-success" onclick="exportBatchResults()">
+                                                    <i class="fas fa-download"></i> Export Results as CSV
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- End Batch Test Tab -->
+                            </div>
+                            <!-- End Tab Content -->
                         </div>
-                    </div>
-                </div>
                     </div>
                 </div>
                 <!-- End of Step 6 -->
