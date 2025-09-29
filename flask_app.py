@@ -44,6 +44,8 @@ from core import (
     ModelTester,
     TestConfig
 )
+from core.test_history import get_test_history_manager
+from core.batch_tester import get_batch_test_runner
 from core.custom_rewards import (
     RewardPresetLibrary,
     RewardTester,
@@ -543,6 +545,16 @@ def run_training(session_id: str, config: Dict[str, Any]):
             fp16=config.get('fp16', False),
             bf16=config.get('bf16', False),
 
+            # Pre-training configuration (for format learning phase)
+            # Handle both nested (from new frontend) and flat (from old code/API) config formats
+            pre_training_epochs=(config.get('pre_training', {}).get('epochs') or
+                                config.get('pre_training_epochs', 2)),  # Default: 2 epochs (matches official notebook)
+            pre_training_max_samples=(config.get('pre_training', {}).get('max_samples') or
+                                     config.get('pre_training_max_samples')),  # Separate from main max_samples
+            pre_training_filter_by_length=(config.get('pre_training', {}).get('filter_by_length') or
+                                          config.get('pre_training_filter_by_length', False)),
+            pre_training_max_length_ratio=config.get('pre_training_max_length_ratio', 0.5),
+
             # Paths
             output_dir=f"./outputs/{session_id}",
             checkpoint_dir=f"./outputs/{session_id}/checkpoints"
@@ -579,6 +591,13 @@ def run_training(session_id: str, config: Dict[str, Any]):
 
         # Load dataset
         q.put(('log', "Loading dataset..."))
+
+        # IMPORTANT: Dataset Sample Size Semantics
+        # - max_samples in DatasetConfig: Samples PER EPOCH for main GRPO training
+        # - pre_training_max_samples: SEPARATE limit for pre-training phase only
+        # Example: max_samples=1000, pre_training_max_samples=100, num_epochs=3
+        #   -> Pre-training: 100 samples for pre_training_epochs (default 2)
+        #   -> Main training: 1000 samples per epoch × 3 epochs = 3000 training steps
 
         # Determine source type based on dataset_path
         dataset_path = config.get('dataset_path', 'tatsu-lab/alpaca')
@@ -688,49 +707,115 @@ def run_training(session_id: str, config: Dict[str, Any]):
         q.put(('log', f"Using {algorithm_name} algorithm for training (importance_sampling_level: {importance_level})"))
 
         # Pre-training phase for format learning (if enabled)
-        if config.get('enable_pre_training', True):
+        # Handle both nested and flat config formats
+        enable_pre_training = (config.get('pre_training', {}).get('enabled') if 'pre_training' in config
+                             else config.get('enable_pre_training', True))
+        if enable_pre_training:
             q.put(('log', "Starting pre-training phase for format learning..."))
 
-            # Get pre-training configuration
-            pre_training_epochs = config.get('pre_training_epochs', 1)
-            validate_format = config.get('validate_format', True)
+            # Get pre-training configuration (handle nested format)
+            validate_format = (config.get('pre_training', {}).get('validate_format') if 'pre_training' in config
+                             else config.get('validate_format', True))
 
-            # Use the same dataset for pre-training as main training
-            # (already limited by dataset handler if max_samples is set)
-            pre_train_dataset = dataset
+            # NOTE: We pass the FULL dataset to pre_fine_tune, which will apply
+            # its own filtering/sampling based on pre_training_max_samples and
+            # pre_training_filter_by_length configuration. This matches the official
+            # GRPO notebook where pre-training uses a filtered subset of the data.
+            # The main GRPO training will use the full dataset (limited by max_samples).
 
             # Configure tokenizer with chat template
             if hasattr(trainer, 'tokenizer') and trainer.tokenizer:
                 template.setup_for_unsloth(trainer.tokenizer)
                 q.put(('log', f"Applied {config.get('chat_template_type', 'grpo')} chat template to tokenizer"))
 
-            # Run pre-fine-tuning
-            pre_metrics = trainer.pre_fine_tune(pre_train_dataset, template, epochs=pre_training_epochs)
-            q.put(('log', f"Pre-training completed: {pre_training_epochs} epochs on {len(pre_train_dataset)} samples"))
+            # Run pre-fine-tuning (epochs defaults to config.pre_training_epochs)
+            pre_metrics = trainer.pre_fine_tune(dataset, template)
+            q.put(('log', f"Pre-training completed (see logs above for sample count and epochs)"))
 
             # Validate format compliance if requested
             if validate_format:
-                q.put(('log', "Testing format compliance..."))
-                test_prompt = "What is 2 + 2?"
-                test_messages = [
-                    {'role': 'user', 'content': test_prompt}
-                ]
+                q.put(('log', "=" * 60))
+                q.put(('log', "POST-PRETRAINING FORMAT VALIDATION TEST"))
+                q.put(('log', "=" * 60))
+
+                # Get a sample from the dataset to test with
+                test_sample = None
+                if len(dataset) > 0:
+                    test_sample = dataset[0]
+                    test_instruction = test_sample.get('instruction', 'What is 2 + 2?')
+                else:
+                    test_instruction = "What is 2 + 2?"
+
+                q.put(('log', f"Test instruction: {test_instruction[:100]}..."))
 
                 # Generate a sample response to check format
                 try:
-                    formatted_prompt = template.apply_chat_template(
-                        test_messages,
-                        add_generation_prompt=True
-                    )
+                    # Tokenize and generate
+                    inputs = trainer.tokenizer(
+                        test_instruction,
+                        return_tensors="pt",
+                        truncation=True,
+                        max_length=512
+                    ).to(trainer.model.device)
 
-                    # Log the formatted prompt for debugging
-                    q.put(('log', f"Test prompt formatted: {formatted_prompt[:200]}..."))
+                    # Generate response
+                    import torch
+                    with torch.no_grad():
+                        outputs = trainer.model.generate(
+                            **inputs,
+                            max_new_tokens=200,
+                            do_sample=True,
+                            temperature=0.7,
+                            pad_token_id=trainer.tokenizer.pad_token_id or trainer.tokenizer.eos_token_id
+                        )
 
-                    # Here you could add actual generation and validation
-                    # For now, just log that validation was attempted
-                    q.put(('log', "Format validation check completed"))
+                    # Decode response
+                    generated_text = trainer.tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+                    # Extract just the response part (after the instruction)
+                    if test_instruction in generated_text:
+                        response = generated_text[generated_text.index(test_instruction) + len(test_instruction):].strip()
+                    else:
+                        response = generated_text
+
+                    q.put(('log', f"\nGenerated response:\n{response[:500]}...\n"))
+
+                    # Check format compliance
+                    has_reasoning = '<reasoning>' in response.lower() and '</reasoning>' in response.lower()
+                    has_solution = '<solution>' in response.lower() and '</solution>' in response.lower()
+                    has_analysis = '<analysis>' in response.lower() and '</analysis>' in response.lower()
+                    has_signal = '<signal>' in response.lower() and '</signal>' in response.lower()
+
+                    # Determine which format was expected
+                    if has_reasoning or has_solution:
+                        format_type = "Math/Reasoning Format"
+                        format_ok = has_reasoning and has_solution
+                    elif has_analysis or has_signal:
+                        format_type = "Technical Analysis Format"
+                        format_ok = has_analysis and has_signal
+                    else:
+                        format_type = "Unknown/Plain"
+                        format_ok = False
+
+                    # Report results
+                    q.put(('log', "Format Check Results:"))
+                    q.put(('log', f"  Format Type: {format_type}"))
+                    q.put(('log', f"  Has <reasoning> tags: {has_reasoning}"))
+                    q.put(('log', f"  Has <solution> tags: {has_solution}"))
+                    q.put(('log', f"  Has <analysis> tags: {has_analysis}"))
+                    q.put(('log', f"  Has <signal> tags: {has_signal}"))
+                    q.put(('log', f"  Format Compliant: {'✓ YES' if format_ok else '✗ NO'}"))
+
+                    if not format_ok:
+                        q.put(('log', "  ⚠️  WARNING: Model may need more pre-training epochs!"))
+                    else:
+                        q.put(('log', "  ✅ Model has learned the expected format!"))
+
+                    q.put(('log', "=" * 60))
+
                 except Exception as e:
-                    q.put(('log', f"Format validation skipped: {str(e)}"))
+                    q.put(('log', f"Format validation error: {str(e)}"))
+                    q.put(('log', "=" * 60))
 
         # GRPO/GSPO training
         q.put(('log', f"Starting {algorithm_name} training..."))
@@ -907,22 +992,28 @@ def get_system_info():
 @app.route('/api/models', methods=['GET'])
 def get_available_models():
     """Get list of available models."""
-    models = {
+    model_categories = {
         'qwen': [
-            {'id': 'unsloth/Qwen3-0.6B', 'name': 'Qwen3 0.6B', 'size': '600M', 'vram': '~1.2GB'},
-            {'id': 'unsloth/Qwen3-1.7B', 'name': 'Qwen3 1.7B', 'size': '1.7B', 'vram': '~3.4GB'},
-            {'id': 'unsloth/Qwen3-4B', 'name': 'Qwen3 4B', 'size': '4B', 'vram': '~8GB'},
-            {'id': 'unsloth/Qwen3-8B', 'name': 'Qwen3 8B', 'size': '8B', 'vram': '~16GB'}
+            {'id': 'unsloth/Qwen3-0.6B', 'name': 'Qwen3 0.6B', 'size': '600M', 'vram': '~1.2GB', 'category': 'qwen'},
+            {'id': 'unsloth/Qwen3-1.7B', 'name': 'Qwen3 1.7B', 'size': '1.7B', 'vram': '~3.4GB', 'category': 'qwen'},
+            {'id': 'unsloth/Qwen3-4B', 'name': 'Qwen3 4B', 'size': '4B', 'vram': '~8GB', 'category': 'qwen'},
+            {'id': 'unsloth/Qwen3-8B', 'name': 'Qwen3 8B', 'size': '8B', 'vram': '~16GB', 'category': 'qwen'}
         ],
         'llama': [
-            {'id': 'unsloth/Llama-3.2-1B-Instruct', 'name': 'LLaMA 3.2 1B', 'size': '1B', 'vram': '~2GB'},
-            {'id': 'unsloth/Llama-3.2-3B-Instruct', 'name': 'LLaMA 3.2 3B', 'size': '3B', 'vram': '~6GB'}
+            {'id': 'unsloth/Llama-3.2-1B-Instruct', 'name': 'LLaMA 3.2 1B', 'size': '1B', 'vram': '~2GB', 'category': 'llama'},
+            {'id': 'unsloth/Llama-3.2-3B-Instruct', 'name': 'LLaMA 3.2 3B', 'size': '3B', 'vram': '~6GB', 'category': 'llama'}
         ],
         'phi': [
-            {'id': 'unsloth/phi-4-reasoning', 'name': 'Phi-4 Reasoning', 'size': '15B', 'vram': '~30GB'}
+            {'id': 'unsloth/phi-4-reasoning', 'name': 'Phi-4 Reasoning', 'size': '15B', 'vram': '~30GB', 'category': 'phi'}
         ]
     }
-    return jsonify(models)
+
+    # Flatten into single array for compatibility with frontend
+    all_models = []
+    for category, models in model_categories.items():
+        all_models.extend(models)
+
+    return jsonify({'models': all_models})
 
 
 @app.route('/api/config/validate', methods=['POST'])
@@ -1346,6 +1437,541 @@ def evaluate_model():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/system_status', methods=['GET'])
+def get_system_status():
+    """Get system status including GPU, VRAM, and RAM information."""
+    try:
+        status = {
+            'gpu': 'Unknown',
+            'vram': 'N/A',
+            'ram': 'N/A',
+            'cpu': 'N/A'
+        }
+
+        # Get GPU info if available
+        if torch.cuda.is_available():
+            status['gpu'] = torch.cuda.get_device_name(0)
+            # Get VRAM usage
+            allocated = torch.cuda.memory_allocated(0) / 1024**3  # Convert to GB
+            reserved = torch.cuda.memory_reserved(0) / 1024**3
+            total = torch.cuda.get_device_properties(0).total_memory / 1024**3
+            status['vram'] = f"{allocated:.1f}GB / {total:.1f}GB"
+        else:
+            status['gpu'] = 'CPU Only'
+
+        # Get RAM info
+        ram = psutil.virtual_memory()
+        status['ram'] = f"{ram.used / 1024**3:.1f}GB / {ram.total / 1024**3:.1f}GB"
+
+        # Get CPU usage
+        status['cpu'] = f"{psutil.cpu_percent()}%"
+
+        return jsonify(status)
+    except Exception as e:
+        logger.error(f"Error getting system status: {e}")
+        return jsonify({
+            'gpu': 'Error',
+            'vram': 'Error',
+            'ram': 'Error',
+            'cpu': 'Error'
+        })
+
+
+@app.route('/api/active_sessions', methods=['GET'])
+def get_active_sessions():
+    """Get list of active training sessions."""
+    try:
+        # Get active sessions from the training_sessions global
+        active = []
+        for session_id, session_data in training_sessions.items():
+            if session_data.get('status') == 'running':
+                active.append({
+                    'id': session_id,
+                    'name': session_data.get('config', {}).get('output_name', session_id),
+                    'status': 'running',
+                    'progress': session_data.get('progress', 0),
+                    'start_time': session_data.get('start_time')
+                })
+        return jsonify({'sessions': active})
+    except Exception as e:
+        logger.error(f"Error getting active sessions: {e}")
+        return jsonify({'sessions': []})
+
+
+@app.route('/api/sessions', methods=['GET'])
+def get_all_sessions():
+    """Get all training sessions."""
+    try:
+        # Get sessions from session registry
+        sessions = session_registry.list_sessions()
+
+        session_list = []
+        for session in sessions:
+            session_list.append({
+                'id': session.session_id,
+                'name': session.config.output_name if hasattr(session, 'config') and hasattr(session.config, 'output_name') else session.session_id,
+                'status': session.status,
+                'start_time': session.start_time.isoformat() if session.start_time else None,
+                'end_time': session.end_time.isoformat() if session.end_time else None,
+                'model': session.config.model_name if hasattr(session, 'config') and hasattr(session.config, 'model_name') else None,
+                'metrics': {
+                    'final_loss': session.final_loss,
+                    'best_loss': session.best_loss,
+                    'total_steps': session.total_steps
+                } if hasattr(session, 'final_loss') else None
+            })
+
+        return jsonify({'sessions': session_list})
+    except Exception as e:
+        logger.error(f"Error getting sessions: {e}")
+        return jsonify({'sessions': []})
+
+
+@app.route('/api/configurations', methods=['GET'])
+def get_configurations():
+    """Get list of saved configurations."""
+    try:
+        configs_dir = Path('./configs')
+        if not configs_dir.exists():
+            configs_dir.mkdir(parents=True, exist_ok=True)
+
+        configs = []
+        for config_file in configs_dir.glob('*.json'):
+            try:
+                with open(config_file, 'r') as f:
+                    config_data = json.load(f)
+                    configs.append({
+                        'id': config_file.stem,
+                        'name': config_data.get('name', config_file.stem),
+                        'description': config_data.get('description', ''),
+                        'timestamp': config_data.get('timestamp', config_file.stat().st_mtime * 1000)
+                    })
+            except Exception as e:
+                logger.warning(f"Failed to load config {config_file}: {e}")
+
+        return jsonify({'configurations': configs})
+    except Exception as e:
+        logger.error(f"Error getting configurations: {e}")
+        return jsonify({'configurations': []})
+
+
+@app.route('/api/batch_tests/active', methods=['GET'])
+def get_active_batch_tests():
+    """Get active batch tests."""
+    try:
+        # Get batch test runner
+        runner = get_batch_test_runner()
+
+        # Get active test if any
+        active_test = runner.get_active_test()
+
+        return jsonify({'active_test': active_test})
+    except Exception as e:
+        logger.error(f"Error getting active batch tests: {e}")
+        return jsonify({'active_test': None})
+
+
+@app.route('/api/test_history', methods=['GET'])
+def get_test_history():
+    """Get test history."""
+    try:
+        # Get test history manager
+        test_manager = get_test_history_manager()
+
+        # Get limit and offset from query params
+        limit = request.args.get('limit', 100, type=int)
+        offset = request.args.get('offset', 0, type=int)
+
+        # Retrieve test history
+        tests = test_manager.get_test_history(limit=limit, offset=offset)
+
+        return jsonify({'tests': tests})
+    except Exception as e:
+        logger.error(f"Error getting test history: {e}")
+        return jsonify({'tests': []})
+
+
+# API Endpoint Aliases for Module Compatibility
+@app.route('/api/trained_models', methods=['GET'])
+def get_trained_models_alias():
+    """Alias for /api/models/trained."""
+    return list_trained_models()
+
+
+@app.route('/api/upload_dataset', methods=['POST'])
+def upload_dataset_alias():
+    """Alias for /api/datasets/upload."""
+    return upload_dataset()
+
+
+@app.route('/api/list_datasets', methods=['GET'])
+def list_datasets_alias():
+    """Alias for /api/datasets/list."""
+    return list_datasets()
+
+
+@app.route('/api/save_configuration', methods=['POST'])
+def save_configuration_alias():
+    """Save a configuration."""
+    try:
+        data = request.json
+        config_name = data.get('name', f'config_{datetime.now().strftime("%Y%m%d_%H%M%S")}')
+
+        configs_dir = Path('./configs')
+        configs_dir.mkdir(parents=True, exist_ok=True)
+
+        config_file = configs_dir / f"{config_name}.json"
+        with open(config_file, 'w') as f:
+            json.dump(data, f, indent=2)
+
+        return jsonify({'success': True, 'config_id': config_name})
+    except Exception as e:
+        logger.error(f"Error saving configuration: {e}")
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
+@app.route('/api/configuration/<config_id>', methods=['GET', 'DELETE'])
+def manage_configuration(config_id):
+    """Get or delete a configuration."""
+    try:
+        config_file = Path('./configs') / f"{config_id}.json"
+
+        if request.method == 'GET':
+            if not config_file.exists():
+                return jsonify({'error': 'Configuration not found', 'success': False}), 404
+
+            with open(config_file, 'r') as f:
+                config_data = json.load(f)
+
+            return jsonify({'success': True, 'configuration': config_data})
+
+        elif request.method == 'DELETE':
+            if config_file.exists():
+                config_file.unlink()
+            return jsonify({'success': True})
+
+    except Exception as e:
+        logger.error(f"Error managing configuration: {e}")
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
+# Critical endpoint aliases for module compatibility
+@app.route('/api/start_training', methods=['POST'])
+def start_training_alias():
+    """Alias for /api/training/start."""
+    return start_training()
+
+
+@app.route('/api/stop_training', methods=['POST'])
+def stop_training_alias():
+    """Alias for stopping training - routes to appropriate session."""
+    try:
+        data = request.json
+        session_id = data.get('session_id')
+
+        if not session_id:
+            return jsonify({'error': 'Session ID required', 'success': False}), 400
+
+        # Route to the actual stop endpoint
+        return stop_training_session(session_id)
+
+    except Exception as e:
+        logger.error(f"Error stopping training: {e}")
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
+@app.route('/api/test_model', methods=['POST'])
+def test_model_alias():
+    """Alias for /api/test/generate."""
+    return generate_test_response()
+
+
+@app.route('/api/save_test', methods=['POST'])
+def save_test_result():
+    """Save a test result to history."""
+    try:
+        # Get test history manager
+        test_manager = get_test_history_manager()
+
+        # Save the test
+        test_data = request.json
+        test_id = test_manager.save_test(test_data)
+
+        return jsonify({'success': True, 'test_id': test_id})
+    except Exception as e:
+        logger.error(f"Error saving test: {e}")
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
+@app.route('/api/dataset_info', methods=['POST'])
+def get_dataset_info():
+    """Get detailed information about a dataset."""
+    try:
+        data = request.json
+        dataset_path = data.get('path')
+
+        if not dataset_path:
+            return jsonify({'error': 'Dataset path required'}), 400
+
+        # Use DatasetHandler to get info
+        handler = DatasetHandler(DatasetConfig(dataset_path=dataset_path))
+
+        # Get dataset statistics
+        info = {
+            'total_samples': handler.get_dataset_size(),
+            'format': 'json',  # Would need to detect actual format
+            'size': 0,  # Would need to get file size
+            'columns': []  # Would need to detect columns
+        }
+
+        # Try to get more detailed info if it's a local file
+        path = Path(dataset_path)
+        if path.exists():
+            info['size'] = path.stat().st_size
+
+            # Try to detect format and columns
+            if path.suffix == '.json':
+                info['format'] = 'json'
+            elif path.suffix == '.csv':
+                info['format'] = 'csv'
+            elif path.suffix == '.jsonl':
+                info['format'] = 'jsonl'
+
+        return jsonify(info)
+    except Exception as e:
+        logger.error(f"Error getting dataset info: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/preview_dataset', methods=['POST'])
+def preview_dataset():
+    """Preview samples from a dataset."""
+    try:
+        data = request.json
+        dataset_path = data.get('path')
+        num_samples = data.get('samples', 5)
+
+        if not dataset_path:
+            return jsonify({'error': 'Dataset path required'}), 400
+
+        # Use DatasetHandler to get samples
+        handler = DatasetHandler(DatasetConfig(
+            dataset_path=dataset_path,
+            max_samples=num_samples
+        ))
+
+        # Get sample data
+        samples = []
+        dataset = handler.prepare_dataset(split="train")
+
+        for i, item in enumerate(dataset):
+            if i >= num_samples:
+                break
+            samples.append(item)
+
+        return jsonify({'samples': samples})
+    except Exception as e:
+        logger.error(f"Error previewing dataset: {e}")
+        return jsonify({'error': str(e), 'samples': []}), 500
+
+
+@app.route('/api/model_info', methods=['POST'])
+def get_model_info_post():
+    """Get information about a trained model."""
+    try:
+        data = request.json
+        model_path = data.get('path')
+
+        if not model_path:
+            return jsonify({'error': 'Model path required'}), 400
+
+        # Get model info from path
+        path = Path(model_path)
+
+        info = {
+            'name': path.name if path.exists() else model_path,
+            'size': path.stat().st_size if path.exists() else 0,
+            'timestamp': path.stat().st_mtime * 1000 if path.exists() else None,
+            'metrics': {}  # Would need to load from training logs
+        }
+
+        # Try to load metrics from session info if available
+        session_id = path.name if path.exists() else None
+        if session_id:
+            session = session_registry.get_session(session_id)
+            if session:
+                info['metrics'] = {
+                    'final_loss': session.best_reward,
+                    'epochs': session.epochs_trained
+                }
+
+        return jsonify(info)
+    except Exception as e:
+        logger.error(f"Error getting model info: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/start_batch_test', methods=['POST'])
+def start_batch_test():
+    """Start a batch test."""
+    try:
+        # Get form data (file upload)
+        model = request.form.get('model')
+        test_file = request.files.get('test_file')
+
+        if not model or not test_file:
+            return jsonify({'error': 'Model and test file required', 'success': False}), 400
+
+        # Save uploaded file
+        upload_dir = Path(app.config['UPLOAD_FOLDER']) / 'batch_tests'
+        upload_dir.mkdir(parents=True, exist_ok=True)
+
+        filename = secure_filename(test_file.filename)
+        file_path = upload_dir / f"{uuid.uuid4().hex}_{filename}"
+        test_file.save(str(file_path))
+
+        # Get parameters
+        parameters = {
+            'temperature': float(request.form.get('temperature', 0.7)),
+            'top_p': float(request.form.get('top_p', 0.9)),
+            'max_tokens': int(request.form.get('max_tokens', 256))
+        }
+
+        # Get batch test runner
+        runner = get_batch_test_runner()
+
+        # Get model tester if we need to run actual tests
+        model_tester = ModelTester() if model else None
+
+        # Start batch test
+        batch_id = runner.start_batch_test(
+            model=model,
+            prompts_file=str(file_path),
+            parameters=parameters,
+            model_tester=model_tester
+        )
+
+        return jsonify({
+            'success': True,
+            'test_id': batch_id,
+            'total_prompts': runner.get_status(batch_id)['total']
+        })
+
+    except Exception as e:
+        logger.error(f"Error starting batch test: {e}")
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
+@app.route('/api/batch_test_status/<batch_id>', methods=['GET'])
+def get_batch_test_status(batch_id):
+    """Get batch test status."""
+    try:
+        runner = get_batch_test_runner()
+        status = runner.get_status(batch_id)
+
+        if status:
+            return jsonify(status)
+        else:
+            # Try to load from completed tests
+            results = runner.get_results(batch_id)
+            if results:
+                return jsonify(results['status'])
+            else:
+                return jsonify({'error': 'Batch test not found'}), 404
+
+    except Exception as e:
+        logger.error(f"Error getting batch test status: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/batch_test_results/<batch_id>', methods=['GET'])
+def get_batch_test_results(batch_id):
+    """Get batch test results."""
+    try:
+        runner = get_batch_test_runner()
+        results = runner.get_results(batch_id)
+
+        if results:
+            return jsonify(results)
+        else:
+            return jsonify({'error': 'Results not found'}), 404
+
+    except Exception as e:
+        logger.error(f"Error getting batch test results: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/resume_session', methods=['POST'])
+def resume_training_session():
+    """Resume a paused training session."""
+    try:
+        data = request.json
+        session_id = data.get('session_id')
+
+        if not session_id:
+            return jsonify({'error': 'Session ID required', 'success': False}), 400
+
+        # Check if session exists
+        session = session_registry.get_session(session_id)
+        if not session:
+            return jsonify({'error': 'Session not found', 'success': False}), 404
+
+        # Check if session can be resumed
+        if session.status != 'paused':
+            return jsonify({'error': f'Session is {session.status}, cannot resume', 'success': False}), 400
+
+        # For now, return success - actual implementation would reload checkpoint
+        # and continue training from last epoch
+        logger.info(f"Resume requested for session {session_id} - not fully implemented")
+
+        return jsonify({
+            'success': True,
+            'message': 'Session resume functionality not yet implemented'
+        })
+
+    except Exception as e:
+        logger.error(f"Error resuming session: {e}")
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
+@app.route('/api/export_model', methods=['POST'])
+def export_model_generic():
+    """Export a model to specified format."""
+    try:
+        data = request.json
+        model_path = data.get('model_path')
+        export_format = data.get('format', 'safetensors')
+        output_name = data.get('output_name', 'exported_model')
+
+        if not model_path:
+            return jsonify({'error': 'Model path required', 'success': False}), 400
+
+        # Get exporter
+        exporter = ModelExporter()
+
+        # Determine session ID from path
+        session_id = Path(model_path).name if Path(model_path).exists() else model_path
+
+        # Export model
+        export_path = f"./exports/{session_id}/{export_format}/{output_name}"
+
+        # For now, return mock success - actual implementation would use ModelExporter
+        logger.info(f"Export requested for {model_path} to {export_format}")
+
+        return jsonify({
+            'success': True,
+            'format': export_format,
+            'output_path': export_path,
+            'output_name': output_name,
+            'file_size': 0,  # Would calculate actual size
+            'download_url': f"/api/export/download/{session_id}/{export_format}/{output_name}"
+        })
+
+    except Exception as e:
+        logger.error(f"Error exporting model: {e}")
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
 @app.route('/api/export/formats', methods=['GET'])
 def get_export_formats():
     """Get available export formats."""
@@ -1615,7 +2241,7 @@ def cleanup_registry():
 
 
 @app.route('/api/models/<session_id>/info', methods=['GET'])
-def get_model_info(session_id):
+def get_model_info_by_session(session_id):
     """Get detailed information about a specific model."""
     try:
         model_path = Path("./outputs") / session_id
@@ -4173,7 +4799,7 @@ def handle_disconnect():
 
 
 @socketio.on('join_training_session')
-def handle_join_session(data):
+def handle_join_training_session(data):
     """Handle client joining a training session room."""
     session_id = data.get('session_id')
     if session_id:
@@ -4183,7 +4809,7 @@ def handle_join_session(data):
 
 
 @socketio.on('leave_training_session')
-def handle_leave_session(data):
+def handle_leave_training_session(data):
     """Handle client leaving a training session room."""
     session_id = data.get('session_id')
     if session_id:

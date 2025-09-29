@@ -232,7 +232,7 @@ function filterPresetsByCategory(category) {
     });
 }
 
-async function selectPresetByName(presetName) {
+async function selectPresetByName(presetName, silent = false) {
     const preset = rewardPresets[presetName];
     if (!preset) return;
 
@@ -281,8 +281,10 @@ async function selectPresetByName(presetName) {
         console.error('Failed to fetch preset details:', error);
     }
 
-    // Visual feedback
-    showNotification(`✓ Selected: ${preset.name}`, 'success');
+    // Visual feedback (suppress for auto-restored selections)
+    if (!silent) {
+        showNotification(`✓ Selected: ${preset.name}`, 'success');
+    }
 
     // Animate the selection
     if (currentlySelectedCard) {
@@ -1205,9 +1207,9 @@ function loadSavedSelection() {
         try {
             const config = JSON.parse(saved);
             if (config.preset_name) {
-                // Wait for presets to load, then select
+                // Wait for presets to load, then select (silently restore without notification)
                 setTimeout(() => {
-                    selectPresetByName(config.preset_name);
+                    selectPresetByName(config.preset_name, true);  // Silent restore
                 }, 500);
             }
         } catch (e) {

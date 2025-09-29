@@ -27,13 +27,22 @@ logger = get_logger(__name__)
 
 @dataclass
 class DatasetConfig:
-    """Configuration for dataset loading and processing."""
+    """Configuration for dataset loading and processing.
+
+    Note on max_samples:
+        max_samples represents the number of samples to use PER EPOCH, not total samples
+        across all epochs. For example, if max_samples=1000 and num_epochs=3, the trainer
+        will use 1000 samples per epoch for a total of 3000 training steps (assuming batch_size=1).
+
+        This matches the behavior of TRL's GRPOTrainer, where the dataset is cycled through
+        for each epoch. If max_samples is None, all available samples will be used per epoch.
+    """
     source_type: str  # 'huggingface', 'local', 'api', 'direct'
     source_path: str  # Path, name, or URL
     split: str = 'train'
     subset: Optional[str] = None
     streaming: bool = False
-    max_samples: Optional[int] = None
+    max_samples: Optional[int] = None  # Samples per epoch (NOT total across all epochs)
     shuffle: bool = True
     seed: int = 42
 

@@ -65,7 +65,31 @@ class CallbackLogHandler(logging.Handler):
 
 @dataclass
 class GRPOTrainingConfig:
-    """Configuration for GRPO training."""
+    """Configuration for GRPO training.
+
+    GRPO Training Process:
+        GRPO (Group Relative Policy Optimization) training consists of two phases:
+
+        1. Pre-training Phase (Optional, but recommended):
+           - Purpose: Teach the model the specific format requirements (reasoning markers,
+             solution markers) before reinforcement learning
+           - Duration: Typically 1-2 epochs on a small subset of data
+           - Method: Standard supervised fine-tuning (SFT) with complete prompt+response examples
+           - In the official GRPO notebook: Uses ~59 filtered short samples for format learning
+
+        2. GRPO Training Phase (Main training):
+           - Purpose: Reinforcement learning with reward-based optimization
+           - Duration: Multiple epochs on the full dataset
+           - Method: Model generates responses and receives rewards based on quality
+           - In the official GRPO notebook: Uses full dataset (e.g., 17K samples)
+
+    Key Configuration Notes:
+        - pre_training_max_samples: Separate from main training max_samples. This allows
+          pre-training to use a small filtered subset while main training uses the full dataset.
+        - max_samples (in dataset config): Represents samples PER EPOCH for main training
+        - num_train_epochs: Number of epochs for main GRPO training (not pre-training)
+        - pre_training_epochs: Separate epoch count just for format learning phase
+    """
     # Model configuration
     model_name: str
     use_4bit: bool = False  # Disabled by default to avoid xformers issues
@@ -97,6 +121,12 @@ class GRPOTrainingConfig:
     optim: str = "paged_adamw_32bit"
     lr_scheduler_type: str = "constant"
     seed: int = 42
+
+    # Pre-training configuration
+    pre_training_epochs: int = 2  # Default: 2 epochs (matches official GRPO notebook)
+    pre_training_max_samples: Optional[int] = None  # Separate sample limit for pre-training phase
+    pre_training_filter_by_length: bool = False  # Filter pre-training samples by length
+    pre_training_max_length_ratio: float = 0.5  # Max length as ratio of max_sequence_length
 
     # GRPO/GSPO specific
     loss_type: str = "grpo"  # Always use "grpo" for TRL compatibility
@@ -319,19 +349,58 @@ class GRPOModelTrainer:
     def pre_fine_tune(self,
                      dataset: Dataset,
                      template: PromptTemplate,
-                     epochs: int = 1) -> Dict[str, Any]:
+                     epochs: Optional[int] = None) -> Dict[str, Any]:
         """Pre-fine-tuning phase for format learning.
 
+        This phase teaches the model to follow the specific formatting requirements
+        (reasoning markers, solution markers) before GRPO reinforcement learning.
+
+        In the official GRPO notebook, pre-training uses a small filtered subset (~59 samples)
+        of short examples to quickly learn the format, while main GRPO training uses the full dataset.
+
         Args:
-            dataset: Training dataset
+            dataset: Training dataset (full dataset - will be filtered if configured)
             template: Prompt template
-            epochs: Number of pre-training epochs
+            epochs: Number of pre-training epochs (defaults to config.pre_training_epochs)
 
         Returns:
             Training metrics
         """
         logger.info("Starting pre-fine-tuning phase")
         self.training_phase = 'pre-training'
+
+        # Use epochs from config if not specified
+        if epochs is None:
+            epochs = self.config.pre_training_epochs
+
+        # Apply pre-training specific filtering/sampling
+        pre_train_dataset = dataset
+        original_size = len(dataset)
+
+        # Filter by length if configured (matches official notebook approach)
+        if self.config.pre_training_filter_by_length:
+            max_length = int(self.config.max_sequence_length * self.config.pre_training_max_length_ratio)
+            logger.info(f"Filtering pre-training dataset by length (max: {max_length} tokens)")
+
+            # Tokenize to get lengths
+            def get_length(example):
+                if 'instruction' in example:
+                    text = str(example.get('instruction', '')) + str(example.get('response', example.get('output', '')))
+                    tokens = self.tokenizer(text, truncation=False)
+                    return {'length': len(tokens['input_ids'])}
+                return {'length': 0}
+
+            dataset_with_lengths = pre_train_dataset.map(get_length)
+            pre_train_dataset = dataset_with_lengths.filter(lambda x: x['length'] <= max_length)
+            logger.info(f"Filtered dataset from {original_size} to {len(pre_train_dataset)} samples by length")
+
+        # Apply sample limit if configured (separate from main training max_samples)
+        if self.config.pre_training_max_samples:
+            if len(pre_train_dataset) > self.config.pre_training_max_samples:
+                pre_train_dataset = pre_train_dataset.select(range(self.config.pre_training_max_samples))
+                logger.info(f"Limited pre-training dataset from {len(dataset)} to {self.config.pre_training_max_samples} samples")
+
+        logger.info(f"Pre-training with {len(pre_train_dataset)} samples for {epochs} epochs (original dataset: {original_size} samples)")
 
         # Store original tokenizer configuration
         original_padding_side = self.tokenizer.padding_side if hasattr(self.tokenizer, 'padding_side') else None
@@ -397,9 +466,9 @@ class GRPOModelTrainer:
 
             return {'text': formatted}
 
-        formatted_dataset = dataset.map(
+        formatted_dataset = pre_train_dataset.map(
             apply_template,
-            remove_columns=dataset.column_names  # Remove original columns, keep only text
+            remove_columns=pre_train_dataset.column_names  # Remove original columns, keep only text
         )
 
         # Tokenize the dataset

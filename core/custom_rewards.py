@@ -501,6 +501,152 @@ class SequentialPatternReward(RewardFunction):
             return 1.0  # All patterns found, order doesn't matter
 
 
+class SignalAccuracyReward(RewardFunction):
+    """Reward for trading signal accuracy with partial credit for direction.
+
+    This reward function provides partial credit when the model gets the trading
+    direction correct (BUY vs SELL) but the strength wrong (STRONG vs WEAK).
+
+    Scoring:
+        - Perfect match (e.g., STRONG_BUY == STRONG_BUY): 1.00
+        - Right direction, wrong strength (e.g., WEAK_BUY when STRONG_BUY): 0.70
+        - HOLD when should be WEAK signal: 0.50
+        - HOLD when should be STRONG signal: 0.40
+        - Opposite direction (e.g., BUY when should be SELL): 0.00
+    """
+
+    # Signal hierarchy for comparison
+    SIGNAL_HIERARCHY = {
+        'STRONG_BUY': 2,
+        'WEAK_BUY': 1,
+        'HOLD': 0,
+        'WEAK_SELL': -1,
+        'STRONG_SELL': -2
+    }
+
+    def __init__(self, config: RewardConfig):
+        """Initialize signal accuracy reward.
+
+        Args:
+            config: Reward configuration with valid_choices containing signal names
+        """
+        super().__init__(config)
+        self.valid_signals = config.valid_choices or []
+
+    def _extract_signal(self, text: str) -> Optional[str]:
+        """Extract signal from <signal> tags.
+
+        Args:
+            text: Text containing signal tags
+
+        Returns:
+            Extracted signal name (normalized) or None
+        """
+        # Extract from <signal>...</signal> tags
+        pattern = r'<signal>\s*([^<]+?)\s*</signal>'
+        match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+
+        if match:
+            signal = match.group(1).strip().upper()
+            # Normalize: replace spaces with underscores
+            signal = signal.replace(' ', '_')
+
+            # Validate against known signals
+            if signal in self.SIGNAL_HIERARCHY:
+                return signal
+
+        return None
+
+    def _get_signal_direction(self, signal: str) -> str:
+        """Get signal direction: BUY, SELL, or HOLD.
+
+        Args:
+            signal: Signal name (e.g., 'STRONG_BUY')
+
+        Returns:
+            Direction: 'BUY', 'SELL', or 'HOLD'
+        """
+        if 'BUY' in signal:
+            return 'BUY'
+        elif 'SELL' in signal:
+            return 'SELL'
+        else:
+            return 'HOLD'
+
+    def _is_strong_signal(self, signal: str) -> bool:
+        """Check if signal is strong (not weak or hold).
+
+        Args:
+            signal: Signal name
+
+        Returns:
+            True if STRONG_BUY or STRONG_SELL
+        """
+        return 'STRONG' in signal
+
+    def compute(self,
+                instruction: str,
+                generated: str,
+                reference: Optional[str] = None) -> float:
+        """Compute signal accuracy reward with partial credit.
+
+        Args:
+            instruction: Input instruction
+            generated: Generated response
+            reference: Reference response with correct signal
+
+        Returns:
+            Reward value (0.0 to 1.0)
+        """
+        # Extract generated signal
+        gen_signal = self._extract_signal(generated)
+
+        if gen_signal is None:
+            # No valid signal found in generation
+            return 0.0
+
+        # If no reference, just reward valid format
+        if reference is None:
+            return 1.0
+
+        # Extract reference signal
+        ref_signal = self._extract_signal(reference)
+
+        if ref_signal is None:
+            # Can't compare without reference signal, give benefit of doubt
+            return 1.0
+
+        # Perfect match
+        if gen_signal == ref_signal:
+            return 1.0
+
+        # Get directions and strengths
+        gen_dir = self._get_signal_direction(gen_signal)
+        ref_dir = self._get_signal_direction(ref_signal)
+
+        # Opposite direction = no credit (most important check)
+        if (gen_dir == 'BUY' and ref_dir == 'SELL') or \
+           (gen_dir == 'SELL' and ref_dir == 'BUY'):
+            return 0.0
+
+        # Same direction, different strength = 70% credit
+        # This is the key partial credit case!
+        if gen_dir == ref_dir and gen_dir != 'HOLD':
+            return 0.70
+
+        # HOLD scenarios (one is HOLD, the other isn't)
+        if gen_dir == 'HOLD' or ref_dir == 'HOLD':
+            # HOLD when should be WEAK signal = 50% (more forgivable)
+            if not self._is_strong_signal(ref_signal if ref_dir != 'HOLD' else gen_signal):
+                return 0.50
+            # HOLD when should be STRONG signal = 40% (less forgivable)
+            else:
+                return 0.40
+
+        # Fallback (shouldn't reach here)
+        return 0.0
+
+
 class RewardPreset:
     """A preset reward configuration with metadata."""
 
@@ -925,7 +1071,16 @@ class RewardPresetLibrary:
         return builder
 
     def _create_technical_analysis_reward(self) -> 'CustomRewardBuilder':
-        """Create reward for technical analysis signal classification."""
+        """Create reward for technical analysis signal classification.
+
+        This reward prioritizes:
+        1. Signal accuracy (40%) - with partial credit for direction
+        2. Format compliance (30%) - proper <analysis> and <signal> tags
+        3. Analysis quality (30%) - technical indicators, reasoning, values
+
+        The signal accuracy component gives partial credit when the direction
+        is correct but strength is wrong (e.g., WEAK_BUY instead of STRONG_BUY).
+        """
         builder = CustomRewardBuilder()
 
         # Template validation - ensure proper structure
@@ -934,16 +1089,15 @@ class RewardPresetLibrary:
             section_tags=["analysis", "signal"],
             required_sections=["analysis", "signal"],
             order_matters=True,
-            weight=0.35  # Reduced from 0.5 to ensure total = 1.0
+            weight=0.30  # Reduced to make room for signal accuracy
         )
 
-        # Signal validation - must be exactly one of the valid signals
-        builder.add_multi_choice_validation(
-            "valid_signal",
-            valid_choices=["STRONG_BUY", "WEAK_BUY", "HOLD", "WEAK_SELL", "STRONG_SELL", "STRONG BUY", "WEAK BUY", "HOLD", "WEAK SELL", "STRONG SELL"],
-            case_sensitive=False,
-            exact_match=False,
-            weight=0.35  # Reduced from 0.5 to ensure total = 1.0
+        # Signal accuracy - with partial credit for correct direction
+        # This replaces the old multi_choice_validation with a smarter scoring system
+        builder.add_signal_accuracy(
+            "signal_accuracy",
+            valid_signals=["STRONG_BUY", "WEAK_BUY", "HOLD", "WEAK_SELL", "STRONG_SELL"],
+            weight=0.40  # Highest weight - getting the signal right is most important
         )
 
         # Analysis content - should mention technical indicators
@@ -956,21 +1110,21 @@ class RewardPresetLibrary:
             required_keywords=["RSI", "MACD", "SMA", "EMA", "support", "resistance",
                               "trend", "momentum", "overbought", "oversold", "crossover",
                               "divergence", "volume", "breakout", "bollinger"],
-            weight=0.15  # Reduced from 0.2 to ensure total = 1.0
+            weight=0.15  # Unchanged
         )
 
         # Reasoning patterns
         builder.add_format_reward(
             "reasoning_words",
             pattern=r"(indicates?|suggests?|shows?|confirms?|signals?|implies|therefore|because|due to|given)",
-            weight=0.10  # Reduced from 0.15 to ensure total = 1.0
+            weight=0.10  # Unchanged
         )
 
         # Technical indicator values mentioned
         builder.add_format_reward(
             "indicator_values",
             pattern=r"(\d+(?:\.\d+)?%?|\d+(?:\.\d+)?(?:k|M|B)?|above|below|crossed)",
-            weight=0.05  # Unchanged, total now = 1.0
+            weight=0.05  # Unchanged, total = 1.0
         )
 
         return builder
@@ -1180,6 +1334,36 @@ class CustomRewardBuilder:
             weight=weight
         )
         self.add_reward(SequentialPatternReward(config), weight)
+
+    def add_signal_accuracy(self, name: str,
+                           valid_signals: List[str],
+                           weight: float = 1.0):
+        """Add signal accuracy reward with partial credit for direction.
+
+        This reward function is designed for trading signal classification tasks
+        where getting the direction right (BUY vs SELL) is more important than
+        getting the exact strength (STRONG vs WEAK).
+
+        Partial credit scoring:
+            - Perfect match: 1.00
+            - Right direction, wrong strength: 0.70
+            - HOLD when should be WEAK: 0.50
+            - HOLD when should be STRONG: 0.40
+            - Opposite direction: 0.00
+
+        Args:
+            name: Reward component name
+            valid_signals: List of valid signal names (e.g., ['STRONG_BUY', 'WEAK_BUY', ...])
+            weight: Weight for this reward component
+        """
+        config = RewardConfig(
+            name=name,
+            description=f"Signal accuracy with partial credit: {name}",
+            type=RewardType.CONTINUOUS,
+            valid_choices=valid_signals,
+            weight=weight
+        )
+        self.add_reward(SignalAccuracyReward(config), weight)
 
     def compute_total_reward(self,
                             instruction: str,
@@ -1738,17 +1922,92 @@ def create_code_reward() -> CustomRewardBuilder:
 
 
 if __name__ == "__main__":
-    # Test reward functions
+    print("=" * 80)
+    print("TESTING SIGNAL ACCURACY REWARD WITH PARTIAL CREDIT")
+    print("=" * 80)
+
+    # Create a signal accuracy reward instance
+    from core.custom_rewards import SignalAccuracyReward, RewardConfig, RewardType
+
+    config = RewardConfig(
+        name="test_signal_accuracy",
+        description="Test signal accuracy with partial credit",
+        type=RewardType.CONTINUOUS,
+        valid_choices=["STRONG_BUY", "WEAK_BUY", "HOLD", "WEAK_SELL", "STRONG_SELL"]
+    )
+
+    signal_reward = SignalAccuracyReward(config)
+
+    # Test cases: (instruction, generated, reference, expected_score)
+    test_cases = [
+        # Perfect matches
+        ("", "<analysis>Good</analysis><signal>STRONG_BUY</signal>",
+         "<analysis>Good</analysis><signal>STRONG_BUY</signal>", 1.00, "Perfect match"),
+
+        # Right direction, wrong strength (70% credit)
+        ("", "<analysis>Good</analysis><signal>WEAK_BUY</signal>",
+         "<analysis>Good</analysis><signal>STRONG_BUY</signal>", 0.70, "Right direction (BUY), wrong strength"),
+
+        ("", "<analysis>Good</analysis><signal>STRONG_SELL</signal>",
+         "<analysis>Good</analysis><signal>WEAK_SELL</signal>", 0.70, "Right direction (SELL), wrong strength"),
+
+        # HOLD scenarios
+        ("", "<analysis>Good</analysis><signal>HOLD</signal>",
+         "<analysis>Good</analysis><signal>WEAK_BUY</signal>", 0.50, "HOLD when should be WEAK"),
+
+        ("", "<analysis>Good</analysis><signal>HOLD</signal>",
+         "<analysis>Good</analysis><signal>STRONG_BUY</signal>", 0.40, "HOLD when should be STRONG"),
+
+        # Opposite direction (0% credit)
+        ("", "<analysis>Good</analysis><signal>STRONG_BUY</signal>",
+         "<analysis>Good</analysis><signal>WEAK_SELL</signal>", 0.00, "Opposite direction BUY vs SELL"),
+
+        ("", "<analysis>Good</analysis><signal>WEAK_SELL</signal>",
+         "<analysis>Good</analysis><signal>STRONG_BUY</signal>", 0.00, "Opposite direction SELL vs BUY"),
+
+        # Format variations (with spaces)
+        ("", "<analysis>Good</analysis><signal>STRONG BUY</signal>",
+         "<analysis>Good</analysis><signal>STRONG_BUY</signal>", 1.00, "Space in signal name (normalized)"),
+    ]
+
+    print("\nRunning test cases...\n")
+
+    passed = 0
+    failed = 0
+
+    for instruction, generated, reference, expected, description in test_cases:
+        actual = signal_reward.compute(instruction, generated, reference)
+        is_correct = abs(actual - expected) < 0.01
+
+        status = "✅ PASS" if is_correct else "❌ FAIL"
+        passed += 1 if is_correct else 0
+        failed += 0 if is_correct else 1
+
+        print(f"{status} | {description}")
+        print(f"     Expected: {expected:.2f}, Actual: {actual:.2f}")
+        if not is_correct:
+            print(f"     ⚠️  MISMATCH!")
+        print()
+
+    print("=" * 80)
+    print(f"RESULTS: {passed}/{len(test_cases)} tests passed, {failed} failed")
+    print("=" * 80)
+
+    # Also test the math reward (original test)
+    print("\n" + "=" * 80)
+    print("TESTING MATH REWARD (ORIGINAL)")
+    print("=" * 80)
+
     builder = create_math_reward()
 
-    test_cases = [
+    math_test_cases = [
         ("What is 2+2?", "The answer is 4", "4", 0.7),
         ("Solve x^2 = 16", "x = 4 or x = -4\n\\boxed{4, -4}", "x = 4, x = -4", 0.9),
         ("Calculate 10/3", "3.333333", "3.333333", 0.7),
     ]
 
-    results = builder.test_reward(test_cases)
-    print(f"Test results: {results['passed']}/{len(test_cases)} passed")
+    results = builder.test_reward(math_test_cases)
+    print(f"\nTest results: {results['passed']}/{len(math_test_cases)} passed")
 
     for detail in results['details']:
         print(f"\nInstruction: {detail['instruction']}")

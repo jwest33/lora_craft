@@ -74,13 +74,13 @@
 
             <!-- Right: Actions -->
             <div class="header-actions">
-                <button class="action-btn" onclick="toggleTheme()" data-bs-toggle="tooltip" title="Toggle Theme">
+                <button class="action-btn" data-bs-toggle="tooltip" title="Toggle Theme">
                     <i class="fas fa-moon" id="theme-icon"></i>
                 </button>
-                <button class="action-btn" onclick="showHelp()" data-bs-toggle="tooltip" title="Help">
+                <button class="action-btn" data-bs-toggle="tooltip" title="Help">
                     <i class="fas fa-question-circle"></i>
                 </button>
-                <button class="action-btn" onclick="toggleSidebar()" data-bs-toggle="tooltip" title="Toggle Sidebar">
+                <button class="action-btn" data-bs-toggle="tooltip" title="Toggle Sidebar">
                     <i class="fas fa-bars"></i>
                 </button>
             </div>
@@ -203,7 +203,7 @@
                                 <div class="col-md-6">
                                     <div class="form-group">
                                         <label class="form-label">Model Family</label>
-                                        <select class="form-select" id="model-family" onchange="updateModelList(); updateConfigSummary();">
+                                        <select class="form-select" id="model-family">
                                             <option value="qwen">Qwen3</option>
                                             <option value="llama">LLaMA 3.2</option>
                                             <option value="phi">Phi-4</option>
@@ -429,17 +429,19 @@
                                 </div>
 
                                 <!-- Upload Dataset -->
-                                <div id="dataset-upload-area" style="display: none;">
+                                <div id="dataset-upload-zone" class="upload-zone" style="display: none; cursor: pointer; padding: 3rem; border: 2px dashed var(--border-color); border-radius: 8px; text-align: center; transition: all 0.3s;">
                                     <div class="upload-area">
                                         <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
                                         <h5>Drop your dataset file here</h5>
                                         <p class="text-muted">or click to browse</p>
-                                        <input type="file" id="dataset-file" accept=".json,.jsonl,.csv,.parquet" style="display: none;">
-                                        <button class="btn btn-outline-primary" onclick="document.getElementById('dataset-file').click()">
+                                        <input type="file" id="dataset-file-input" accept=".json,.jsonl,.csv,.parquet,.txt" style="display: none;">
+                                        <button class="btn btn-outline-primary" onclick="document.getElementById('dataset-file-input').click()">
                                             Browse Files
                                         </button>
                                     </div>
                                 </div>
+                                <!-- Upload Status -->
+                                <div id="dataset-upload-status" class="mt-3"></div>
 
                                 <!-- Selected Dataset Configuration -->
                                 <div id="dataset-selected" class="mt-3">
@@ -482,16 +484,14 @@
                                     <i class="fas fa-file-code"></i> System Prompt
                                 </h5>
                                 <div class="template-selector mb-3">
-                                    <div class="btn-group w-100" role="group">
-                                        <input type="radio" class="btn-check" name="template-type" id="template-grpo" checked>
-                                        <label class="btn btn-outline-primary" for="template-grpo">
-                                            Default
-                                        </label>
-                                        <input type="radio" class="btn-check" name="template-type" id="template-custom">
-                                        <label class="btn btn-outline-primary" for="template-custom">
-                                            Custom
-                                        </label>
-                                    </div>
+                                    <label class="form-label">Template Type</label>
+                                    <select class="form-select" id="prompt-template-select">
+                                        <option value="grpo-default">GRPO Default</option>
+                                        <option value="qwen">Qwen GRPO</option>
+                                        <option value="llama">LLaMA GRPO</option>
+                                        <option value="phi">Phi GRPO</option>
+                                        <option value="custom">Custom Template</option>
+                                    </select>
                                 </div>
 
                                 <!-- Template Editor (for Custom mode) -->
@@ -624,11 +624,25 @@ Then, provide your solution between &lt;SOLUTION&gt;&lt;/SOLUTION&gt;</textarea>
                                             <div class="row">
                                                 <div class="col-md-6">
                                                     <label class="form-label small">Pre-training Epochs</label>
-                                                    <input type="number" class="form-control form-control-sm" id="pre-training-epochs" value="1" min="1" max="3">
+                                                    <input type="number" class="form-control form-control-sm" id="pre-training-epochs" value="2" min="1" max="5">
+                                                    <small class="text-muted">Default: 2 (matches official GRPO notebook)</small>
                                                 </div>
                                                 <div class="col-md-6">
-                                                    <label class="form-label small">Sample Size</label>
-                                                    <input type="number" class="form-control form-control-sm" id="pre-training-samples" value="100" min="50" max="500">
+                                                    <label class="form-label small">Pre-training Sample Size</label>
+                                                    <input type="number" class="form-control form-control-sm" id="pre-training-samples" placeholder="Auto (use main dataset)" min="10" max="5000">
+                                                    <small class="text-muted">Leave empty to use main dataset samples. Official: ~59 filtered samples</small>
+                                                </div>
+                                            </div>
+                                            <div class="row mt-2">
+                                                <div class="col-md-12">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" id="pre-training-filter-length">
+                                                        <label class="form-check-label small" for="pre-training-filter-length">
+                                                            Filter by Length (keep shorter samples)
+                                                            <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip"
+                                                               title="Filters pre-training dataset to keep only samples shorter than 50% of max sequence length. Matches official notebook approach."></i>
+                                                        </label>
+                                                    </div>
                                                 </div>
                                             </div>
                                             <div class="form-check mt-2">
@@ -2385,7 +2399,30 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+
+    <!-- Modular JavaScript Architecture -->
+    <!-- Core modules loaded first -->
+    <script src="{{ url_for('static', filename='js/modules/state.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/socket.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/core.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/navigation.js') }}"></script>
+
+    <!-- Feature modules -->
+    <script src="{{ url_for('static', filename='js/modules/models.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/datasets.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/templates.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/training.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/sessions.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/config.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/export.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/testing.js') }}"></script>
+
     <script src="{{ url_for('static', filename='js/enhanced_rewards.js') }}"></script>
+
+    <!-- Global function exports for onclick handlers -->
+    <script src="{{ url_for('static', filename='js/globals.js') }}"></script>
+
+    <!-- Application initialization -->
+    <script src="{{ url_for('static', filename='js/app-init.js') }}"></script>
 </body>
 </html>
