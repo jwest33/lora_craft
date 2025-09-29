@@ -109,7 +109,7 @@ class GRPOTrainingConfig:
     top_k: int = 50
     top_p: float = 0.95
     repetition_penalty: float = 1.0
-    kl_penalty: float = 0.01
+    kl_penalty: float = 0.05  # Increased to prevent KL divergence
     clip_range: float = 0.2
     value_coefficient: float = 1.0
 
@@ -168,6 +168,7 @@ class GRPOModelTrainer:
         self.current_epoch = 0
         self.best_reward = float('-inf')
         self.training_history = []
+        self.training_phase = 'idle'  # 'idle', 'pre-training', 'training'
 
         # Callbacks
         self.progress_callback = None
@@ -330,6 +331,7 @@ class GRPOModelTrainer:
             Training metrics
         """
         logger.info("Starting pre-fine-tuning phase")
+        self.training_phase = 'pre-training'
 
         # Store original tokenizer configuration
         original_padding_side = self.tokenizer.padding_side if hasattr(self.tokenizer, 'padding_side') else None
@@ -342,19 +344,57 @@ class GRPOModelTrainer:
         # Set padding side to 'right' for training (required by DataCollatorForLanguageModeling)
         self.tokenizer.padding_side = 'right'
 
-        # Apply template to dataset (just format, don't tokenize yet)
+        # Apply template to dataset for pre-training
+        # CRITICAL: Use the same prompt format as GRPO will use, but include the response
         def apply_template(example):
-            # Ensure we're formatting correctly with instruction and response fields
+            # Format the prompt exactly as GRPO will see it
             if 'instruction' in example:
-                # Create a proper message format for the template
-                messages = [
-                    {'role': 'user', 'content': example.get('instruction', '')},
-                    {'role': 'assistant', 'content': example.get('response', example.get('output', ''))}
+                # Get the prompt format (what GRPO will use)
+                prompt_messages = [
+                    {'role': 'user', 'content': example.get('instruction', '')}
                 ]
-                formatted = template.apply(messages, mode='training')
+                # Use inference mode to get the prompt format without response
+                prompt = template.apply(prompt_messages, mode='inference')
+
+                # Get the response with reasoning markers
+                response = example.get('response', example.get('output', ''))
+
+                # For pre-training, we want the model to learn the format
+                # So we combine prompt + response with proper reasoning and solution markers
+                if template.config.reasoning_start_marker and template.config.reasoning_end_marker:
+                    # Check if response already has the markers
+                    has_reasoning_markers = (template.config.reasoning_start_marker in response and
+                                           template.config.reasoning_end_marker in response)
+                    has_solution_markers = (template.config.solution_start_marker in response and
+                                          template.config.solution_end_marker in response)
+
+                    # If no markers at all, add them
+                    if not has_reasoning_markers and not has_solution_markers:
+                        # Split response into reasoning and solution if possible
+                        # For now, treat entire response as solution
+                        response = (f"{template.config.reasoning_start_marker}\n"
+                                  f"Let me work through this step by step.\n"
+                                  f"{template.config.reasoning_end_marker}\n"
+                                  f"{template.config.solution_start_marker}\n"
+                                  f"{response}\n"
+                                  f"{template.config.solution_end_marker}")
+
+                # Combine prompt and response for training
+                formatted = prompt + response
+
+                # Add EOS token if needed
+                if hasattr(template, 'config') and template.config.model_type == 'grpo':
+                    if not formatted.endswith('</s>'):
+                        formatted += '</s>'
             else:
-                # Fallback to original behavior
+                # Fallback for non-standard format
                 formatted = template.apply(example, mode='training')
+
+            # Log sample format for debugging (only first example)
+            if not hasattr(apply_template, 'logged'):
+                logger.info(f"Pre-training format sample (first 500 chars): {formatted[:500]}")
+                apply_template.logged = True
+
             return {'text': formatted}
 
         formatted_dataset = dataset.map(
@@ -457,10 +497,18 @@ class GRPOModelTrainer:
             Formatted dataset
         """
         formatted_items = []
+        vocab_size = self.model.config.vocab_size if hasattr(self.model, 'config') else 151936
+        skipped_count = 0
+        first_logged = False
 
         for item in dataset:
             # Format the prompt using the template
             prompt = template.apply(item, mode='inference')
+
+            # Log first prompt for comparison with pre-training
+            if not first_logged:
+                logger.info(f"GRPO prompt format sample (first 500 chars): {prompt[:500]}")
+                first_logged = True
 
             # TRL expects a specific format with prompt field
             formatted_item = {
@@ -475,7 +523,27 @@ class GRPOModelTrainer:
             if 'input' in item:
                 formatted_item['context'] = item['input']
 
+            # Tokenize to check for invalid tokens (defensive check)
+            if self.tokenizer:
+                try:
+                    test_tokens = self.tokenizer.encode(
+                        formatted_item["prompt"][0]["content"],
+                        add_special_tokens=True
+                    )
+                    # Check if any token exceeds vocab size
+                    if any(token >= vocab_size for token in test_tokens):
+                        logger.warning(f"Skipping sample with out-of-range tokens (max={max(test_tokens)})")
+                        skipped_count += 1
+                        continue
+                except Exception as e:
+                    logger.warning(f"Error tokenizing sample: {e}")
+                    skipped_count += 1
+                    continue
+
             formatted_items.append(formatted_item)
+
+        if skipped_count > 0:
+            logger.warning(f"Skipped {skipped_count} samples due to tokenization issues")
 
         return Dataset.from_list(formatted_items)
 
@@ -537,6 +605,7 @@ class GRPOModelTrainer:
         """
 
         logger.info("Starting GRPO training with TRL...")
+        self.training_phase = 'training'  # Set training phase
 
         # Disable Torch compilation for TRL to avoid Dynamo errors with Unsloth
         # This is necessary due to incompatibility between Unsloth's optimizations and TRL's gradient computation
@@ -602,11 +671,23 @@ class GRPOModelTrainer:
         logger.info(f"GRPO batch configuration: batch_size={batch_size}, global_batch_size={global_batch_size}, generation_batch_size={generation_batch_size}, num_generations={num_gens}")
 
         # Calculate the actual number of training steps based on dataset and epochs
+        # If max_samples is set, it represents samples per epoch
+        # Otherwise use the full dataset size
         num_train_samples = len(formatted_dataset)
-        steps_per_epoch = max(1, num_train_samples // global_batch_size)  # At least 1 step per epoch
+
+        if self.config.max_samples:
+            # max_samples is actually "samples per epoch"
+            samples_per_epoch = min(self.config.max_samples, num_train_samples)
+            logger.info(f"Using {samples_per_epoch} samples per epoch (configured: {self.config.max_samples})")
+        else:
+            # Use all available samples per epoch
+            samples_per_epoch = num_train_samples
+            logger.info(f"Using all {samples_per_epoch} samples per epoch")
+
+        steps_per_epoch = max(1, samples_per_epoch // global_batch_size)  # At least 1 step per epoch
         max_steps = steps_per_epoch * self.config.num_train_epochs
 
-        logger.info(f"Training steps calculation: {num_train_samples} samples / {global_batch_size} batch size = {steps_per_epoch} steps/epoch")
+        logger.info(f"Training steps calculation: {samples_per_epoch} samples/epoch / {global_batch_size} batch size = {steps_per_epoch} steps/epoch")
         logger.info(f"Total training steps: {steps_per_epoch} steps/epoch * {self.config.num_train_epochs} epochs = {max_steps} steps")
 
         # Create TRL GRPO configuration with algorithm support
@@ -615,7 +696,7 @@ class GRPOModelTrainer:
             per_device_train_batch_size=batch_size,  # Use adjusted batch_size
             gradient_accumulation_steps=self.config.gradient_accumulation_steps,
             generation_batch_size=generation_batch_size,  # Must be divisible by num_generations
-            max_steps=max_steps,  # Calculated based on dataset size and epochs
+            num_train_epochs=self.config.num_train_epochs,  # Use epochs instead of max_steps
             warmup_ratio=self.config.warmup_ratio,
             weight_decay=self.config.weight_decay,
             lr_scheduler_type=self.config.lr_scheduler_type,
@@ -645,9 +726,62 @@ class GRPOModelTrainer:
         # Create reward functions list for TRL
         reward_funcs = self._create_trl_reward_funcs(reward_builder)
 
+        # Add debugging info for vocab sizes
+        logger.info(f"Tokenizer vocab size: {self.tokenizer.vocab_size}")
+        if hasattr(self.model, 'config'):
+            logger.info(f"Model config vocab size: {getattr(self.model.config, 'vocab_size', 'Not found')}")
+        if hasattr(self.model, 'get_input_embeddings'):
+            embeddings = self.model.get_input_embeddings()
+            if embeddings is not None:
+                logger.info(f"Model embedding size: {embeddings.weight.shape}")
+
+        # Check and fix vocab size mismatch
+        if hasattr(self.model, 'config') and hasattr(self.tokenizer, 'vocab_size'):
+            model_vocab_size = getattr(self.model.config, 'vocab_size', None)
+            tokenizer_vocab_size = self.tokenizer.vocab_size
+
+            if model_vocab_size and model_vocab_size != tokenizer_vocab_size:
+                logger.warning(f"Vocab size mismatch: Model={model_vocab_size}, Tokenizer={tokenizer_vocab_size}")
+
+                # NEVER resize DOWN as it causes index out of bounds errors
+                if tokenizer_vocab_size > model_vocab_size:
+                    # Only resize UP when tokenizer has MORE tokens
+                    if hasattr(self.model, 'resize_token_embeddings'):
+                        logger.info(f"Resizing model embeddings UP from {model_vocab_size} to {tokenizer_vocab_size}")
+                        self.model.resize_token_embeddings(tokenizer_vocab_size)
+                        logger.info("Model embeddings resized successfully")
+                    else:
+                        logger.error("Cannot resize token embeddings - model may not work correctly!")
+                else:
+                    # Model has more tokens than tokenizer - keep model size
+                    logger.info(f"Keeping model vocab size at {model_vocab_size} (larger than tokenizer's {tokenizer_vocab_size})")
+                    # Update tokenizer to match model's vocab size to prevent issues
+                    if hasattr(self.tokenizer, 'vocab_size'):
+                        logger.info(f"Updating tokenizer reference vocab_size to match model: {model_vocab_size}")
+                        # Don't actually resize tokenizer, just update the reference
+                        # The model will handle any tokens beyond tokenizer's actual vocab
+
+        # Ensure generation config is properly set
+        if hasattr(self.model, 'generation_config'):
+            logger.info(f"Generation config pad_token_id: {self.model.generation_config.pad_token_id}")
+            logger.info(f"Generation config eos_token_id: {self.model.generation_config.eos_token_id}")
+
+            # Update generation config to match tokenizer
+            if self.tokenizer.pad_token_id is not None:
+                self.model.generation_config.pad_token_id = self.tokenizer.pad_token_id
+            if self.tokenizer.eos_token_id is not None:
+                self.model.generation_config.eos_token_id = self.tokenizer.eos_token_id
+
+            # Set max_length to avoid dimension issues
+            self.model.generation_config.max_length = self.config.max_sequence_length
+            self.model.generation_config.max_new_tokens = self.config.max_new_tokens
+            logger.info(f"Updated generation config max_length: {self.model.generation_config.max_length}")
+
         # Reset model state to avoid dimension mismatches
         # This is critical when reusing a model from a previous training session
         try:
+            import torch as torch_module  # Re-import to ensure it's in scope
+
             # Clear any cached states in the model
             if hasattr(self.model, 'eval'):
                 self.model.eval()
@@ -665,13 +799,48 @@ class GRPOModelTrainer:
                 self.model.clear_cache()
 
             # Ensure model is on the correct device
-            if torch.cuda.is_available():
+            if torch_module.cuda.is_available():
                 self.model = self.model.cuda()
-                torch.cuda.empty_cache()
+                torch_module.cuda.empty_cache()
 
             logger.info("Reset model state for GRPO training")
         except Exception as e:
             logger.warning(f"Could not fully reset model state: {e}")
+
+        # Validate token IDs in dataset before training
+        max_token_id = 0
+        invalid_samples = []
+        vocab_size = self.model.config.vocab_size if hasattr(self.model, 'config') else 151936
+
+        logger.info(f"Validating token IDs in dataset (vocab_size={vocab_size})...")
+
+        for idx, sample in enumerate(formatted_dataset):
+            if 'input_ids' in sample:
+                token_ids = sample['input_ids']
+                if isinstance(token_ids, list):
+                    max_id = max(token_ids) if token_ids else 0
+                    if max_id >= vocab_size:
+                        invalid_samples.append((idx, max_id))
+                    max_token_id = max(max_token_id, max_id)
+
+        if invalid_samples:
+            logger.error(f"Found {len(invalid_samples)} samples with token IDs >= {vocab_size}")
+            for idx, max_id in invalid_samples[:5]:  # Show first 5
+                logger.error(f"  Sample {idx}: max token ID = {max_id}")
+
+            # Filter out invalid samples
+            logger.info("Filtering out invalid samples...")
+            valid_indices = [i for i in range(len(formatted_dataset))
+                           if not any(idx == i for idx, _ in invalid_samples)]
+            formatted_dataset = formatted_dataset.select(valid_indices)
+            logger.info(f"Filtered dataset size: {len(formatted_dataset)} samples")
+        else:
+            logger.info(f"All token IDs are valid (max={max_token_id} < {vocab_size})")
+
+        # DO NOT override model's vocab_size with tokenizer's if model is larger
+        # This causes index out of bounds errors
+        if hasattr(self.model, 'config'):
+            logger.info(f"Final model config vocab_size: {self.model.config.vocab_size}")
 
         # Initialize TRL's GRPOTrainer with valid parameters only
         trainer = GRPOTrainer(
@@ -712,15 +881,28 @@ class GRPOModelTrainer:
                     actual_reward = float(logs.get('reward', logs.get('rewards/reward_wrapper/mean', 0.0)))
                     grad_norm = float(logs.get('grad_norm', 0.0))
 
+                    # Calculate epoch correctly based on training phase
+                    current_step = trainer.state.global_step if hasattr(trainer, 'state') else 0
+
+                    # Calculate epoch based on step and total steps
+                    if parent.training_phase == 'pre-training':
+                        # For pre-training, report special value
+                        calculated_epoch = -1
+                    else:
+                        # For main training, calculate actual epoch (0-based)
+                        steps_per_epoch = max(1, max_steps / parent.config.num_train_epochs)
+                        calculated_epoch = current_step / steps_per_epoch
+
                     # Convert to our format
                     metrics = {
-                        'epoch': logs.get('epoch', parent.current_epoch),
-                        'step': trainer.state.global_step if hasattr(trainer, 'state') else 0,
+                        'epoch': calculated_epoch,
+                        'step': current_step,
                         'loss': actual_loss,
                         'mean_reward': actual_reward,
                         'learning_rate': logs.get('learning_rate', parent.config.learning_rate),
                         'grad_norm': grad_norm,
                         'reward_std': logs.get('reward_std', logs.get('rewards/reward_wrapper/std', 0.0)),
+                        'training_phase': parent.training_phase,  # Add phase indicator
                     }
 
                     # Add all reward components
@@ -784,9 +966,11 @@ class GRPOModelTrainer:
                 logger.info("Attempting to fix model state and retry...")
 
                 try:
+                    import torch as torch_module  # Re-import to ensure it's in scope
+
                     # Reset model completely
                     self.model.eval()
-                    torch.cuda.empty_cache() if torch.cuda.is_available() else None
+                    torch_module.cuda.empty_cache() if torch_module.cuda.is_available() else None
 
                     # Force model reinitialization for attention layers
                     for module in self.model.modules():
@@ -875,10 +1059,19 @@ class GRPOModelTrainer:
         self.tokenizer.save_pretrained(checkpoint_path)
 
         # Save training state
+        # Handle infinity values which are not valid JSON
+        best_reward_value = self.best_reward
+        if best_reward_value == float('-inf'):
+            best_reward_value = None
+        elif best_reward_value == float('inf'):
+            best_reward_value = None
+        elif best_reward_value != best_reward_value:  # Check for NaN
+            best_reward_value = None
+
         state = {
             'global_step': self.global_step,
             'current_epoch': self.current_epoch,
-            'best_reward': self.best_reward,
+            'best_reward': best_reward_value,
             'training_history': self.training_history,
             'config': self.config.to_dict(),
         }
@@ -908,7 +1101,9 @@ class GRPOModelTrainer:
 
         self.global_step = state['global_step']
         self.current_epoch = state['current_epoch']
-        self.best_reward = state['best_reward']
+        # Handle None values that replaced infinity
+        best_reward = state['best_reward']
+        self.best_reward = best_reward if best_reward is not None else float('-inf')
         self.training_history = state['training_history']
 
         logger.info(f"Checkpoint loaded from {checkpoint_path}")

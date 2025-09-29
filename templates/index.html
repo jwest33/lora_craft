@@ -65,14 +65,9 @@
                         <span>Export</span>
                     </div>
                     <div class="step-connector"></div>
-                    <div class="compact-step" id="step-6-indicator" onclick="goToStep(6); setTimeout(() => loadTestableModels(), 100);" data-bs-toggle="tooltip" title="Test Model">
+                    <div class="compact-step" id="step-6-indicator" onclick="goToStep(6); setTimeout(() => loadTestableModels(), 100);" data-bs-toggle="tooltip" title="Test & Evaluate Model">
                         <i class="fas fa-vial"></i>
                         <span>Test</span>
-                    </div>
-                    <div class="step-connector"></div>
-                    <div class="compact-step" id="step-7-indicator" onclick="goToStep(7);" data-bs-toggle="tooltip" title="Evaluate Model">
-                        <i class="fas fa-chart-line"></i>
-                        <span>Evaluate</span>
                     </div>
                 </div>
             </div>
@@ -116,8 +111,10 @@
 
     <!-- Main Wrapper with Flexbox Layout -->
     <div class="main-wrapper">
-        <!-- Sidebar Panel -->
-        <aside class="sidebar-panel" id="sidebar-panel">
+        <!-- Inner layout container -->
+        <div class="layout-inner">
+            <!-- Sidebar Panel -->
+            <aside class="sidebar-panel" id="sidebar-panel">
                 <div class="sidebar-card">
                     <div class="card-header">
                         <h5 class="mb-0">
@@ -456,8 +453,8 @@
                                         <div class="col-md-6">
                                             <div class="form-group">
                                                 <label class="form-label">Split</label>
-                                                <input type="text" class="form-control" id="dataset-split" value="train[:100]">
-                                                <small class="text-muted">Limit samples for testing</small>
+                                                <input type="text" class="form-control" id="dataset-split" value="train">
+                                                <small class="text-muted">e.g., train, test, validation</small>
                                             </div>
                                         </div>
                                     </div>
@@ -643,13 +640,7 @@ Then, provide your solution between &lt;SOLUTION&gt;&lt;/SOLUTION&gt;</textarea>
                                         </div>
                                     </div>
 
-                                    <!-- Chat Template Preview -->
-                                    <div class="template-preview-box mt-3">
-                                        <div class="preview-header">
-                                            <span>Chat Template Preview</span>
-                                        </div>
-                                        <pre id="chat-template-preview" class="preview-content" style="border-radius: 0 0 12px 12px;">Loading...</pre>
-                                    </div>
+                                    <!-- Chat Template Preview removed for clarity -->
                                 </div>
                             </div>
 
@@ -816,7 +807,7 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                 </ul>
 
                                 <!-- Tab Content -->
-                                <div class="tab-content p-3 border border-top-0">
+                                <div class="tab-content p-3 border-top-0">
                                     <!-- Quick Start Templates Tab -->
                                     <div class="tab-pane fade show active" id="reward-templates-tab" role="tabpanel">
                                         <div class="row" id="reward-templates-grid">
@@ -1012,6 +1003,14 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                     </div>
                                     <div class="col-md-3">
                                         <div class="form-group">
+                                            <label class="form-label">Samples Per Epoch <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Number of samples to use per epoch. Leave empty to use all available samples per epoch"></i></label>
+                                            <input type="number" class="form-control" id="max-samples" placeholder="All" min="1">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row mt-3">
+                                    <div class="col-md-3">
+                                        <div class="form-group">
                                             <label class="form-label">Warmup Steps</label>
                                             <input type="number" class="form-control" id="warmup-steps" value="10" min="0" max="1000">
                                         </div>
@@ -1062,7 +1061,8 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                         <div class="col-md-3">
                                             <div class="form-group">
                                                 <label class="form-label">KL Penalty</label>
-                                                <input type="number" class="form-control" id="kl-penalty" value="0.01" min="0" max="1" step="0.01">
+                                                <input type="number" class="form-control" id="kl-penalty" value="0.05" min="0" max="1" step="0.01">
+                                                <small class="text-muted">Controls KL divergence (0.05-0.1 recommended)</small>
                                             </div>
                                         </div>
                                         <div class="col-md-3">
@@ -1680,6 +1680,37 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                         Use chat template
                                     </label>
                                 </div>
+
+                                <!-- Full Prompt Preview -->
+                                <div class="mt-3">
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#full-prompt-preview" aria-expanded="false" aria-controls="full-prompt-preview">
+                                        <i class="fas fa-eye"></i> Show Full Prompt Preview
+                                    </button>
+                                    <div class="collapse mt-2" id="full-prompt-preview">
+                                        <div class="card">
+                                            <div class="card-body">
+                                                <h6 class="card-title mb-3">
+                                                    <i class="fas fa-code"></i> Full Prompt (Including System Prompt)
+                                                </h6>
+                                                <div class="alert alert-info mb-2">
+                                                    <small><i class="fas fa-info-circle"></i> This shows exactly what the LLM will receive</small>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-bold">System Prompt:</label>
+                                                    <pre class="bg-light p-3 rounded" id="system-prompt-preview" style="white-space: pre-wrap; word-wrap: break-word;">Loading...</pre>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-bold">Formatted Full Prompt:</label>
+                                                    <pre class="bg-light p-3 rounded" id="formatted-prompt-preview" style="white-space: pre-wrap; word-wrap: break-word;">Click "Update Preview" to see the formatted prompt</pre>
+                                                </div>
+                                                <button class="btn btn-sm btn-primary" onclick="updatePromptPreview()">
+                                                    <i class="fas fa-sync"></i> Update Preview
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div class="mt-3">
                                     <button class="btn btn-success btn-lg w-100" onclick="compareModels()" id="compare-btn">
                                         <i class="fas fa-play"></i> Compare Models
@@ -1913,6 +1944,9 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                             <div class="mt-3">
                                                 <button class="btn btn-success btn-lg w-100" onclick="runBatchComparison()" id="batch-compare-btn" disabled>
                                                     <i class="fas fa-play"></i> Run Batch Comparison
+                                                </button>
+                                                <button class="btn btn-danger btn-lg w-100 mt-2" onclick="cancelBatchTest()" id="batch-cancel-btn" style="display: none;">
+                                                    <i class="fas fa-stop"></i> Cancel Batch Test
                                                 </button>
                                             </div>
                                         </div>
@@ -2159,6 +2193,8 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
             <!-- End of content-container -->
         </main>
         <!-- End of content-area -->
+        </div>
+        <!-- End of layout-inner -->
     </div>
     <!-- End of main-wrapper -->
 

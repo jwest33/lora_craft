@@ -431,10 +431,12 @@ class DatasetHandler:
                     except Exception as e:
                         logger.warning(f"Failed to cache dataset: {e}")
 
-                # Limit samples if specified (and not already limited by split)
-                if self.config.max_samples and dataset_len > self.config.max_samples and not self.config.sample_size:
+                # max_samples now represents "samples per epoch"
+                # TRL will handle repeating the dataset for multiple epochs
+                # We only limit if we want fewer samples per epoch than available
+                if self.config.max_samples and dataset_len > self.config.max_samples:
                     dataset = dataset.select(range(self.config.max_samples))
-                    logger.info(f"Limited dataset to {self.config.max_samples} samples")
+                    logger.info(f"Limited dataset to {self.config.max_samples} samples per epoch")
 
                 # Shuffle if requested
                 if self.config.shuffle and not self.config.sample_size:
@@ -593,7 +595,9 @@ class DatasetHandler:
         # Limit samples
         if self.config.max_samples and not self.config.streaming:
             if len(dataset) > self.config.max_samples:
+                original_size = len(dataset)
                 dataset = dataset.select(range(self.config.max_samples))
+                logger.info(f"Limited dataset from {original_size} to {self.config.max_samples} samples (in preprocessing)")
 
         return dataset
 

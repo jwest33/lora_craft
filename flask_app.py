@@ -84,6 +84,10 @@ system_config = SystemConfig()
 # Session registry for fast model lookup
 session_registry = SessionRegistry()
 
+# Global storage for batch tests
+active_batch_tests = {}  # batch_id -> test info
+batch_test_lock = threading.Lock()
+
 # Define Popular Datasets catalog (matching the frontend catalog)
 POPULAR_DATASETS = {
     'tatsu-lab/alpaca': {
@@ -519,7 +523,7 @@ def run_training(session_id: str, config: Dict[str, Any]):
             # GRPO/Algorithm specific
             loss_type=config.get('loss_type', 'grpo'),
             importance_sampling_level=config.get('importance_sampling_level', 'token'),
-            kl_penalty=config.get('kl_penalty', 0.01),
+            kl_penalty=config.get('kl_penalty', 0.05),  # Increased default to prevent KL divergence
             clip_range=config.get('clip_range', 0.2),
             value_coefficient=config.get('value_coefficient', 1.0),
             epsilon=config.get('epsilon', 3e-4),
@@ -590,15 +594,20 @@ def run_training(session_id: str, config: Dict[str, Any]):
             source_type=source_type,
             source_path=dataset_path,
             subset=config.get('dataset_config', None),  # Config for multi-config datasets
-            split=config.get('dataset_split', 'train[:100]') if source_type == 'huggingface' else 'train',  # No split for local files
+            split=config.get('dataset_split', 'train'),  # Use 'train' as default, let max_samples handle limiting
             instruction_field=config.get('instruction_field', 'instruction'),
             response_field=config.get('response_field', 'output'),
-            max_samples=config.get('max_samples', 100)
+            max_samples=config.get('max_samples')  # Don't default to 100, use None if not provided
         )
 
         dataset_handler = DatasetHandler(dataset_config)
         dataset = dataset_handler.load()
-        q.put(('log', f"Loaded {len(dataset)} samples"))
+        actual_samples = len(dataset)
+        max_samples_config = config.get('max_samples')
+        if max_samples_config:
+            q.put(('log', f"Loaded dataset with {actual_samples} samples (max_samples: {max_samples_config})"))
+        else:
+            q.put(('log', f"Loaded dataset with {actual_samples} samples (no limit configured)"))
 
         # Setup prompt template with chat template
         template_config = TemplateConfig(
@@ -1634,7 +1643,13 @@ def get_model_info(session_id):
                     state_file = checkpoint / "training_state.json"
                     if state_file.exists():
                         with open(state_file, 'r') as f:
-                            checkpoint_info['training_state'] = json.load(f)
+                            # Read the file content and handle infinity values
+                            content = f.read()
+                            # Replace JavaScript-style infinity values with null
+                            content = content.replace('-Infinity', 'null')
+                            content = content.replace('Infinity', 'null')
+                            content = content.replace('NaN', 'null')
+                            checkpoint_info['training_state'] = json.loads(content)
 
                     # Check for model files
                     checkpoint_info['has_model'] = (checkpoint / "adapter_model.safetensors").exists() or \
@@ -2832,6 +2847,103 @@ def compare_models():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/test/prompt-preview', methods=['POST'])
+def get_prompt_preview():
+    """Get a preview of the formatted prompt with system prompt."""
+    try:
+        data = request.json
+        prompt = data.get('prompt', '')
+        session_id = data.get('session_id')
+        use_chat_template = data.get('use_chat_template', True)
+
+        # Get the session info to retrieve the system prompt
+        session_info = session_registry.get_session(session_id)
+        if not session_info:
+            return jsonify({'error': 'Session not found'}), 404
+
+        # Get training config
+        training_config = session_info.training_config
+        system_prompt = training_config.get('system_prompt', 'You are given a problem.\nThink about the problem and provide your working out.\nPlace it between <start_working_out> and <end_working_out>.\nThen, provide your solution between <SOLUTION></SOLUTION>')
+
+        # Get the formatted prompt preview
+        formatted_prompt = prompt  # Default to just the prompt
+
+        if use_chat_template:
+            # Try to use the chat template from the training config
+            chat_template_type = training_config.get('chat_template_type', 'grpo')
+            chat_template = training_config.get('chat_template')
+
+            # If we have a specific chat template, try to apply it
+            if chat_template:
+                try:
+                    from jinja2 import Environment
+                    env = Environment()
+                    template = env.from_string(chat_template)
+
+                    # Prepare messages
+                    messages = []
+                    if system_prompt:
+                        messages.append({"role": "system", "content": system_prompt})
+                    messages.append({"role": "user", "content": prompt})
+
+                    # Get template markers from config
+                    reasoning_start = training_config.get('reasoning_start', '<start_working_out>')
+                    eos_token = '</s>'  # Common default
+
+                    # Render template
+                    formatted_prompt = template.render(
+                        messages=messages,
+                        add_generation_prompt=True,
+                        eos_token=eos_token,
+                        system_prompt=system_prompt,
+                        reasoning_start=reasoning_start
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to apply chat template from config: {e}")
+                    # Fallback to simple format
+                    if system_prompt:
+                        formatted_prompt = f"{system_prompt}\n\nUser: {prompt}\n\nAssistant:"
+                    else:
+                        formatted_prompt = f"User: {prompt}\n\nAssistant:"
+            else:
+                # Use template type to format
+                reasoning_start = training_config.get('reasoning_start', '<start_working_out>')
+                if chat_template_type == 'grpo':
+                    # GRPO format
+                    if system_prompt:
+                        formatted_prompt = f"{system_prompt}</s>{prompt}{reasoning_start}"
+                    else:
+                        formatted_prompt = f"{prompt}{reasoning_start}"
+                elif chat_template_type == 'qwen':
+                    # Qwen format
+                    if system_prompt:
+                        formatted_prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
+                    else:
+                        formatted_prompt = f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
+                elif chat_template_type == 'llama':
+                    # LLaMA format
+                    if system_prompt:
+                        formatted_prompt = f"<s>[INST] <<SYS>>\n{system_prompt}\n<</SYS>>\n\n{prompt} [/INST]"
+                    else:
+                        formatted_prompt = f"<s>[INST] {prompt} [/INST]"
+                else:
+                    # Generic format
+                    if system_prompt:
+                        formatted_prompt = f"{system_prompt}\n\nUser: {prompt}\n\nAssistant:"
+                    else:
+                        formatted_prompt = f"User: {prompt}\n\nAssistant:"
+
+        return jsonify({
+            'system_prompt': system_prompt,
+            'formatted_prompt': formatted_prompt,
+            'use_chat_template': use_chat_template
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to get prompt preview: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/test/compare-models', methods=['POST'])
 def compare_two_trained_models():
     """Compare responses from two trained models."""
@@ -3307,9 +3419,239 @@ def upload_test_file():
         return jsonify({'error': str(e)}), 500
 
 
+def run_batch_comparison_background(batch_id, params):
+    """Run batch comparison in background thread."""
+    try:
+        # Update status
+        with batch_test_lock:
+            active_batch_tests[batch_id]['status'] = 'running'
+            active_batch_tests[batch_id]['started_at'] = datetime.now().isoformat()
+
+        # Extract parameters
+        temp_path = params['temp_path']
+        file_info = params['file_info']
+        session_id = params['session_id']
+        base_model = params['base_model']
+        instruction_column = params['instruction_column']
+        response_column = params['response_column']
+        sample_size = params['sample_size']
+        use_chat_template = params['use_chat_template']
+        compare_mode = params['compare_mode']
+        comparison_session_id = params['comparison_session_id']
+        config_data = params['config']
+
+        # Load test data
+        import pandas as pd
+
+        if file_info['format'] == 'csv':
+            df = pd.read_csv(temp_path)
+        elif file_info['format'] == 'json':
+            with open(temp_path, 'r', encoding='utf-8') as f:
+                df = pd.DataFrame(json.load(f))
+        elif file_info['format'] == 'jsonl':
+            with open(temp_path, 'r', encoding='utf-8') as f:
+                df = pd.DataFrame([json.loads(line) for line in f])
+
+        # Apply sample size limit if specified
+        if sample_size:
+            df = df.head(sample_size)
+
+        # Validate columns exist
+        if instruction_column not in df.columns:
+            raise Exception(f'Instruction column "{instruction_column}" not found')
+
+        if response_column and response_column not in df.columns:
+            raise Exception(f'Response column "{response_column}" not found')
+
+        # Get checkpoint path from registry
+        session_info = session_registry.get_session(session_id)
+        if not session_info:
+            raise Exception(f'Session {session_id} not found')
+
+        checkpoint_path = session_info.checkpoint_path
+        if not checkpoint_path or not Path(checkpoint_path).exists():
+            raise Exception(f'Checkpoint not found for session {session_id}')
+
+        # Load trained model
+        success, error = model_tester.load_trained_model(checkpoint_path, session_id)
+        if not success:
+            raise Exception(f'Failed to load trained model: {error}')
+
+        # Load comparison model
+        if compare_mode == 'base':
+            success, error = model_tester.load_base_model(base_model)
+            if not success:
+                raise Exception(f'Failed to load base model: {error}')
+        else:
+            comp_session_info = session_registry.get_session(comparison_session_id)
+            if not comp_session_info:
+                raise Exception(f'Comparison session {comparison_session_id} not found')
+
+            comp_checkpoint = comp_session_info.checkpoint_path
+            if not comp_checkpoint or not Path(comp_checkpoint).exists():
+                raise Exception(f'Checkpoint not found for comparison session {comparison_session_id}')
+
+            success, error = model_tester.load_trained_model(comp_checkpoint, comparison_session_id)
+            if not success:
+                raise Exception(f'Failed to load comparison model: {error}')
+
+        # Generation config
+        config = TestConfig(
+            temperature=config_data.get('temperature', 0.7),
+            max_new_tokens=config_data.get('max_new_tokens', 512),
+            top_p=config_data.get('top_p', 0.95),
+            top_k=config_data.get('top_k', 50),
+            repetition_penalty=config_data.get('repetition_penalty', 1.0),
+            do_sample=config_data.get('do_sample', True)
+        )
+
+        # Process batch with progress updates
+        results = []
+        total_rows = len(df)
+
+        # Send initial status via WebSocket
+        socketio.emit('batch_progress', {
+            'batch_id': batch_id,
+            'status': 'started',
+            'total': total_rows,
+            'current': 0
+        })
+
+        for idx, (row_idx, row) in enumerate(df.iterrows()):
+            # Check if test was cancelled
+            with batch_test_lock:
+                if active_batch_tests[batch_id]['status'] == 'cancelled':
+                    break
+
+            instruction = str(row[instruction_column])
+            expected = str(row[response_column]) if response_column else None
+
+            # Update progress
+            with batch_test_lock:
+                active_batch_tests[batch_id]['current'] = idx + 1
+                active_batch_tests[batch_id]['current_instruction'] = instruction[:100]
+
+            # Send progress update
+            socketio.emit('batch_progress', {
+                'batch_id': batch_id,
+                'status': 'processing',
+                'total': total_rows,
+                'current': idx + 1,
+                'instruction': instruction[:100] if instruction else ''
+            })
+
+            # Generate from trained model
+            trained_response = model_tester.generate_response(
+                prompt=instruction,
+                model_type="trained",
+                model_key=session_id,
+                config=config,
+                use_chat_template=use_chat_template
+            )
+
+            # Generate from comparison model
+            if compare_mode == 'base':
+                comparison_response = model_tester.generate_response(
+                    prompt=instruction,
+                    model_type="base",
+                    model_key=base_model,
+                    config=config,
+                    use_chat_template=use_chat_template
+                )
+            else:
+                comparison_response = model_tester.generate_response(
+                    prompt=instruction,
+                    model_type="trained",
+                    model_key=comparison_session_id,
+                    config=config,
+                    use_chat_template=use_chat_template
+                )
+
+            result_item = {
+                'index': row_idx,
+                'instruction': instruction,
+                'trained_response': trained_response.get('response', '') if trained_response.get('success') else 'ERROR',
+                'comparison_response': comparison_response.get('response', '') if comparison_response.get('success') else 'ERROR',
+                'trained_time': trained_response.get('metadata', {}).get('generation_time', 0),
+                'comparison_time': comparison_response.get('metadata', {}).get('generation_time', 0)
+            }
+
+            # Add expected response and calculate match if available
+            if expected:
+                result_item['expected'] = expected
+                result_item['trained_match'] = result_item['trained_response'].strip().lower() == expected.strip().lower()
+                result_item['comparison_match'] = result_item['comparison_response'].strip().lower() == expected.strip().lower()
+
+            results.append(result_item)
+
+            # Send result update for each completed row
+            socketio.emit('batch_result', {
+                'batch_id': batch_id,
+                'row_index': idx,
+                'result': result_item
+            })
+
+        # Calculate summary statistics
+        total_samples = len(results)
+        avg_trained_time = sum(r['trained_time'] for r in results) / total_samples if total_samples > 0 else 0
+        avg_comparison_time = sum(r['comparison_time'] for r in results) / total_samples if total_samples > 0 else 0
+        avg_trained_length = sum(len(r['trained_response']) for r in results) / total_samples if total_samples > 0 else 0
+        avg_comparison_length = sum(len(r['comparison_response']) for r in results) / total_samples if total_samples > 0 else 0
+
+        summary = {
+            'total_samples': total_samples,
+            'avg_trained_time': round(avg_trained_time, 3),
+            'avg_comparison_time': round(avg_comparison_time, 3),
+            'avg_trained_length': round(avg_trained_length, 1),
+            'avg_comparison_length': round(avg_comparison_length, 1)
+        }
+
+        # Add accuracy metrics if expected responses provided
+        if response_column:
+            trained_matches = sum(1 for r in results if r.get('trained_match', False))
+            comparison_matches = sum(1 for r in results if r.get('comparison_match', False))
+            summary['trained_accuracy'] = round(trained_matches / total_samples * 100, 1) if total_samples > 0 else 0
+            summary['comparison_accuracy'] = round(comparison_matches / total_samples * 100, 1) if total_samples > 0 else 0
+
+        # Update batch test with results
+        with batch_test_lock:
+            active_batch_tests[batch_id]['status'] = 'completed'
+            active_batch_tests[batch_id]['completed_at'] = datetime.now().isoformat()
+            active_batch_tests[batch_id]['results'] = results
+            active_batch_tests[batch_id]['summary'] = summary
+
+        # Send completion notification
+        socketio.emit('batch_progress', {
+            'batch_id': batch_id,
+            'status': 'completed',
+            'total': total_rows,
+            'current': total_rows
+        })
+
+        # Clean up temp file
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+
+    except Exception as e:
+        logger.error(f"Batch comparison failed for {batch_id}: {str(e)}")
+
+        # Update status to failed
+        with batch_test_lock:
+            active_batch_tests[batch_id]['status'] = 'failed'
+            active_batch_tests[batch_id]['error'] = str(e)
+            active_batch_tests[batch_id]['completed_at'] = datetime.now().isoformat()
+
+        # Send error notification
+        socketio.emit('batch_progress', {
+            'batch_id': batch_id,
+            'status': 'failed',
+            'error': str(e)
+        })
+
+
 @app.route('/api/test/batch-compare', methods=['POST'])
 def batch_compare_models():
-    """Run batch comparison between trained and base/comparison models."""
+    """Start batch comparison in background."""
     try:
         data = request.json
 
@@ -3342,155 +3684,53 @@ def batch_compare_models():
         elif compare_mode == 'model' and not comparison_session_id:
             return jsonify({'error': 'Comparison model required'}), 400
 
-        # Load test data
-        import pandas as pd
+        # Create a unique batch ID
+        import uuid
+        batch_id = str(uuid.uuid4())
 
-        if file_info['format'] == 'csv':
-            df = pd.read_csv(temp_path)
-        elif file_info['format'] == 'json':
-            with open(temp_path, 'r', encoding='utf-8') as f:
-                df = pd.DataFrame(json.load(f))
-        elif file_info['format'] == 'jsonl':
-            with open(temp_path, 'r', encoding='utf-8') as f:
-                df = pd.DataFrame([json.loads(line) for line in f])
-
-        # Apply sample size limit if specified
-        if sample_size:
-            df = df.head(sample_size)
-
-        # Validate columns exist
-        if instruction_column not in df.columns:
-            return jsonify({'error': f'Instruction column "{instruction_column}" not found'}), 400
-
-        if response_column and response_column not in df.columns:
-            return jsonify({'error': f'Response column "{response_column}" not found'}), 400
-
-        # Get checkpoint path from registry
-        session_info = session_registry.get_session(session_id)
-        if not session_info:
-            return jsonify({'error': f'Session {session_id} not found'}), 404
-
-        checkpoint_path = session_info.checkpoint_path
-        if not checkpoint_path or not Path(checkpoint_path).exists():
-            return jsonify({'error': f'Checkpoint not found for session {session_id}'}), 404
-
-        # Load trained model
-        success, error = model_tester.load_trained_model(checkpoint_path, session_id)
-        if not success:
-            return jsonify({'error': f'Failed to load trained model: {error}'}), 500
-
-        # Load comparison model
-        if compare_mode == 'base':
-            success, error = model_tester.load_base_model(base_model)
-            if not success:
-                return jsonify({'error': f'Failed to load base model: {error}'}), 500
-        else:
-            # Load another trained model for comparison
-            comp_session_info = session_registry.get_session(comparison_session_id)
-            if not comp_session_info:
-                return jsonify({'error': f'Comparison session {comparison_session_id} not found'}), 404
-
-            comp_checkpoint = comp_session_info.checkpoint_path
-            if not comp_checkpoint or not Path(comp_checkpoint).exists():
-                return jsonify({'error': f'Checkpoint not found for comparison session {comparison_session_id}'}), 404
-
-            success, error = model_tester.load_trained_model(comp_checkpoint, comparison_session_id)
-            if not success:
-                return jsonify({'error': f'Failed to load comparison model: {error}'}), 500
-
-        # Generation config
-        config_data = data.get('config', {})
-        config = TestConfig(
-            temperature=config_data.get('temperature', 0.7),
-            max_new_tokens=config_data.get('max_new_tokens', 512),
-            top_p=config_data.get('top_p', 0.95),
-            top_k=config_data.get('top_k', 50),
-            repetition_penalty=config_data.get('repetition_penalty', 1.0),
-            do_sample=config_data.get('do_sample', True)
-        )
-
-        # Process batch
-        results = []
-        for idx, row in df.iterrows():
-            instruction = str(row[instruction_column])
-            expected = str(row[response_column]) if response_column else None
-
-            # Generate from trained model
-            trained_response = model_tester.generate_response(
-                prompt=instruction,
-                model_type="trained",
-                model_key=session_id,
-                config=config,
-                use_chat_template=use_chat_template
-            )
-
-            # Generate from comparison model
-            if compare_mode == 'base':
-                comparison_response = model_tester.generate_response(
-                    prompt=instruction,
-                    model_type="base",
-                    model_key=base_model,
-                    config=config,
-                    use_chat_template=use_chat_template
-                )
-            else:
-                comparison_response = model_tester.generate_response(
-                    prompt=instruction,
-                    model_type="trained",
-                    model_key=comparison_session_id,
-                    config=config,
-                    use_chat_template=use_chat_template
-                )
-
-            result_item = {
-                'index': idx,
-                'instruction': instruction,
-                'trained_response': trained_response.get('response', '') if trained_response.get('success') else 'ERROR',
-                'comparison_response': comparison_response.get('response', '') if comparison_response.get('success') else 'ERROR',
-                'trained_time': trained_response.get('metadata', {}).get('generation_time', 0),
-                'comparison_time': comparison_response.get('metadata', {}).get('generation_time', 0)
+        # Create batch test entry
+        with batch_test_lock:
+            active_batch_tests[batch_id] = {
+                'batch_id': batch_id,
+                'status': 'pending',
+                'created_at': datetime.now().isoformat(),
+                'session_id': session_id,
+                'compare_mode': compare_mode,
+                'total': file_info['sample_count'],
+                'current': 0,
+                'results': None,
+                'summary': None,
+                'error': None
             }
 
-            # Add expected response and calculate match if available
-            if expected:
-                result_item['expected'] = expected
-                result_item['trained_match'] = result_item['trained_response'].strip().lower() == expected.strip().lower()
-                result_item['comparison_match'] = result_item['comparison_response'].strip().lower() == expected.strip().lower()
-
-            results.append(result_item)
-
-        # Calculate summary statistics
-        total_samples = len(results)
-        avg_trained_time = sum(r['trained_time'] for r in results) / total_samples if total_samples > 0 else 0
-        avg_comparison_time = sum(r['comparison_time'] for r in results) / total_samples if total_samples > 0 else 0
-        avg_trained_length = sum(len(r['trained_response']) for r in results) / total_samples if total_samples > 0 else 0
-        avg_comparison_length = sum(len(r['comparison_response']) for r in results) / total_samples if total_samples > 0 else 0
-
-        summary = {
-            'total_samples': total_samples,
-            'avg_trained_time': round(avg_trained_time, 3),
-            'avg_comparison_time': round(avg_comparison_time, 3),
-            'avg_trained_length': round(avg_trained_length, 1),
-            'avg_comparison_length': round(avg_comparison_length, 1)
+        # Prepare parameters for background task
+        params = {
+            'temp_path': temp_path,
+            'file_info': file_info,
+            'session_id': session_id,
+            'base_model': base_model,
+            'instruction_column': instruction_column,
+            'response_column': response_column,
+            'sample_size': sample_size,
+            'use_chat_template': use_chat_template,
+            'compare_mode': compare_mode,
+            'comparison_session_id': comparison_session_id,
+            'config': data.get('config', {})
         }
 
-        # Add accuracy metrics if expected responses provided
-        if response_column:
-            trained_matches = sum(1 for r in results if r.get('trained_match', False))
-            comparison_matches = sum(1 for r in results if r.get('comparison_match', False))
-            summary['trained_accuracy'] = round(trained_matches / total_samples * 100, 1) if total_samples > 0 else 0
-            summary['comparison_accuracy'] = round(comparison_matches / total_samples * 100, 1) if total_samples > 0 else 0
+        # Start background thread
+        thread = threading.Thread(
+            target=run_batch_comparison_background,
+            args=(batch_id, params),
+            daemon=True
+        )
+        thread.start()
 
-        # Clean up temp file
-        if os.path.exists(temp_path):
-            os.unlink(temp_path)
-        session.pop('batch_test_file', None)
-
+        # Return immediately with batch ID
         return jsonify({
             'success': True,
-            'results': results,
-            'summary': summary,
-            'compare_mode': compare_mode
+            'batch_id': batch_id,
+            'message': 'Batch comparison started in background'
         })
 
     except Exception as e:
@@ -3502,6 +3742,92 @@ def batch_compare_models():
                 os.unlink(temp_path)
             session.pop('batch_test_file', None)
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/test/batch-status/<batch_id>', methods=['GET'])
+def get_batch_status(batch_id):
+    """Get status of a running batch test."""
+    with batch_test_lock:
+        if batch_id not in active_batch_tests:
+            return jsonify({'error': 'Batch test not found'}), 404
+
+        test_info = active_batch_tests[batch_id]
+        return jsonify({
+            'batch_id': batch_id,
+            'status': test_info['status'],
+            'progress': test_info.get('progress', 0),
+            'total': test_info.get('total', 0),
+            'current_instruction': test_info.get('current_instruction', ''),
+            'start_time': test_info.get('start_time'),
+            'end_time': test_info.get('end_time'),
+            'error': test_info.get('error')
+        })
+
+
+@app.route('/api/test/batch-results/<batch_id>', methods=['GET'])
+def get_batch_results(batch_id):
+    """Get results of a completed batch test."""
+    with batch_test_lock:
+        if batch_id not in active_batch_tests:
+            return jsonify({'error': 'Batch test not found'}), 404
+
+        test_info = active_batch_tests[batch_id]
+
+        # Only return results if test is completed
+        if test_info['status'] not in ['completed', 'error']:
+            return jsonify({
+                'error': f"Test is still {test_info['status']}",
+                'status': test_info['status']
+            }), 400
+
+        return jsonify({
+            'batch_id': batch_id,
+            'status': test_info['status'],
+            'results': test_info.get('results', []),
+            'metrics': test_info.get('metrics', {}),
+            'start_time': test_info.get('start_time'),
+            'end_time': test_info.get('end_time'),
+            'error': test_info.get('error')
+        })
+
+
+@app.route('/api/test/batch-list', methods=['GET'])
+def list_batch_tests():
+    """List all active batch tests."""
+    with batch_test_lock:
+        tests = []
+        for batch_id, info in active_batch_tests.items():
+            tests.append({
+                'batch_id': batch_id,
+                'status': info['status'],
+                'progress': info.get('progress', 0),
+                'total': info.get('total', 0),
+                'start_time': info.get('start_time')
+            })
+        return jsonify({'tests': tests})
+
+
+@app.route('/api/test/batch-cancel/<batch_id>', methods=['POST'])
+def cancel_batch_test(batch_id):
+    """Cancel a running batch test."""
+    with batch_test_lock:
+        if batch_id not in active_batch_tests:
+            return jsonify({'error': 'Batch test not found'}), 404
+
+        test_info = active_batch_tests[batch_id]
+        if test_info['status'] not in ['running', 'pending']:
+            return jsonify({
+                'error': f"Cannot cancel test with status: {test_info['status']}"
+            }), 400
+
+        # Mark as cancelled
+        test_info['status'] = 'cancelled'
+        test_info['end_time'] = datetime.now().isoformat()
+
+        return jsonify({
+            'success': True,
+            'message': f'Batch test {batch_id} cancelled'
+        })
 
 
 # ============================================================================
@@ -3516,6 +3842,42 @@ def get_reward_presets():
         return jsonify(library.to_dict())
     except Exception as e:
         logger.error(f"Failed to load reward presets: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/rewards/preset-details/<preset_name>', methods=['GET'])
+def get_preset_details(preset_name):
+    """Get detailed component breakdown for a preset reward."""
+    try:
+        library = RewardPresetLibrary()
+        preset = library.get_preset(preset_name)
+
+        if not preset:
+            return jsonify({'error': f'Preset not found: {preset_name}'}), 404
+
+        # Create the builder to get component details
+        builder = preset.create_builder()
+        components = builder.get_component_details()
+
+        # Calculate total weight for validation
+        total_weight = sum(c['weight'] for c in components)
+
+        # Get preset metadata
+        preset_data = preset.to_dict()
+
+        return jsonify({
+            'name': preset_data['name'],
+            'description': preset_data['description'],
+            'example_input': preset_data['example_input'],
+            'example_output': preset_data['example_output'],
+            'difficulty': preset_data['difficulty'],
+            'tags': preset_data['tags'],
+            'components': components,
+            'total_weight': total_weight,
+            'weight_valid': abs(total_weight - 1.0) < 0.001
+        })
+    except Exception as e:
+        logger.error(f"Failed to get preset details for {preset_name}: {e}")
         return jsonify({'error': str(e)}), 500
 
 

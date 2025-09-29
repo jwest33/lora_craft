@@ -1,6 +1,6 @@
 {
   "model_name": "unsloth/Qwen3-1.7B",
-  "display_name": null,
+  "display_name": "gpro_test_003",
   "lora_rank": 16,
   "lora_alpha": 32,
   "lora_dropout": 0.05,
@@ -12,14 +12,15 @@
   "dataset_source": "huggingface",
   "dataset_path": "./uploads/dataset_20250928_125839_train_20250928_055945.csv",
   "dataset_config": null,
-  "dataset_split": "train[:100]",
+  "dataset_split": "train",
   "instruction_field": "instruction",
   "response_field": "output",
+  "max_samples": null,
   "reasoning_start": "<analysis>",
   "reasoning_end": "</analysis>",
   "solution_start": "<signal>",
   "solution_end": "</signal>",
-  "system_prompt": "You are a technical analysis expert that evaluates trading indicators to classify market signals.\n\nAnalyze the provided technical indicators and market context carefully.\n\nFirst, provide your technical analysis and reasoning between <analysis> and </analysis> tags.\nThen, provide your final signal classification between <signal> and </signal> tags.\nThe signal must be exactly one of: STRONG_BUY, WEAK_BUY, HOLD, WEAK_SELL, or STRONG_SELL.\n\nExpected Response Format:\n<analysis>\nProvide your technical analysis based on the specific indicator values\n</analysis>\n<signal>\nOne of: STRONG_BUY, WEAK_BUY, HOLD, WEAK_SELL, or STRONG_SELL\n</signal> ",
+  "system_prompt": "You are a technical analysis expert that evaluates trading indicators to classify market signals\n\nAnalyze the provided technical indicators and market context.\n\nFirst, provide your technical analysis and reasoning between <analysis> and </analysis> tags\n\nThen, provide your final signal classification between <signal> and </signal> tags.\n\nThe signal must be exactly one of: STRONG_BUY, WEAK_BUY, HOLD, WEAK_SELL, or STRONG_SELL.\n\nRequired Response Format:\n<analysis>Provide your technical analysis based on the specific indicator values\n</analysis>\n<signal>\nOne of: STRONG_BUY, WEAK_BUY, HOLD, WEAK_SELL, or STRONG_SELL\n</signal>",
   "chat_template_type": "grpo",
   "chat_template": "{% if messages[0]['role'] == 'system' %}{{ messages[0]['content'] + eos_token }}{% set loop_messages = messages[1:] %}{% else %}{{ system_prompt + eos_token }}{% set loop_messages = messages %}{% endif %}{% for message in loop_messages %}{% if message['role'] == 'user' %}{{ message['content'] }}{% elif message['role'] == 'assistant' %}{{ message['content'] + eos_token }}{% endif %}{% endfor %}{% if add_generation_prompt %}{{ reasoning_start }}{% endif %}",
   "enable_pre_training": true,
@@ -60,11 +61,11 @@
   "use_nested_quant": false,
   "reward_config": {
     "type": "preset",
-    "preset_name": "Data Analysis"
+    "preset_name": "Technical Analysis Signal"
   },
   "use_flash_attention": false,
   "gradient_checkpointing": false,
   "fp16": true,
   "bf16": false,
-  "filename": "trade_config_001.json"
+  "filename": "gen_trader_007.json"
 }

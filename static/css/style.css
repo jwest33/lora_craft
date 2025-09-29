@@ -19,8 +19,8 @@
     /* Primary Colors - Synthwave Theme */
     --primary: #9333ea;        /* Purple */
     --primary-dark: #7e22ce;   /* Darker Purple */
-    --primary-light: #a855f7;  /* Light Purple */
-    --secondary: #ec4899;       /* Pink */
+    --primary-light: #f255f7;  /* Light Purple */
+    --secondary: #ec48c8;       /* Pink */
     --accent-color: #06b6d4;   /* Cyan */
     --success: #14b8a6;        /* Teal */
     --warning: #f97316;        /* Soft Orange */
@@ -36,10 +36,13 @@
     --text-secondary: #94a3b8;
     --text-muted: #9ca3af;
     --border-color: #e5e7eb;
-    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.08);
+    --shadow-md: 0 4px 8px -1px rgba(0, 0, 0, 0.12), 0 2px 4px -1px rgba(0, 0, 0, 0.08);
+    --shadow-lg: 0 10px 20px -3px rgba(0, 0, 0, 0.15), 0 4px 8px -2px rgba(0, 0, 0, 0.08);
+    --shadow-xl: 0 20px 30px -5px rgba(0, 0, 0, 0.18), 0 10px 15px -5px rgba(0, 0, 0, 0.1);
+
+    --bs-danger: #f43f5e;
+    --bs-success: #14b8a6;
 
     /* Additional variables for compatibility */
     --card-bg: #ffffff;
@@ -52,26 +55,45 @@
     --bg-primary: #0f172a;
     --bg-secondary: #1e293b;
     --bg-tertiary: #334155;
-    --bg-card: #1e293b;
+    --bg-card: #263244;
     --text-primary: #f1f5f9;
     --text-secondary: #cbd5e1;
     --text-muted: #94a3b8;
     --border-color: #334155;
     --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.2);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
-    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+    --shadow-md: 0 4px 8px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 10px 20px -3px rgba(0, 0, 0, 0.4), 0 4px 8px -2px rgba(0, 0, 0, 0.3);
+    --shadow-xl: 0 20px 30px -5px rgba(0, 0, 0, 0.5), 0 10px 15px -5px rgba(0, 0, 0, 0.4);
 
     /* Additional variables for compatibility */
-    --card-bg: #1e293b;
+    --card-bg: #263244;
     --dark-bg: #0f172a;
     --hover-bg: #334155;
+
+    --bs-danger: #f43f5e;
+    --bs-success: #14b8a6;
+}
+
+.nav-link {
+    color: #06b6d4;
+}
+
+.nav-link:hover {
+    color: #f255f7;
+}
+
+.nav-link:focus {
+    color: #f255f7;
+}
+
+.text-success {
+    color: #14b8a6 !important;
 }
 
 /* Light Mode Specific Fixes */
 [data-theme="light"] .step-card {
-    border: 1px solid #e5e7eb;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border: 2px solid #d1d5db;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
 [data-theme="light"] .selection-card {
@@ -453,36 +475,6 @@ body {
     flex-shrink: 0;
 }
 
-.action-btn {
-    width: 26px;
-    height: 26px;
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    font-size: 0.75rem;
-}
-
-[data-theme="dark"] .action-btn {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.8);
-}
-
-.action-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
-    transform: translateY(-1px);
-}
-
-[data-theme="dark"] .action-btn:hover {
-    background: rgba(255, 255, 255, 0.15);
-}
-
 /* Integrated Progress Bar */
 .navbar-progress {
     position: absolute;
@@ -628,17 +620,17 @@ body {
     transform: translateY(-2px);
 }
 
-/* Main Container */
-.main-container {
+/* Main Container - DEPRECATED - Using layout-inner instead */
+/* .main-container {
     max-width: 1400px;
     margin: 2rem auto;
     padding: 0 1rem;
 }
 
 .main-container.with-compact-header {
-    margin-top: 45px; /* Account for fixed header + floating icon */
+    margin-top: 45px;
     padding-top: 16px;
-}
+} */
 
 /* Sidebar Cards */
 .sidebar-card {
@@ -791,6 +783,23 @@ body {
     overflow: hidden;
     box-shadow: var(--shadow-md);
     transition: all 0.3s ease;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    position: relative;
+}
+
+.step-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+[data-theme="dark"] .step-card {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: linear-gradient(135deg, var(--bg-card) 0%, rgba(51, 65, 85, 0.3) 100%);
+}
+
+[data-theme="dark"] .step-card:hover {
+    border-color: rgba(147, 51, 234, 0.3);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
 }
 
 .step-header {
@@ -1886,33 +1895,11 @@ body {
 }
 
 /* Model Testing Section Styles */
-.model-testing-section {
+.model-testing-section .form-label,
+.model-testing-section label {
     padding: 20px;
     background-color: var(--bg-card);
-    color: var(--text-primary);
-}
-
-/* Comparison Mode Selector */
-.comparison-mode .btn-group {
-    display: flex;
-    gap: 0;
-}
-
-.comparison-mode .btn-check:checked + .btn-outline-primary {
-    background-color: var(--primary);
-    color: white;
-    border-color: var(--primary);
-}
-
-.comparison-mode .btn-outline-primary {
-    flex: 1;
-    transition: all 0.3s ease;
-}
-
-.comparison-mode .btn-outline-primary:hover {
-    background-color: var(--primary);
-    color: white;
-    transform: translateY(-1px);
+    color: rgba(36, 36, 36, 0.9);
 }
 
 /* Model Selection Sections */
@@ -1949,11 +1936,7 @@ body {
 /* Override Bootstrap card styles for step containers */
 #step-6 > .card,
 #step-6 .card,
-.model-testing-section .card {
-    background-color: var(--bg-card) !important;
-    border: 1px solid var(--border-color) !important;
-    color: var(--text-primary) !important;
-}
+
 
 /* Ensure the main step card matches other steps */
 .step-container .card {
@@ -2210,50 +2193,60 @@ body {
 
 /* Centered Layout for Main Content */
 
-/* Main wrapper using flexbox */
+/* Main wrapper - full viewport centering */
 .main-wrapper {
     display: flex;
     justify-content: center;
     padding-top: 120px; /* Account for fixed header */
     min-height: 100vh;
-    position: relative;
     width: 100%;
 }
 
-/* Sidebar Panel */
+/* Inner layout container - controls total width and centers */
+.layout-inner {
+    display: flex;
+    width: 100%;
+    max-width: 1400px;  /* Total maximum width for sidebar + content */
+    padding: 0 20px;  /* Padding from viewport edges */
+}
+
+/* Sidebar Panel - Fixed width, toggleable */
 .sidebar-panel {
     width: 330px;
     flex-shrink: 0;
-    padding: 0 5px 20px 20px;  /* Further reduced right padding to 5px */
-    transition: margin-left 0.3s ease, opacity 0.3s ease;
+    padding: 0 15px 20px 20px;
+    transition: width 0.3s ease, opacity 0.3s ease;
     position: sticky;
     top: 104px;
     height: calc(100vh - 104px);
     overflow-y: auto;
     z-index: 10;
+    margin-right: 15px;  /* Reduced space between sidebar and content */
 }
 
 .sidebar-panel.hidden {
-    margin-left: -335px;
+    width: 0;
+    margin-right: 0;
     opacity: 0;
     pointer-events: none;
+    padding: 0;
+    overflow: hidden;
 }
 
-/* Content Area - Centers content in available space */
+/* Content Area - Takes remaining space, centers content */
 .content-area {
     flex: 1;
     display: flex;
-    justify-content: center;  /* Center content in the remaining space */
-    padding: 0 20px 20px 5px;  /* Reduced left padding */
+    justify-content: center;
+    padding: 0 20px 20px 20px;
     overflow-x: hidden;
-    max-width: 1200px; /* Limit total width */
+    min-width: 0;  /* Allow flex shrinking */
 }
 
-/* Content Container - Constrains width of centered content */
+/* Content Container - Inner content wrapper */
 .content-container {
     width: 100%;
-    max-width: 900px;
-    position: relative;
+    max-width: 900px;  /* Maximum content width */
 }
 
 /* Remove Bootstrap container margins/padding for our custom layout */
@@ -2267,6 +2260,7 @@ body {
 /* Ensure step cards maintain proper spacing */
 .workflow-step {
     margin-bottom: 20px;
+    width: 100%;  /* Full width within container */
 }
 
 /* Sidebar cards styling adjustment */
@@ -2278,16 +2272,20 @@ body {
 
 /* Responsive adjustments */
 @media (max-width: 1200px) {
+    .layout-inner {
+        max-width: 1100px;
+    }
+
     .sidebar-panel {
-        width: 290px;
+        width: 280px;
+        margin-right: 10px;  /* Even closer on smaller screens */
     }
 
     .sidebar-panel.hidden {
-        margin-left: -295px;
-    }
-
-    .content-container {
-        max-width: 800px;
+        width: 0;
+        margin-right: 0;
+        padding: 0;
+        overflow: hidden;
     }
 }
 
@@ -2296,20 +2294,26 @@ body {
         padding-top: 110px;
     }
 
+    .layout-inner {
+        padding: 0 15px;
+    }
+
+    /* Sidebar becomes overlay on mobile */
     .sidebar-panel {
         position: fixed;
-        left: 0; /* On mobile, keep sidebar at left edge */
-        top: 104px; /* Below header */
+        left: 0;
+        top: 104px;
         height: calc(100vh - 104px);
         background: var(--bg-secondary);
         box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
         z-index: 1000;
-        overflow-y: auto;
+        margin: 0;
+        width: 300px;
     }
 
     .sidebar-panel.hidden {
-        margin-left: -330px;
-        transform: none;
+        transform: translateX(-100%);
+        width: 300px;  /* Keep width for smooth animation */
     }
 
     .content-area {
@@ -2323,21 +2327,30 @@ body {
 
 @media (max-width: 768px) {
     .main-wrapper {
-        padding-top: 70px; /* Smaller header on mobile */
+        padding-top: 70px;
+    }
+
+    .layout-inner {
+        padding: 0 10px;
     }
 
     .sidebar-panel {
-        width: 310px;
+        width: 280px;
         top: 70px;
         height: calc(100vh - 70px);
     }
 
     .sidebar-panel.hidden {
-        margin-left: -310px;
+        transform: translateX(-100%);
+        width: 280px;
     }
 
     .content-area {
         padding: 10px;
+    }
+
+    .content-container {
+        max-width: 100%;
     }
 }
 
@@ -2352,13 +2365,14 @@ body {
     }
 }
 
-/* Smooth transitions when sidebar toggles */
-.content-area {
-    transition: none; /* Content doesn't move, stays centered */
-}
+/* Smooth transitions when sidebar toggles - removed duplicate */
 
-/* Ensure cards don't get too wide on large screens */
+/* Ensure proper layout on large screens */
 @media (min-width: 1600px) {
+    .layout-inner {
+        max-width: 1500px;  /* Reasonable max width for large screens */
+    }
+
     .content-container {
         max-width: 1000px;
     }
@@ -2436,6 +2450,118 @@ body {
     background-color: var(--primary);
     border-color: var(--primary);
     color: white;
+}
+
+/* Reward Component Visualization Styles */
+.component-item,
+.component-detail-item {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    transition: all 0.3s ease;
+}
+
+.component-item:hover,
+.component-detail-item:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary);
+}
+
+.component-description {
+    font-size: 0.875rem;
+    line-height: 1.4;
+}
+
+.component-params {
+    border-top: 1px solid var(--border-color);
+    padding-top: 0.5rem;
+}
+
+.components-breakdown {
+    max-height: 500px;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+.components-breakdown::-webkit-scrollbar {
+    width: 6px;
+}
+
+.components-breakdown::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+    border-radius: 3px;
+}
+
+.components-breakdown::-webkit-scrollbar-thumb {
+    background: var(--primary);
+    border-radius: 3px;
+}
+
+.components-breakdown::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-dark);
+}
+
+#preset-component-display .card {
+    border: 2px solid var(--primary);
+    box-shadow: var(--shadow-lg);
+}
+
+#preset-component-display .card-header {
+    font-weight: 600;
+}
+
+#preset-component-display .progress {
+    background: var(--bg-secondary);
+}
+
+#preset-component-display .progress-bar {
+    background: linear-gradient(90deg, var(--primary), var(--primary-light));
+}
+
+.example-box {
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.example-box pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+/* Modal improvements for component details */
+#detailsModal .modal-content {
+    border: none;
+    box-shadow: var(--shadow-xl);
+}
+
+#detailsModal .modal-header {
+    background: var(--gradient-primary);
+    border: none;
+}
+
+#detailsModal .modal-body {
+    background: var(--bg-primary);
+}
+
+#detailsModal .modal-footer {
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+}
+
+/* Preset card enhancements */
+.preset-card .btn-group-sm {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.preset-card .btn-sm {
+    flex: 1;
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
 }
 
 /* Fix input placeholders in dark mode */
@@ -2752,10 +2878,10 @@ body {
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
-/* Adjust Main Container for New Header */
-.main-container {
-    padding-top: 120px !important; /* Account for header height: 72px + 32px + spacing */
-}
+/* Adjust Main Container for New Header - DEPRECATED */
+/* .main-container {
+    padding-top: 120px !important;
+} */
 
 /* Responsive Design */
 @media (max-width: 1200px) {
@@ -2875,15 +3001,108 @@ body {
 }
 
 /* Synthwave Bootstrap Button Overrides */
+
+.btn-danger {
+  background-color: #f43f5e;
+  border-color: #f43f5e;
+  color: #fff;
+}
+
+.btn-danger:hover {
+  background-color: #e11d48; /* darker shade */
+  border-color: #e11d48;
+  color: #fff;
+}
+
+/* Override outlined danger button */
+.btn-outline-danger {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: #f43f5e;
+  color: #f43f5e;
+}
+
+.btn-outline-danger:hover {
+  background-color: #f43f5e;
+  color: #fff;
+}
+
+.btn {
+    background: rgba(255, 255, 255, 0.1);
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 1px solid #00FFFF;
+    color: #00FFFF;
+}
+
+
+.btn-check:checked+.btn {
+    background-color: #00FFFF;
+    border: 1px solid #00FFFF;
+    color: rgba(36, 36, 36, 0.9);
+}
+
+.btn.btn-outline-primary:hover {
+    color: rgba(36, 36, 36, 0.9);
+    background-color: #00FFFF;
+    border-color: #00FFFF;
+}
+
+.btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    background-color: #ec48c8;
+    border: 1px solid #ec48c8;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.action-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.75rem;
+}
+
+[data-theme="dark"] .action-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.action-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+}
+
+[data-theme="dark"] .action-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.btn-group {
+    background: rgba(255, 255, 255, 0.1);
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #00FFFF;
+}
+
+.btn-group:hover {
+    color: rgba(36, 36, 36, 0.9);
+    background-color: #00FFFF;
+}
+
 .btn-primary {
     background: linear-gradient(135deg, #9333ea, #a855f7) !important;
-    border-color: #9333ea !important;
+    border-color: White !important;
     color: white !important;
 }
 
 .btn-primary:hover {
-    background: linear-gradient(135deg, #7e22ce, #9333ea) !important;
-    border-color: #7e22ce !important;
+    background: linear-gradient(135deg, #14b8a6, #5eead4) !important;
+    border-color: White !important;
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(147, 51, 234, 0.4);
 }
@@ -2939,3 +3158,62 @@ body {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(6, 182, 212, 0.4);
 }
+
+/* Comparison Mode Selector */
+.comparison-mode .btn-group {
+    display: flex;
+    gap: 0;
+    color: rgba(36, 36, 36, 0.9);
+}
+
+.comparison-mode .btn-check:checked + .btn-outline-primary {
+    background-color: var(--primary);
+    color: rgba(36, 36, 36, 0.9);
+    border-color: white;
+}
+
+.comparison-mode .btn-outline-primary {
+    flex: 1;
+    transition: all 0.3s ease;
+    color: rgba(36, 36, 36, 0.9);
+    border-color: white;
+}
+
+.comparison-mode .btn-outline-primary:hover {
+    background-color: #00FFFF;;
+    transform: translateY(-1px);
+    color: rgba(36, 36, 36, 0.9);
+}
+
+.comparison-mode .btn-check:checked + .btn-outline-primary:hover {
+    background-color: var(--primary);
+    color: rgba(36, 36, 36, 0.9);
+    border-color: white;
+}
+
+/* Dark mode styles for prompt preview section */
+[data-theme="dark"] #full-prompt-preview .card {
+    background-color: var(--bg-card);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] #full-prompt-preview .card-body {
+    background-color: transparent;
+}
+
+[data-theme="dark"] #full-prompt-preview pre {
+    background-color: var(--bg-primary) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] #full-prompt-preview .alert-info {
+    background-color: rgba(59, 130, 246, 0.1);
+    border-color: rgba(59, 130, 246, 0.3);
+    color: #93c5fd;
+}
+
+[data-theme="dark"] #full-prompt-preview .form-label {
+    color: var(--text-secondary);
+}
+

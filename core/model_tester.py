@@ -295,6 +295,9 @@ You are a helpful AI assistant.
             if config is None:
                 config = TestConfig()
 
+            # Track system prompt for metadata
+            system_prompt = None
+
             # Apply chat template if requested
             if use_simple_prompt:
                 # For simple testing, just use the prompt directly
@@ -303,6 +306,7 @@ You are a helpful AI assistant.
             elif use_chat_template:
                 if model_type == "base":
                     # Use generic chat template for base model
+                    system_prompt = "You are a helpful AI assistant."
                     formatted_prompt = self.base_chat_template.format(prompt=prompt)
                 else:
                     # Try to use model's chat template if available
@@ -452,6 +456,7 @@ You are a helpful AI assistant.
                     "total_tokens": input_tokens + output_tokens,
                     "generation_time": generation_time,
                     "formatted_prompt": formatted_prompt,
+                    "system_prompt": system_prompt,
                     "config": {
                         "temperature": config.temperature,
                         "max_new_tokens": config.max_new_tokens,

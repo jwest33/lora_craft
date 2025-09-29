@@ -214,7 +214,11 @@ function filterPresetsByCategory(category) {
                                 <span class="badge bg-${difficultyColor}">${preset.difficulty}</span>
                                 ${preset.tags.map(tag => `<span class="badge bg-light text-dark ms-1">${tag}</span>`).join('')}
                             </div>
-                            <div class="mt-2">
+                            <div class="mt-2 d-flex gap-2">
+                                <button class="btn btn-sm btn-outline-primary"
+                                        onclick="event.stopPropagation(); showPresetDetails('${name}')">
+                                    <i class="fas fa-puzzle-piece"></i> Components
+                                </button>
                                 <button class="btn btn-sm btn-outline-info"
                                         onclick="event.stopPropagation(); showPresetExample('${name}')">
                                     <i class="fas fa-eye"></i> Example
@@ -228,7 +232,7 @@ function filterPresetsByCategory(category) {
     });
 }
 
-function selectPresetByName(presetName) {
+async function selectPresetByName(presetName) {
     const preset = rewardPresets[presetName];
     if (!preset) return;
 
@@ -266,6 +270,17 @@ function selectPresetByName(presetName) {
     if (nameElement) nameElement.textContent = preset.name;
     if (descElement) descElement.textContent = preset.description;
 
+    // Fetch and display component details
+    try {
+        const response = await fetch(`/api/rewards/preset-details/${presetName}`);
+        if (response.ok) {
+            const details = await response.json();
+            displayPresetComponents(details);
+        }
+    } catch (error) {
+        console.error('Failed to fetch preset details:', error);
+    }
+
     // Visual feedback
     showNotification(`✓ Selected: ${preset.name}`, 'success');
 
@@ -281,6 +296,258 @@ function selectPresetByName(presetName) {
 
     // Store selection in localStorage for persistence
     localStorage.setItem('selectedReward', JSON.stringify(selectedRewardConfig));
+}
+
+function displayPresetComponents(details) {
+    // Find or create component display area
+    let componentDisplay = document.getElementById('preset-component-display');
+    if (!componentDisplay) {
+        // Create display area if it doesn't exist
+        const selectedRewardDisplay = document.getElementById('selected-reward-display');
+        if (!selectedRewardDisplay) return;
+
+        componentDisplay = document.createElement('div');
+        componentDisplay.id = 'preset-component-display';
+        componentDisplay.className = 'mt-3';
+        selectedRewardDisplay.appendChild(componentDisplay);
+    }
+
+    // Generate component HTML
+    const componentsHtml = details.components.map(comp => {
+        const weightPercentage = comp.weight_percentage.toFixed(1);
+        const barWidth = Math.max(5, comp.weight_percentage); // Minimum 5% for visibility
+
+        // Choose icon based on component type
+        const iconMap = {
+            'binary': 'fas fa-toggle-on',
+            'continuous': 'fas fa-sliders-h',
+            'format': 'fas fa-code',
+            'numerical': 'fas fa-calculator',
+            'length': 'fas fa-ruler',
+            'template': 'fas fa-file-alt',
+            'choice': 'fas fa-list-ul',
+            'content': 'fas fa-paragraph',
+            'pattern': 'fas fa-search'
+        };
+
+        const icon = iconMap[comp.type.toLowerCase()] || 'fas fa-cog';
+
+        // Format parameters for display
+        let paramHtml = '';
+        if (comp.parameters && Object.keys(comp.parameters).length > 0) {
+            paramHtml = '<div class="component-params mt-2 small text-muted">';
+            for (const [key, value] of Object.entries(comp.parameters)) {
+                if (value !== null && value !== undefined) {
+                    let displayValue = value;
+                    if (Array.isArray(value)) {
+                        displayValue = value.length > 0 ? value.join(', ') : 'None';
+                    } else if (typeof value === 'boolean') {
+                        displayValue = value ? 'Yes' : 'No';
+                    }
+                    paramHtml += `<div><strong>${key.replace(/_/g, ' ')}:</strong> ${displayValue}</div>`;
+                }
+            }
+            paramHtml += '</div>';
+        }
+
+        return `
+            <div class="component-item mb-3 p-3 border rounded">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <div class="d-flex align-items-center">
+                        <i class="${icon} me-2 text-primary"></i>
+                        <strong>${comp.name}</strong>
+                    </div>
+                    <span class="badge bg-secondary">${weightPercentage}%</span>
+                </div>
+                <div class="component-description small text-muted mb-2">
+                    ${comp.description}
+                </div>
+                <div class="progress mb-2" style="height: 8px;">
+                    <div class="progress-bar bg-primary" role="progressbar"
+                         style="width: ${barWidth}%"
+                         aria-valuenow="${comp.weight_percentage}"
+                         aria-valuemin="0"
+                         aria-valuemax="100">
+                    </div>
+                </div>
+                ${paramHtml}
+            </div>
+        `;
+    }).join('');
+
+    // Add weight validation indicator
+    const weightStatus = details.weight_valid
+        ? '<span class="badge bg-success"><i class="fas fa-check"></i> Weight Valid (1.0)</span>'
+        : `<span class="badge bg-danger"><i class="fas fa-exclamation-triangle"></i> Weight Invalid (${details.total_weight.toFixed(2)})</span>`;
+
+    componentDisplay.innerHTML = `
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-puzzle-piece"></i> Reward Components</span>
+                    ${weightStatus}
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="components-list">
+                    ${componentsHtml}
+                </div>
+                <hr>
+                <div class="example-section mt-3">
+                    <h6 class="text-primary">Example</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label class="small text-muted">Input:</label>
+                            <pre class="bg-light p-2 rounded small">${details.example_input}</pre>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="small text-muted">Expected Output:</label>
+                            <pre class="bg-light p-2 rounded small">${details.example_output}</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+async function showPresetDetails(presetName) {
+    try {
+        const response = await fetch(`/api/rewards/preset-details/${presetName}`);
+        if (!response.ok) throw new Error('Failed to fetch preset details');
+
+        const details = await response.json();
+
+        // Generate component breakdown HTML
+        const componentsHtml = details.components.map(comp => {
+            const weightPercentage = comp.weight_percentage.toFixed(1);
+            const barWidth = Math.max(5, comp.weight_percentage);
+
+            const iconMap = {
+                'binary': 'fas fa-toggle-on',
+                'continuous': 'fas fa-sliders-h',
+                'format': 'fas fa-code',
+                'numerical': 'fas fa-calculator',
+                'length': 'fas fa-ruler',
+                'template': 'fas fa-file-alt',
+                'choice': 'fas fa-list-ul',
+                'content': 'fas fa-paragraph',
+                'pattern': 'fas fa-search'
+            };
+
+            const icon = iconMap[comp.type.toLowerCase()] || 'fas fa-cog';
+
+            return `
+                <div class="component-detail-item mb-3">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <div>
+                            <i class="${icon} text-primary me-2"></i>
+                            <strong>${comp.name}</strong>
+                            <span class="badge bg-secondary ms-2">${weightPercentage}%</span>
+                        </div>
+                    </div>
+                    <div class="small text-muted mb-2">${comp.description}</div>
+                    <div class="progress" style="height: 10px;">
+                        <div class="progress-bar" role="progressbar"
+                             style="width: ${barWidth}%"
+                             aria-valuenow="${comp.weight_percentage}"
+                             aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        const difficultyColor = {
+            'beginner': 'success',
+            'intermediate': 'warning',
+            'advanced': 'danger'
+        }[details.difficulty] || 'secondary';
+
+        const modalHtml = `
+            <div class="modal fade" id="detailsModal" tabindex="-1">
+                <div class="modal-dialog modal-xl">
+                    <div class="modal-content">
+                        <div class="modal-header bg-primary text-white">
+                            <h5 class="modal-title">
+                                <i class="fas fa-puzzle-piece"></i> ${details.name} - Component Breakdown
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <span class="badge bg-${difficultyColor}">${details.difficulty}</span>
+                                ${details.tags.map(tag => `<span class="badge bg-light text-dark ms-1">${tag}</span>`).join('')}
+                            </div>
+
+                            <p class="mb-4">${details.description}</p>
+
+                            <div class="row">
+                                <div class="col-lg-7">
+                                    <h6 class="text-primary mb-3">
+                                        <i class="fas fa-puzzle-piece"></i> Components (${details.components.length})
+                                    </h6>
+                                    <div class="components-breakdown">
+                                        ${componentsHtml}
+                                    </div>
+
+                                    <div class="mt-3 text-center">
+                                        <strong>Total Weight:</strong>
+                                        ${details.weight_valid
+                                            ? '<span class="badge bg-success">1.0 ✓</span>'
+                                            : `<span class="badge bg-danger">${details.total_weight.toFixed(2)} ✗</span>`}
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-5">
+                                    <h6 class="text-primary mb-3">
+                                        <i class="fas fa-lightbulb"></i> Example
+                                    </h6>
+                                    <div class="example-box">
+                                        <div class="mb-3">
+                                            <label class="small text-muted fw-bold">Input:</label>
+                                            <pre class="bg-light p-2 rounded small">${details.example_input}</pre>
+                                        </div>
+                                        <div>
+                                            <label class="small text-muted fw-bold">Expected Output (High Score):</label>
+                                            <pre class="bg-light p-2 rounded small">${details.example_output}</pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-primary" onclick="selectPresetByName('${presetName}'); bootstrap.Modal.getInstance(document.getElementById('detailsModal')).hide();">
+                                <i class="fas fa-check"></i> Select This Preset
+                            </button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Remove existing modal if present
+        const existingModal = document.getElementById('detailsModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        // Add modal to page
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('detailsModal'));
+        modal.show();
+
+        // Clean up on hide
+        document.getElementById('detailsModal').addEventListener('hidden.bs.modal', function() {
+            this.remove();
+        });
+
+    } catch (error) {
+        console.error('Error showing preset details:', error);
+        showNotification('Failed to load preset details', 'error');
+    }
 }
 
 function showPresetExample(presetName) {
@@ -820,15 +1087,6 @@ function showRewardHelp() {
     document.body.insertAdjacentHTML('beforeend', helpModal);
     const modal = new bootstrap.Modal(document.getElementById('rewardHelpModal'));
     modal.show();
-}
-
-function viewRewardDetails() {
-    // Show details about the selected reward
-    const config = gatherRewardConfig();
-    console.log('Current reward configuration:', config);
-
-    // You can extend this to show a modal with full details
-    showNotification('Reward details logged to console', 'info');
 }
 
 function gatherCustomRewardConfig() {

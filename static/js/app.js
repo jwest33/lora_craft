@@ -19,6 +19,7 @@ let datasetStatusCache = {};
 let trainedModels = [];
 let selectedModelsForExport = new Set();
 let collapseInstances = {}; // Store Bootstrap Collapse instances
+let activeBatchTestId = null; // Track current batch test
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
@@ -84,6 +85,9 @@ function initializeApp() {
 
     // Initialize chat template preview
     setTimeout(initializeChatTemplate, 100); // Small delay to ensure DOM is ready
+
+    // Check for active batch tests
+    checkForActiveBatchTests();
 }
 
 // ============================================================================
@@ -301,12 +305,12 @@ function goToStep(stepNum) {
             loadTestableModels();
         }, 100);
     }
-    // If navigating to evaluation section (step 7), load evaluation models
-    if (stepNum === 7) {
-        setTimeout(() => {
-            loadEvaluationModels();
-        }, 100);
-    }
+    // Evaluation section removed - now part of Test step
+    // if (stepNum === 7) {
+    //     setTimeout(() => {
+    //         loadEvaluationModels();
+    //     }, 100);
+    // }
 
     // Smooth scroll to step after a short delay to allow animation
     setTimeout(() => {
@@ -1891,12 +1895,16 @@ function validateChatTemplate() {
 }
 
 function updateChatTemplatePreview() {
-    const templateTypeElem = document.getElementById('chat-template-type');
+    // Chat template preview has been removed from the UI
+    // This function is kept for backward compatibility but returns early
     const preview = document.getElementById('chat-template-preview');
+    if (!preview) {
+        // Preview element doesn't exist, which is expected
+        return;
+    }
 
-    // Check if elements exist
-    if (!templateTypeElem || !preview) {
-        console.warn('Chat template elements not found');
+    const templateTypeElem = document.getElementById('chat-template-type');
+    if (!templateTypeElem) {
         return;
     }
 
@@ -2497,6 +2505,7 @@ function gatherConfig() {
         dataset_split: document.getElementById('dataset-split').value,
         instruction_field: document.getElementById('instruction-field').value,
         response_field: document.getElementById('response-field').value,
+        max_samples: document.getElementById('max-samples').value ? parseInt(document.getElementById('max-samples').value) : null,
 
         // Template configuration
         reasoning_start: document.getElementById('reasoning-start').value,
@@ -2801,7 +2810,7 @@ function resetCharts() {
     document.getElementById('metric-reward').textContent = '--';
     document.getElementById('metric-grad-norm').textContent = '--';
     document.getElementById('metric-lr').textContent = '--';
-    document.getElementById('metric-epoch').textContent = '0';
+    document.getElementById('metric-epoch').textContent = '0';  // Start at 0, will be updated when metrics arrive
 }
 
 function updateTrainingProgress(progress) {
@@ -2857,8 +2866,24 @@ function updateTrainingMetrics(metrics, isHistorical = false) {
     if (metrics.learning_rate !== undefined) {
         document.getElementById('metric-lr').textContent = parseFloat(metrics.learning_rate).toExponential(2);
     }
-    if (metrics.epoch !== undefined) {
-        document.getElementById('metric-epoch').textContent = Math.floor(metrics.epoch);
+    // Handle epoch display based on training phase
+    if (metrics.training_phase === 'pre-training') {
+        // Show "Pre-training" for pre-training phase
+        document.getElementById('metric-epoch').textContent = 'Pre-training';
+    } else if (metrics.epoch !== undefined && metrics.epoch >= 0) {
+        // For main training, display 1-based epoch with progress
+        const currentEpoch = Math.floor(metrics.epoch) + 1;
+        const epochProgress = ((metrics.epoch % 1) * 100).toFixed(0);
+
+        // Show epoch number with progress if not at the start of an epoch
+        if (epochProgress > 0) {
+            document.getElementById('metric-epoch').textContent = `${currentEpoch} (${epochProgress}%)`;
+        } else {
+            document.getElementById('metric-epoch').textContent = currentEpoch;
+        }
+    } else if (metrics.epoch === -1) {
+        // Fallback for pre-training (if training_phase not provided)
+        document.getElementById('metric-epoch').textContent = 'Pre-training';
     }
 
     // Determine the step number for chart labels
@@ -3915,6 +3940,11 @@ function applyConfigToUI(config) {
         if (responseFieldVisible) responseFieldVisible.value = config.response_field;
     }
 
+    if (config.max_samples) {
+        const maxSamples = document.getElementById('max-samples');
+        if (maxSamples) maxSamples.value = config.max_samples;
+    }
+
     // Template configuration - IMPORTANT: Restore these fields
     if (config.system_prompt) {
         const systemPrompt = document.getElementById('system-prompt');
@@ -4240,6 +4270,22 @@ function setupEventListeners() {
     });
     document.getElementById('custom-reasoning-start')?.addEventListener('input', function() {
         updateTemplatePreview();
+    });
+
+    // Update prompt preview when test model selection or prompt changes
+    document.getElementById('test-model-select')?.addEventListener('change', function() {
+        // Update the prompt preview when a model is selected
+        updatePromptPreview();
+    });
+
+    document.getElementById('test-prompt')?.addEventListener('input', debounce(function() {
+        // Update preview when user types in the test prompt
+        updatePromptPreview();
+    }, 500));
+
+    document.getElementById('use-chat-template')?.addEventListener('change', function() {
+        // Update preview when chat template checkbox changes
+        updatePromptPreview();
     });
     document.getElementById('custom-reasoning-end')?.addEventListener('input', function() {
         updateTemplatePreview();
@@ -6428,10 +6474,6 @@ async function loadModelsForTesting() {
     const selectedOption = select.selectedOptions[0];
     const baseModel = selectedOption.dataset.baseModel;
 
-    const loadBtn = document.getElementById('load-models-btn');
-    loadBtn.disabled = true;
-    loadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
-
     try {
         const response = await fetch('/api/test/load', {
             method: 'POST',
@@ -6449,23 +6491,22 @@ async function loadModelsForTesting() {
             selectedTestModel = { sessionId, baseModel };
             document.getElementById('compare-btn').disabled = false;
 
-            // Update button to show success state
-            loadBtn.classList.remove('btn-primary');
-            loadBtn.classList.add('btn-success');
-            loadBtn.innerHTML = '<i class="fas fa-check-circle"></i> <span id="load-btn-text">Models Loaded</span>';
-
             // Show loaded models status
             const statusDiv = document.getElementById('loaded-models-status');
-            statusDiv.style.display = 'block';
+            if (statusDiv) {
+                statusDiv.style.display = 'block';
 
-            // Update badges with model names
-            const trainedBadge = document.getElementById('loaded-trained-badge');
-            const baseBadge = document.getElementById('loaded-base-badge');
+                // Update badges with model names
+                const trainedBadge = document.getElementById('loaded-trained-badge');
+                const baseBadge = document.getElementById('loaded-base-badge');
 
-            // Get model display name from select option
-            const modelName = selectedOption.textContent.trim();
-            trainedBadge.textContent = modelName.length > 20 ? modelName.substring(0, 20) + '...' : modelName;
-            baseBadge.textContent = baseModel.split('/').pop();
+                if (trainedBadge && baseBadge) {
+                    // Get model display name from select option
+                    const modelName = selectedOption.textContent.trim();
+                    trainedBadge.textContent = modelName.length > 20 ? modelName.substring(0, 20) + '...' : modelName;
+                    baseBadge.textContent = baseModel.split('/').pop();
+                }
+            }
 
         } else {
             const errors = [];
@@ -6476,24 +6517,82 @@ async function loadModelsForTesting() {
                 errors.push(`Base model: ${result.results.base.error}`);
             }
             showAlert('Failed to load models: ' + errors.join(', '), 'danger');
-
-            // Reset button on failure
-            loadBtn.disabled = false;
-            loadBtn.innerHTML = '<i class="fas fa-download"></i> <span id="load-btn-text">Load Selected</span>';
         }
 
     } catch (error) {
         console.error('Failed to load models:', error);
         showAlert('Failed to load models: ' + error.message, 'danger');
+    }
+}
 
-        // Reset button on error
-        loadBtn.disabled = false;
-        loadBtn.innerHTML = '<i class="fas fa-download"></i> <span id="load-btn-text">Load Selected</span>';
-    } finally {
-        // Re-enable button but keep success state if successful
-        if (!loadBtn.classList.contains('btn-success')) {
-            loadBtn.disabled = false;
+async function unloadModelsAfterTest() {
+    // Unload models to free memory
+    if (selectedTestModel) {
+        try {
+            const response = await fetch('/api/test/clear-cache', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
+
+            if (response.ok) {
+                console.log('Models unloaded to free memory');
+            }
+        } catch (error) {
+            console.error('Failed to unload models:', error);
         }
+
+        // Clear the selected model
+        selectedTestModel = null;
+
+        // Hide loaded models status
+        const statusDiv = document.getElementById('loaded-models-status');
+        if (statusDiv) {
+            statusDiv.style.display = 'none';
+        }
+    }
+}
+
+async function updatePromptPreview() {
+    try {
+        const testPrompt = document.getElementById('test-prompt').value;
+        const useChatTemplate = document.getElementById('use-chat-template').checked;
+
+        // Get the session ID from the dropdown
+        const modelSelect = document.getElementById('test-model-select');
+        const sessionId = modelSelect.value;
+
+        if (!sessionId) {
+            document.getElementById('system-prompt-preview').textContent = 'Please select a model to see its system prompt';
+            document.getElementById('formatted-prompt-preview').textContent = 'Please select a model to see the formatted prompt';
+            return;
+        }
+
+        // Fetch the prompt preview from the backend
+        const response = await fetch('/api/test/prompt-preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                prompt: testPrompt,
+                session_id: sessionId,
+                use_chat_template: useChatTemplate
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to get prompt preview');
+        }
+
+        const data = await response.json();
+
+        // Update the preview elements
+        document.getElementById('system-prompt-preview').textContent = data.system_prompt || 'No system prompt configured';
+        document.getElementById('formatted-prompt-preview').textContent = data.formatted_prompt || 'Unable to format prompt';
+
+    } catch (error) {
+        console.error('Error updating prompt preview:', error);
+        document.getElementById('system-prompt-preview').textContent = 'Error loading system prompt';
+        document.getElementById('formatted-prompt-preview').textContent = 'Error formatting prompt';
     }
 }
 
@@ -6704,37 +6803,11 @@ async function compareModels() {
         compareBtn.innerHTML = '<i class="fas fa-play"></i> Compare Models';
 
         // Auto-unload models to free memory after comparison
-        try {
-            const response = await fetch('/api/test/clear-cache', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({})
-            });
+        await unloadModelsAfterTest();
 
-            if (response.ok) {
-                console.log('Models unloaded to free memory');
-                // Reset the loaded model state
-                selectedTestModel = null;
-                selectedComparisonModel = null;
-
-                // Update UI to reflect models are unloaded
-                const loadBtn = document.getElementById('load-models-btn');
-                if (loadBtn) {
-                    loadBtn.classList.remove('btn-success');
-                    loadBtn.classList.add('btn-primary');
-                    loadBtn.innerHTML = '<i class="fas fa-download"></i> <span id="load-btn-text">Load Selected</span>';
-                    loadBtn.disabled = false;
-                }
-
-                // Hide loaded models status
-                const statusDiv = document.getElementById('loaded-models-status');
-                if (statusDiv) {
-                    statusDiv.style.display = 'none';
-                }
-            }
-        } catch (unloadError) {
-            console.warn('Failed to unload models:', unloadError);
-            // Don't show error to user as this is a cleanup operation
+        // Also clear comparison model if it exists
+        if (selectedComparisonModel) {
+            selectedComparisonModel = null;
         }
     }
 }
@@ -6820,23 +6893,15 @@ async function clearModelCache() {
             if (result.success) {
                 showAlert('Model cache cleared', 'success');
                 selectedTestModel = null;
-            document.getElementById('compare-btn').disabled = true;
+                selectedComparisonModel = null;
+                document.getElementById('compare-btn').disabled = true;
 
-            // Reset load button to default state
-            const loadBtn = document.getElementById('load-models-btn');
-            if (loadBtn) {
-                loadBtn.classList.remove('btn-success');
-                loadBtn.classList.add('btn-primary');
-                loadBtn.innerHTML = '<i class="fas fa-download"></i> <span id="load-btn-text">Load Selected</span>';
-                loadBtn.disabled = false;
+                // Hide loaded models status
+                const statusDiv = document.getElementById('loaded-models-status');
+                if (statusDiv) {
+                    statusDiv.style.display = 'none';
+                }
             }
-
-            // Hide loaded models status
-            const statusDiv = document.getElementById('loaded-models-status');
-            if (statusDiv) {
-                statusDiv.style.display = 'none';
-            }
-        }
         } catch (error) {
             console.error('Failed to clear cache:', error);
             showAlert('Failed to clear cache', 'danger');
@@ -7185,8 +7250,8 @@ async function runBatchComparison() {
     stepCounter.textContent = `0 / ${totalItems}`;
     currentItemText.textContent = 'Preparing batch comparison...';
 
-    // Track progress interval for cleanup
-    let progressInterval = null;
+    // Track WebSocket handler for cleanup
+    let handleBatchProgress = null;
 
     try {
         // Validate required data
@@ -7228,61 +7293,58 @@ async function runBatchComparison() {
 
         // Start the batch comparison request immediately
         console.log('Sending batch comparison request to server...');
+        console.log('Request URL:', window.location.origin + '/api/test/batch-compare');
+        console.log('Cookies:', document.cookie || 'No cookies found');
+
         const responsePromise = fetch('/api/test/batch-compare', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestData),
             credentials: 'include'  // Include session cookies - CRITICAL!
+        }).then(response => {
+            console.log('Fetch completed, response status:', response.status);
+            return response;
+        }).catch(fetchError => {
+            console.error('Fetch failed:', fetchError);
+            throw fetchError;
         });
 
-        // Simulate progress with step counter updates (runs alongside the request)
-        let currentStep = 0;
+        console.log('Fetch promise created, waiting for response...');
+
+        // Listen for WebSocket progress updates
         currentItemText.textContent = 'Starting batch comparison...';
 
-        progressInterval = setInterval(() => {
-            try {
-                // Update progress based on estimated time per item
-                currentStep = Math.min(currentStep + 1, Math.floor(totalItems * 0.9));
-                const progress = (currentStep / totalItems) * 100;
-                progressBar.style.width = `${Math.min(progress, 90)}%`;
+        // Set up WebSocket listeners for progress
+        handleBatchProgress = (data) => {
+            if (data.status === 'processing') {
+                const progress = (data.current / data.total) * 100;
+                progressBar.style.width = `${progress}%`;
+                stepCounter.textContent = `${data.current} / ${data.total}`;
 
-                // Update step counter
-                stepCounter.textContent = `${currentStep} / ${totalItems}`;
-
-                // Try to update current item text with sample instruction
-                if (currentStep > 0 && currentStep <= totalItems) {
-                    // We only have the first 5 samples in batchTestData
-                    if (batchTestData && batchTestData.length > 0 && currentStep <= batchTestData.length) {
-                        try {
-                            const itemIndex = currentStep - 1;
-                            const currentInstruction = batchTestData[itemIndex][instructionColumn];
-                            const truncatedInstruction = currentInstruction && currentInstruction.length > 50
-                                ? currentInstruction.substring(0, 50) + '...'
-                                : currentInstruction || 'Processing...';
-                            currentItemText.textContent = `Processing: "${truncatedInstruction}"`;
-                        } catch (innerError) {
-                            // If we can't get the instruction, just show a generic message
-                            currentItemText.textContent = `Processing item ${currentStep} of ${totalItems}...`;
-                        }
-                    } else {
-                        // For items beyond the sample, show generic message
-                        currentItemText.textContent = `Processing item ${currentStep} of ${totalItems}...`;
-                    }
+                if (data.instruction) {
+                    const truncated = data.instruction.length > 50
+                        ? data.instruction.substring(0, 50) + '...'
+                        : data.instruction;
+                    currentItemText.textContent = `Processing: "${truncated}"`;
+                } else {
+                    currentItemText.textContent = `Processing item ${data.current} of ${data.total}...`;
                 }
-            } catch (intervalError) {
-                console.error('Error in progress interval:', intervalError);
-                // Don't clear the interval, just log the error and continue
+            } else if (data.status === 'completed') {
+                progressBar.style.width = '100%';
+                stepCounter.textContent = `${data.total} / ${data.total}`;
+                currentItemText.textContent = 'Completed!';
             }
-        }, 800); // Update roughly every 0.8 seconds
+        };
+
+        // Listen for batch progress updates
+        if (socket) {
+            socket.on('batch_progress', handleBatchProgress);
+        }
 
         // Wait for the response
+        console.log('About to await responsePromise...');
         const response = await responsePromise;
         console.log('Response received:', response.status, response.statusText);
-
-        clearInterval(progressInterval);
-        progressBar.style.width = '100%';
-        stepCounter.textContent = `${totalItems} / ${totalItems}`;
-        currentItemText.textContent = 'Complete!';
 
         if (!response.ok) {
             const error = await response.json();
@@ -7292,13 +7354,35 @@ async function runBatchComparison() {
         const result = await response.json();
         console.log('Batch comparison result:', result);
 
-        // Display results
-        displayBatchResults(result, evaluateResponses);
+        // Check if we got a batch ID (background processing)
+        if (result.batch_id) {
+            // Store batch ID for tracking
+            activeBatchTestId = result.batch_id;
+            localStorage.setItem('activeBatchTestId', result.batch_id);
+            localStorage.setItem('activeBatchTestTime', Date.now().toString());
 
-        // Hide progress bar after a short delay
-        setTimeout(() => {
-            document.getElementById('batch-progress').style.display = 'none';
-        }, 500);
+            // Start polling for status
+            pollBatchTestStatus(result.batch_id);
+        } else {
+            // Legacy synchronous result (shouldn't happen with new backend)
+            // Clean up WebSocket listener
+            if (socket) {
+                socket.off('batch_progress', handleBatchProgress);
+            }
+
+            // Ensure progress shows complete
+            progressBar.style.width = '100%';
+            stepCounter.textContent = `${totalItems} / ${totalItems}`;
+            currentItemText.textContent = 'Complete!';
+
+            // Display results
+            displayBatchResults(result, evaluateResponses);
+
+            // Hide progress bar after a short delay
+            setTimeout(() => {
+                document.getElementById('batch-progress').style.display = 'none';
+            }, 500);
+        }
 
     } catch (error) {
         console.error('Batch comparison failed:', error);
@@ -7310,21 +7394,247 @@ async function runBatchComparison() {
             batchTestMetadata: batchTestMetadata ? `${batchTestMetadata.sample_count} total rows` : 'null'
         });
 
-        // Clear the progress interval if it's running
-        if (progressInterval) {
-            clearInterval(progressInterval);
-            progressInterval = null;
+        // Clean up WebSocket listener if it exists
+        if (socket && handleBatchProgress) {
+            socket.off('batch_progress', handleBatchProgress);
         }
 
         showAlert('Batch comparison failed: ' + error.message, 'danger');
         document.getElementById('batch-progress').style.display = 'none';
+
+        // Clear stored batch ID on error
+        activeBatchTestId = null;
+        localStorage.removeItem('activeBatchTestId');
     } finally {
-        // Ensure interval is cleared
-        if (progressInterval) {
-            clearInterval(progressInterval);
+        // Ensure WebSocket listener is cleaned up
+        if (socket && handleBatchProgress) {
+            socket.off('batch_progress', handleBatchProgress);
         }
         compareBtn.disabled = false;
         compareBtn.innerHTML = '<i class="fas fa-play"></i> Run Batch Comparison';
+    }
+}
+
+// Check for active batch tests on page load
+async function checkForActiveBatchTests() {
+    const storedBatchId = localStorage.getItem('activeBatchTestId');
+    const storedTime = localStorage.getItem('activeBatchTestTime');
+
+    if (!storedBatchId) return;
+
+    // Check if the test is older than 1 hour (might be stale)
+    const age = Date.now() - parseInt(storedTime || '0');
+    if (age > 3600000) {
+        localStorage.removeItem('activeBatchTestId');
+        localStorage.removeItem('activeBatchTestTime');
+        return;
+    }
+
+    try {
+        // Check if the batch test is still active
+        const response = await fetch(`/api/test/batch-status/${storedBatchId}`, {
+            credentials: 'include'
+        });
+
+        if (!response.ok) {
+            // Test not found or error
+            localStorage.removeItem('activeBatchTestId');
+            localStorage.removeItem('activeBatchTestTime');
+            return;
+        }
+
+        const status = await response.json();
+
+        if (status.status === 'running' || status.status === 'pending') {
+            // Reconnect to the running test
+            activeBatchTestId = storedBatchId;
+
+            // Show progress UI
+            document.getElementById('batch-results').style.display = 'block';
+            document.getElementById('batch-progress').style.display = 'block';
+            document.getElementById('batch-summary').style.display = 'none';
+
+            // Update progress display
+            const progressBar = document.getElementById('batch-progress-bar');
+            const stepCounter = document.getElementById('batch-step-counter');
+            const currentItemText = document.getElementById('batch-current-item');
+
+            const progress = status.total > 0 ? (status.progress / status.total) * 100 : 0;
+            progressBar.style.width = `${progress}%`;
+            stepCounter.textContent = `${status.progress} / ${status.total}`;
+            currentItemText.textContent = status.current_instruction || 'Reconnected to batch test...';
+
+            // Continue polling
+            pollBatchTestStatus(storedBatchId);
+
+            showAlert('Reconnected to running batch test', 'info');
+        } else if (status.status === 'completed') {
+            // Test completed, fetch results
+            fetchAndDisplayBatchResults(storedBatchId);
+        } else if (status.status === 'error') {
+            showAlert(`Batch test failed: ${status.error}`, 'danger');
+            localStorage.removeItem('activeBatchTestId');
+            localStorage.removeItem('activeBatchTestTime');
+        }
+    } catch (error) {
+        console.error('Failed to check batch test status:', error);
+        localStorage.removeItem('activeBatchTestId');
+        localStorage.removeItem('activeBatchTestTime');
+    }
+}
+
+// Poll batch test status
+async function pollBatchTestStatus(batchId) {
+    const pollInterval = 1000; // Poll every second
+    const maxPolls = 3600; // Max 1 hour of polling
+    let pollCount = 0;
+
+    const progressBar = document.getElementById('batch-progress-bar');
+    const stepCounter = document.getElementById('batch-step-counter');
+    const currentItemText = document.getElementById('batch-current-item');
+
+    // Show cancel button, hide compare button
+    const compareBtn = document.getElementById('batch-compare-btn');
+    const cancelBtn = document.getElementById('batch-cancel-btn');
+    if (compareBtn) compareBtn.style.display = 'none';
+    if (cancelBtn) cancelBtn.style.display = 'block';
+
+    const poll = async () => {
+        if (pollCount >= maxPolls || batchId !== activeBatchTestId) {
+            // Stop polling if exceeded max polls or test changed
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/test/batch-status/${batchId}`, {
+                credentials: 'include'
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch status');
+            }
+
+            const status = await response.json();
+
+            // Update progress display
+            if (status.total > 0) {
+                const progress = (status.progress / status.total) * 100;
+                progressBar.style.width = `${progress}%`;
+                stepCounter.textContent = `${status.progress} / ${status.total}`;
+            }
+
+            if (status.current_instruction) {
+                const truncated = status.current_instruction.length > 50
+                    ? status.current_instruction.substring(0, 50) + '...'
+                    : status.current_instruction;
+                currentItemText.textContent = `Processing: "${truncated}"`;
+            }
+
+            if (status.status === 'completed') {
+                // Test completed, fetch results
+                progressBar.style.width = '100%';
+                currentItemText.textContent = 'Complete!';
+                fetchAndDisplayBatchResults(batchId);
+
+                // Clear stored batch ID
+                activeBatchTestId = null;
+                localStorage.removeItem('activeBatchTestId');
+                localStorage.removeItem('activeBatchTestTime');
+
+                // Reset buttons
+                const compareBtn = document.getElementById('batch-compare-btn');
+                const cancelBtn = document.getElementById('batch-cancel-btn');
+                if (compareBtn) compareBtn.style.display = 'block';
+                if (cancelBtn) cancelBtn.style.display = 'none';
+            } else if (status.status === 'error') {
+                // Test failed
+                showAlert(`Batch test failed: ${status.error}`, 'danger');
+                document.getElementById('batch-progress').style.display = 'none';
+
+                // Clear stored batch ID
+                activeBatchTestId = null;
+                localStorage.removeItem('activeBatchTestId');
+                localStorage.removeItem('activeBatchTestTime');
+
+                // Reset buttons
+                const compareBtn = document.getElementById('batch-compare-btn');
+                const cancelBtn = document.getElementById('batch-cancel-btn');
+                if (compareBtn) compareBtn.style.display = 'block';
+                if (cancelBtn) cancelBtn.style.display = 'none';
+            } else if (status.status === 'cancelled') {
+                // Test was cancelled
+                showAlert('Batch test was cancelled', 'warning');
+                document.getElementById('batch-progress').style.display = 'none';
+
+                // Clear stored batch ID
+                activeBatchTestId = null;
+                localStorage.removeItem('activeBatchTestId');
+                localStorage.removeItem('activeBatchTestTime');
+
+                // Reset buttons
+                const compareBtn = document.getElementById('batch-compare-btn');
+                const cancelBtn = document.getElementById('batch-cancel-btn');
+                if (compareBtn) {
+                    compareBtn.style.display = 'block';
+                    compareBtn.disabled = false;
+                    compareBtn.innerHTML = '<i class="fas fa-play"></i> Run Batch Comparison';
+                }
+                if (cancelBtn) cancelBtn.style.display = 'none';
+            } else {
+                // Still running, continue polling
+                pollCount++;
+                setTimeout(poll, pollInterval);
+            }
+        } catch (error) {
+            console.error('Failed to poll batch status:', error);
+            pollCount++;
+            if (pollCount < 10) {
+                // Retry a few times on error
+                setTimeout(poll, pollInterval * 2);
+            } else {
+                showAlert('Lost connection to batch test', 'warning');
+                document.getElementById('batch-progress').style.display = 'none';
+            }
+        }
+    };
+
+    // Start polling
+    poll();
+}
+
+// Fetch and display batch test results
+async function fetchAndDisplayBatchResults(batchId) {
+    try {
+        const response = await fetch(`/api/test/batch-results/${batchId}`, {
+            credentials: 'include'
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to fetch results');
+        }
+
+        const result = await response.json();
+
+        // Display results - the backend returns the full structure
+        const displayData = result.results || result;
+        displayBatchResults(displayData, false); // TODO: get evaluateResponses from somewhere
+
+        // Hide progress bar after a short delay
+        setTimeout(() => {
+            document.getElementById('batch-progress').style.display = 'none';
+        }, 500);
+
+        // Re-enable compare button
+        const compareBtn = document.getElementById('batch-compare-btn');
+        if (compareBtn) {
+            compareBtn.disabled = false;
+            compareBtn.innerHTML = '<i class="fas fa-play"></i> Run Batch Comparison';
+        }
+    } catch (error) {
+        console.error('Failed to fetch batch results:', error);
+        showAlert('Failed to fetch batch results: ' + error.message, 'danger');
+        document.getElementById('batch-progress').style.display = 'none';
     }
 }
 
@@ -7488,3 +7798,61 @@ function escapeHtml(unsafe) {
         .replace(/'/g, "&#039;");
 }
 
+// Cancel a running batch test
+async function cancelBatchTest() {
+    if (!activeBatchTestId) {
+        showAlert('No active batch test to cancel', 'warning');
+        return;
+    }
+
+    const cancelBtn = document.getElementById('batch-cancel-btn');
+    if (cancelBtn) {
+        cancelBtn.disabled = true;
+        cancelBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cancelling...';
+    }
+
+    try {
+        const response = await fetch(`/api/test/batch-cancel/${activeBatchTestId}`, {
+            method: 'POST',
+            credentials: 'include'
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to cancel batch test');
+        }
+
+        const result = await response.json();
+        showAlert(result.message, 'success');
+
+        // Clear the active batch test
+        activeBatchTestId = null;
+        localStorage.removeItem('activeBatchTestId');
+        localStorage.removeItem('activeBatchTestTime');
+
+        // Hide progress and reset UI
+        document.getElementById('batch-progress').style.display = 'none';
+
+        // Reset buttons
+        const compareBtn = document.getElementById('batch-compare-btn');
+        if (compareBtn) {
+            compareBtn.style.display = 'block';
+            compareBtn.disabled = false;
+            compareBtn.innerHTML = '<i class="fas fa-play"></i> Run Batch Comparison';
+        }
+        if (cancelBtn) {
+            cancelBtn.style.display = 'none';
+            cancelBtn.disabled = false;
+            cancelBtn.innerHTML = '<i class="fas fa-stop"></i> Cancel Batch Test';
+        }
+    } catch (error) {
+        console.error('Failed to cancel batch test:', error);
+        showAlert('Failed to cancel batch test: ' + error.message, 'danger');
+
+        // Reset cancel button
+        if (cancelBtn) {
+            cancelBtn.disabled = false;
+            cancelBtn.innerHTML = '<i class="fas fa-stop"></i> Cancel Batch Test';
+        }
+    }
+}
