@@ -693,11 +693,11 @@ def run_training(session_id: str, config: Dict[str, Any]):
 
             # Get pre-training configuration
             pre_training_epochs = config.get('pre_training_epochs', 1)
-            pre_training_samples = config.get('pre_training_samples', 100)
             validate_format = config.get('validate_format', True)
 
-            # Subset dataset for pre-training
-            pre_train_dataset = dataset.select(range(min(pre_training_samples, len(dataset))))
+            # Use the same dataset for pre-training as main training
+            # (already limited by dataset handler if max_samples is set)
+            pre_train_dataset = dataset
 
             # Configure tokenizer with chat template
             if hasattr(trainer, 'tokenizer') and trainer.tokenizer:
