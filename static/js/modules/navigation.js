@@ -176,6 +176,15 @@
                 }
             }
 
+            // Step-specific actions
+            if (stepNum === 4) {
+                // Update configuration summary when navigating to Train & Review step
+                if (typeof window.updateConfigSummary === 'function') {
+                    // Small delay to ensure DOM is ready
+                    setTimeout(() => window.updateConfigSummary(), 100);
+                }
+            }
+
             // Scroll to the target step
             const targetStep = document.getElementById(`step-${stepNum}`);
             if (targetStep) {

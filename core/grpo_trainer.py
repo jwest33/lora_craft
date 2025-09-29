@@ -253,10 +253,18 @@ class GRPOModelTrainer:
         if use_unsloth:
             try:
                 # Load with Unsloth
+                # Determine dtype for model loading
+                if self.config.fp16:
+                    model_dtype = torch.float16
+                elif self.config.bf16:
+                    model_dtype = torch.bfloat16
+                else:
+                    model_dtype = None
+
                 self.model, self.tokenizer = FastModel.from_pretrained(
                     model_name=model_name,
                     max_seq_length=self.config.max_sequence_length,
-                    dtype=torch.float16 if self.config.fp16 else None,
+                    dtype=model_dtype,
                     load_in_4bit=self.config.load_in_4bit,
                     load_in_8bit=self.config.use_8bit,
                     full_finetuning=False,
@@ -437,16 +445,21 @@ class GRPOModelTrainer:
                     has_solution_markers = (template.config.solution_start_marker in response and
                                           template.config.solution_end_marker in response)
 
-                    # If no markers at all, add them
+                    # If no markers at all, add the configured template markers
                     if not has_reasoning_markers and not has_solution_markers:
-                        # Split response into reasoning and solution if possible
-                        # For now, treat entire response as solution
-                        response = (f"{template.config.reasoning_start_marker}\n"
+                        # Use the template's configured markers (not hardcoded defaults)
+                        reasoning_start = template.config.reasoning_start_marker
+                        reasoning_end = template.config.reasoning_end_marker
+                        solution_start = template.config.solution_start_marker
+                        solution_end = template.config.solution_end_marker
+
+                        # Wrap response with configured markers
+                        response = (f"{reasoning_start}\n"
                                   f"Let me work through this step by step.\n"
-                                  f"{template.config.reasoning_end_marker}\n"
-                                  f"{template.config.solution_start_marker}\n"
+                                  f"{reasoning_end}\n"
+                                  f"{solution_start}\n"
                                   f"{response}\n"
-                                  f"{template.config.solution_end_marker}")
+                                  f"{solution_end}")
 
                 # Combine prompt and response for training
                 formatted = prompt + response
@@ -487,11 +500,49 @@ class GRPOModelTrainer:
             remove_columns=['text']  # Remove text, keep only tokenized data
         )
 
-        # Setup data collator
+        # Setup data collator with matching dtype
+        # Detect the model's actual dtype (critical for Unsloth models which may not match config flags)
+        model_dtype = None
+
+        # Try to get dtype from model directly
+        if hasattr(self.model, 'dtype'):
+            model_dtype = self.model.dtype
+            logger.info(f"Detected model dtype from model.dtype: {model_dtype}")
+        else:
+            # Fall back to checking a parameter
+            try:
+                # Get dtype from first parameter
+                first_param = next(self.model.parameters())
+                model_dtype = first_param.dtype
+                logger.info(f"Detected model dtype from parameters: {model_dtype}")
+            except StopIteration:
+                # No parameters found, fall back to config flags
+                if self.config.fp16:
+                    model_dtype = torch.float16
+                elif self.config.bf16:
+                    model_dtype = torch.bfloat16
+                logger.info(f"Using dtype from config flags: {model_dtype}")
+
         data_collator = DataCollatorForLanguageModeling(
             tokenizer=self.tokenizer,
             mlm=False,
         )
+
+        # Override the collator's return_tensors behavior to use correct dtype
+        original_call = data_collator.__call__
+
+        def dtype_aware_call(features):
+            batch = original_call(features)
+            # Convert tensors to model's dtype if specified
+            if model_dtype is not None:
+                for key in batch:
+                    if isinstance(batch[key], torch.Tensor) and batch[key].dtype in (torch.float32, torch.float64):
+                        batch[key] = batch[key].to(dtype=model_dtype)
+                        logger.debug(f"Converted {key} from {batch[key].dtype} to {model_dtype}")
+            return batch
+
+        data_collator.__call__ = dtype_aware_call
+        logger.info(f"Data collator configured with dtype conversion to {model_dtype}")
 
         # Training arguments for pre-fine-tuning
         training_args = TrainingArguments(
@@ -625,6 +676,10 @@ class GRPOModelTrainer:
         Returns:
             List of reward functions for TRL
         """
+        # Capture model dtype and device for tensor conversion
+        model_dtype = self.model.dtype if hasattr(self.model, 'dtype') else torch.float32
+        model_device = self.model.device if hasattr(self.model, 'device') else 'cpu'
+
         def reward_wrapper(prompts, completions, **kwargs):
             """Wrapper to adapt our reward function to TRL's format."""
             scores = []
@@ -652,7 +707,8 @@ class GRPOModelTrainer:
                 # Use the total reward directly
                 scores.append(reward)
 
-            return scores
+            # Convert scores to tensor with model's dtype to avoid dtype mismatch
+            return torch.tensor(scores, dtype=model_dtype, device=model_device)
 
         return [reward_wrapper]
 

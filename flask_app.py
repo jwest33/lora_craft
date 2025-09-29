@@ -759,7 +759,6 @@ def run_training(session_id: str, config: Dict[str, Any]):
                     ).to(trainer.model.device)
 
                     # Generate response
-                    import torch
                     with torch.no_grad():
                         outputs = trainer.model.generate(
                             **inputs,
@@ -1168,6 +1167,7 @@ def start_training():
         training_threads[session_id] = thread
 
         return jsonify({
+            'success': True,
             'session_id': session_id,
             'status': 'started',
             'message': 'Training started successfully'
@@ -2922,8 +2922,12 @@ def upload_dataset():
             'success': True,
             'filename': filename,
             'filepath': filepath,
+            'path': f"uploads/{filename}",  # Relative path for dataset selection
             'original_filename': original_filename,
+            'file_size': file_size,  # Raw bytes
             'size_mb': round(file_size / 1024 / 1024, 2),
+            'sample_count': dataset_info.get('num_samples', 0),  # Map from num_samples
+            'columns': dataset_info.get('columns', []),
             'dataset_info': dataset_info
         })
 

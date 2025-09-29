@@ -233,6 +233,66 @@
             modal.show();
         },
 
+        // Show input modal
+        showInputModal(title, message, placeholder, onSubmit, submitBtnClass = 'btn-primary') {
+            const modalId = 'inputModal-' + Date.now();
+            const inputId = `${modalId}-input`;
+            const modalHtml = `
+                <div class="modal fade" id="${modalId}" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">${this.escapeHtml(title)}</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p>${this.escapeHtml(message)}</p>
+                                <input type="text" class="form-control" id="${inputId}" placeholder="${this.escapeHtml(placeholder || '')}" />
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="button" class="btn ${submitBtnClass}" id="${modalId}-submit">Submit</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+            const modalElement = document.getElementById(modalId);
+            const modal = new bootstrap.Modal(modalElement);
+            const inputElement = document.getElementById(inputId);
+            const submitBtn = document.getElementById(`${modalId}-submit`);
+
+            const handleSubmit = () => {
+                const value = inputElement.value.trim();
+                if (value) {
+                    onSubmit(value);
+                    modal.hide();
+                }
+            };
+
+            submitBtn.onclick = handleSubmit;
+
+            // Allow Enter key to submit
+            inputElement.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    handleSubmit();
+                }
+            });
+
+            modalElement.addEventListener('hidden.bs.modal', () => {
+                modalElement.remove();
+            });
+
+            modalElement.addEventListener('shown.bs.modal', () => {
+                inputElement.focus();
+            });
+
+            modal.show();
+        },
+
         // Update system status indicators
         updateSystemStatus() {
             fetch('/api/system_status')

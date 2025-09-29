@@ -240,6 +240,14 @@
                     sample_size: parseInt(document.getElementById('sample-size')?.value) || 0,
                     train_split: parseInt(document.getElementById('train-split')?.value) || 80
                 },
+                // Map frontend datasetType to backend source_type
+                dataset_source: (() => {
+                    const datasetType = AppState.getConfigValue('datasetType') || 'upload';
+                    if (datasetType === 'upload') return 'local';
+                    if (datasetType === 'popular' || datasetType === 'custom') return 'huggingface';
+                    return 'huggingface'; // default
+                })(),
+                dataset_path: document.getElementById('dataset-path')?.value,
 
                 // Template config
                 template: (window.TemplatesModule && TemplatesModule.exportTemplateConfig)
@@ -401,23 +409,43 @@
             console.error('Training error:', data);
         },
 
+        // Socket.js compatibility methods (aliases)
+        updateProgress(data) {
+            this.handleTrainingProgress(data);
+        },
+
+        updateMetrics(data) {
+            if (data.metrics) {
+                this.updateCharts(data.metrics);
+            }
+            this.updateTrainingStats(data);
+        },
+
+        handleComplete(data) {
+            this.handleTrainingComplete(data);
+        },
+
+        handleError(data) {
+            this.handleTrainingError(data);
+        },
+
         // Update training UI
         updateTrainingUI(isTraining) {
-            // Toggle start/stop buttons
-            const startBtn = document.getElementById('start-training-btn');
-            const stopBtn = document.getElementById('stop-training-btn');
+            // Toggle start/stop buttons (match actual HTML IDs)
+            const startBtn = document.getElementById('train-btn');
+            const stopBtn = document.getElementById('stop-btn');
 
             if (startBtn) startBtn.style.display = isTraining ? 'none' : 'inline-block';
             if (stopBtn) stopBtn.style.display = isTraining ? 'inline-block' : 'none';
 
-            // Show/hide progress section
-            const progressSection = document.getElementById('training-progress-section');
-            if (progressSection) {
-                progressSection.style.display = isTraining ? 'block' : 'none';
+            // Show/hide training monitor (match actual HTML ID)
+            const trainingMonitor = document.getElementById('training-monitor');
+            if (trainingMonitor) {
+                trainingMonitor.style.display = isTraining ? 'block' : 'none';
             }
 
             // Disable form inputs during training
-            const inputs = document.querySelectorAll('#step-3 input, #step-3 select');
+            const inputs = document.querySelectorAll('#step-3 input, #step-3 select, #step-4 input, #step-4 select');
             inputs.forEach(input => {
                 input.disabled = isTraining;
             });
@@ -602,6 +630,20 @@
                 console.error('Error pausing training:', error);
                 CoreModule.showAlert('Error pausing training', 'error');
             });
+        },
+
+        // Append log message
+        appendLog(message) {
+            const logsContainer = document.getElementById('training-logs');
+            if (!logsContainer) return;
+
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            logEntry.textContent = message;
+            logsContainer.appendChild(logEntry);
+
+            // Auto-scroll to bottom
+            logsContainer.scrollTop = logsContainer.scrollHeight;
         },
 
         // Clear training logs

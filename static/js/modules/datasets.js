@@ -47,6 +47,7 @@
             this.setupEventListeners();
             this.initializeDatasetUpload();
             this.loadPopularDatasets();
+            this.updateSavedTemplatesList();
         },
 
         // Setup dataset-related event listeners
@@ -133,6 +134,11 @@
             const datasetPathInput = document.getElementById('dataset-path');
             if (datasetPathInput) {
                 datasetPathInput.value = datasetPath;
+            }
+
+            // Update configuration summary
+            if (typeof window.updateConfigSummary === 'function') {
+                window.updateConfigSummary();
             }
 
             // Show success message
@@ -287,8 +293,119 @@
             AppState.setConfigValue('datasetSamples', data.sample_count);
             this.updateDatasetStats();
 
+            // Update configuration summary
+            if (typeof window.updateConfigSummary === 'function') {
+                window.updateConfigSummary();
+            }
+
             // Validate step
             NavigationModule.validateStep(2);
+
+            // Reload uploaded files list
+            this.loadUploadedDatasets();
+        },
+
+        // Load previously uploaded datasets
+        async loadUploadedDatasets() {
+            try {
+                const response = await fetch('/api/datasets/uploaded');
+                const data = await response.json();
+
+                if (data.files && data.files.length > 0) {
+                    this.renderUploadedDatasets(data.files);
+                } else {
+                    // Hide container if no files
+                    const container = document.getElementById('uploaded-datasets-container');
+                    if (container) container.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Failed to load uploaded datasets:', error);
+            }
+        },
+
+        // Render uploaded datasets as cards
+        renderUploadedDatasets(files) {
+            const container = document.getElementById('uploaded-datasets-container');
+            const grid = document.getElementById('uploaded-datasets-grid');
+
+            if (!container || !grid) return;
+
+            container.style.display = 'block';
+            grid.innerHTML = files.map(file => `
+                <div class="col-md-6">
+                    <div class="card uploaded-dataset-card">
+                        <div class="card-body">
+                            <h6 class="card-title text-truncate" title="${CoreModule.escapeHtml(file.filename)}">
+                                ${CoreModule.escapeHtml(file.filename)}
+                            </h6>
+                            <p class="card-text small text-muted mb-2">
+                                <i class="fas fa-database"></i> ${file.size_mb} MB<br>
+                                <i class="fas fa-clock"></i> ${new Date(file.uploaded_at).toLocaleString()}
+                            </p>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-sm btn-primary flex-grow-1"
+                                        onclick="DatasetsModule.selectUploadedDataset('${file.relative_path}', '${CoreModule.escapeHtml(file.filename)}')">
+                                    <i class="fas fa-check"></i> Select
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger"
+                                        onclick="DatasetsModule.deleteUploadedDataset('${CoreModule.escapeHtml(file.filename)}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        },
+
+        // Select an uploaded dataset
+        selectUploadedDataset(path, filename) {
+            // Update dataset path input
+            const datasetPathInput = document.getElementById('dataset-path');
+            if (datasetPathInput) {
+                datasetPathInput.value = path;
+            }
+
+            // Store in app state
+            AppState.setConfigValue('datasetPath', path);
+            AppState.setConfigValue('datasetName', filename);
+
+            // Update configuration summary
+            if (typeof window.updateConfigSummary === 'function') {
+                window.updateConfigSummary();
+            }
+
+            // Show success message
+            CoreModule.showAlert(`Selected: ${filename}`, 'success');
+
+            // Mark step as complete
+            if (NavigationModule && NavigationModule.validateStep) {
+                NavigationModule.validateStep(2);
+            }
+        },
+
+        // Delete an uploaded dataset
+        async deleteUploadedDataset(filename) {
+            if (!confirm(`Delete ${filename}?\n\nThis action cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/datasets/uploaded/${encodeURIComponent(filename)}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    CoreModule.showAlert('File deleted successfully', 'success');
+                    this.loadUploadedDatasets();  // Refresh list
+                } else {
+                    throw new Error(data.error || 'Delete failed');
+                }
+            } catch (error) {
+                console.error('Failed to delete dataset:', error);
+                CoreModule.showAlert(`Delete failed: ${error.message}`, 'danger');
+            }
         },
 
         // Browse for local dataset
@@ -604,29 +721,72 @@
             if (solutionStart) solutionStart.value = template.solution_start;
             if (solutionEnd) solutionEnd.value = template.solution_end;
             if (systemPrompt) systemPrompt.value = template.system_prompt;
+
+            // Update preview display
+            this.updateTemplatePreview(template);
+        },
+
+        // Update template preview display
+        updateTemplatePreview(template) {
+            const previewElement = document.getElementById('template-preview');
+            if (!previewElement) return;
+
+            // Create a sample formatted output showing the template structure
+            const samplePreview = `System Prompt:
+            ${template.system_prompt}
+
+            ────────────────────────────────────
+
+            User: Solve the equation: 2x + 5 = 13
+            Assistant: ${template.reasoning_start}Let me think about this. 13 - 5 = 8. 8 / 2 = 4. x = 4.${template.reasoning_end}
+            ${template.solution_start}4${template.solution_end}`
+
+            previewElement.textContent = samplePreview;
+        },
+
+        // Test template with sample data
+        testTemplate() {
+            const reasoningStart = document.getElementById('custom-reasoning-start')?.value || '';
+            const reasoningEnd = document.getElementById('custom-reasoning-end')?.value || '';
+            const solutionStart = document.getElementById('custom-solution-start')?.value || '';
+            const solutionEnd = document.getElementById('custom-solution-end')?.value || '';
+            const systemPrompt = document.getElementById('custom-system-prompt')?.value || '';
+
+            const sampleOutput = `${systemPrompt}
+
+User: What is 2 + 2?
+Assistant: ${reasoningStart}Let me think about this. 2 + 2 equals 4.${reasoningEnd}
+${solutionStart}4${solutionEnd}`;
+
+            CoreModule.showAlert(sampleOutput, "info");
         },
 
         // Save custom template
         saveCustomTemplate() {
-            const templateName = prompt('Enter a name for this template:');
-            if (!templateName) return;
+            CoreModule.showInputModal(
+                'Save Template',
+                'Enter a name for this template:',
+                'Template name',
+                (templateName) => {
+                    const customTemplate = {
+                        name: templateName,
+                        reasoning_start: document.getElementById('custom-reasoning-start')?.value || '',
+                        reasoning_end: document.getElementById('custom-reasoning-end')?.value || '',
+                        solution_start: document.getElementById('custom-solution-start')?.value || '',
+                        solution_end: document.getElementById('custom-solution-end')?.value || '',
+                        system_prompt: document.getElementById('custom-system-prompt')?.value || ''
+                    };
 
-            const customTemplate = {
-                name: templateName,
-                reasoning_start: document.getElementById('custom-reasoning-start')?.value || '',
-                reasoning_end: document.getElementById('custom-reasoning-end')?.value || '',
-                solution_start: document.getElementById('custom-solution-start')?.value || '',
-                solution_end: document.getElementById('custom-solution-end')?.value || '',
-                system_prompt: document.getElementById('custom-system-prompt')?.value || ''
-            };
+                    // Save to localStorage
+                    const savedTemplates = JSON.parse(localStorage.getItem('customPromptTemplates') || '{}');
+                    savedTemplates[templateName] = customTemplate;
+                    localStorage.setItem('customPromptTemplates', JSON.stringify(savedTemplates));
 
-            // Save to localStorage
-            const savedTemplates = JSON.parse(localStorage.getItem('customPromptTemplates') || '{}');
-            savedTemplates[templateName] = customTemplate;
-            localStorage.setItem('customPromptTemplates', JSON.stringify(savedTemplates));
-
-            CoreModule.showAlert('Template saved successfully', 'success');
-            this.updateSavedTemplatesList();
+                    CoreModule.showAlert('Template saved successfully', 'success');
+                    this.updateSavedTemplatesList();
+                },
+                'btn-success'
+            );
         },
 
         // Load selected saved template
@@ -664,24 +824,7 @@
             });
         },
 
-        // Test template with sample data
-        testTemplate() {
-            const reasoningStart = document.getElementById('custom-reasoning-start')?.value || '';
-            const reasoningEnd = document.getElementById('custom-reasoning-end')?.value || '';
-            const solutionStart = document.getElementById('custom-solution-start')?.value || '';
-            const solutionEnd = document.getElementById('custom-solution-end')?.value || '';
-            const systemPrompt = document.getElementById('custom-system-prompt')?.value || '';
-
-            const sampleOutput = `${systemPrompt}
-
-User: What is 2 + 2?
-Assistant: ${reasoningStart}Let me think about this. 2 + 2 equals 4.${reasoningEnd}
-${solutionStart}4${solutionEnd}`;
-
-            CoreModule.showAlert(sampleOutput, "info");
-        },
-
-        // Select dataset type (popular, custom, upload)
+        // Handle dataset type selection UI (popular / custom / upload)
         selectDatasetType(type) {
             console.log('Dataset type selected:', type);
 
@@ -722,6 +865,7 @@ ${solutionStart}4${solutionEnd}`;
                     break;
                 case 'upload':
                     if (uploadSection) uploadSection.style.display = 'block';
+                    this.loadUploadedDatasets();  // Load cached uploads
                     break;
             }
 

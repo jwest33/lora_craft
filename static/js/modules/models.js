@@ -180,6 +180,11 @@
             // Update model info display
             this.updateModelInfo(selectedModel);
 
+            // Update configuration summary
+            if (typeof window.updateConfigSummary === 'function') {
+                window.updateConfigSummary();
+            }
+
             // Validate step
             NavigationModule.validateStep(1);
 
@@ -611,10 +616,70 @@
     window.applyRecommendedSettings = () => ModelsModule.applyRecommendedSettings();
     window.updateModelList = () => ModelsModule.updateModelList();
 
-    // Stub for updateConfigSummary - can be implemented later if needed
+    // Update configuration summary display
     window.updateConfigSummary = () => {
-        // This function can be expanded to show a config summary panel
-        // For now, it's a no-op to prevent errors
+        // Get current configuration values from form fields
+        const modelNameEl = document.getElementById('model-name');
+        const datasetPathEl = document.getElementById('dataset-path');
+        const numEpochsEl = document.getElementById('num-epochs');
+        const batchSizeEl = document.getElementById('batch-size');
+
+        // Get the selected model name
+        let modelName = '--';
+        if (modelNameEl && modelNameEl.value) {
+            // Get the selected option's text (which shows the model name)
+            const selectedOption = modelNameEl.options[modelNameEl.selectedIndex];
+            modelName = selectedOption ? selectedOption.text : modelNameEl.value;
+        }
+
+        // Get dataset name (extract filename only)
+        let datasetName = '--';
+        if (datasetPathEl && datasetPathEl.value) {
+            const fullPath = datasetPathEl.value;
+            // Extract just the filename
+            datasetName = fullPath.split('/').pop().split('\\').pop();
+            // Truncate if too long
+            if (datasetName.length > 40) {
+                datasetName = datasetName.substring(0, 37) + '...';
+            }
+        }
+
+        // Get training parameters
+        const epochs = numEpochsEl?.value || '--';
+        const batchSize = batchSizeEl?.value || '--';
+
+        // Calculate estimated time and VRAM based on config
+        let estimatedTime = '~15 minutes';
+        let estimatedVRAM = '~4GB';
+
+        // Simple estimation based on epochs and batch size
+        if (epochs !== '--' && batchSize !== '--') {
+            const timePerEpoch = 5; // baseline minutes per epoch
+            const totalMinutes = parseInt(epochs) * timePerEpoch;
+            estimatedTime = totalMinutes < 60
+                ? `~${totalMinutes} minutes`
+                : `~${Math.round(totalMinutes / 60)} hours`;
+
+            // VRAM scales with batch size
+            const baseVRAM = 3;
+            const vramGB = baseVRAM + (parseInt(batchSize) - 1) * 0.5;
+            estimatedVRAM = `~${Math.ceil(vramGB)}GB`;
+        }
+
+        // Update summary fields
+        const summaryModel = document.getElementById('summary-model');
+        const summaryDataset = document.getElementById('summary-dataset');
+        const summaryEpochs = document.getElementById('summary-epochs');
+        const summaryBatch = document.getElementById('summary-batch');
+        const summaryTime = document.getElementById('summary-time');
+        const summaryVRAM = document.getElementById('summary-vram');
+
+        if (summaryModel) summaryModel.textContent = modelName;
+        if (summaryDataset) summaryDataset.textContent = datasetName;
+        if (summaryEpochs) summaryEpochs.textContent = epochs;
+        if (summaryBatch) summaryBatch.textContent = batchSize;
+        if (summaryTime) summaryTime.textContent = estimatedTime;
+        if (summaryVRAM) summaryVRAM.textContent = estimatedVRAM;
     };
 
 })(window);
