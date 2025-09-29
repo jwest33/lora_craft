@@ -671,18 +671,10 @@ class GRPOModelTrainer:
         logger.info(f"GRPO batch configuration: batch_size={batch_size}, global_batch_size={global_batch_size}, generation_batch_size={generation_batch_size}, num_generations={num_gens}")
 
         # Calculate the actual number of training steps based on dataset and epochs
-        # If max_samples is set, it represents samples per epoch
-        # Otherwise use the full dataset size
-        num_train_samples = len(formatted_dataset)
-
-        if self.config.max_samples:
-            # max_samples is actually "samples per epoch"
-            samples_per_epoch = min(self.config.max_samples, num_train_samples)
-            logger.info(f"Using {samples_per_epoch} samples per epoch (configured: {self.config.max_samples})")
-        else:
-            # Use all available samples per epoch
-            samples_per_epoch = num_train_samples
-            logger.info(f"Using all {samples_per_epoch} samples per epoch")
+        # The dataset handler has already applied max_samples limiting if configured
+        # So we just use the actual dataset size as samples per epoch
+        samples_per_epoch = len(formatted_dataset)
+        logger.info(f"Using {samples_per_epoch} samples per epoch")
 
         steps_per_epoch = max(1, samples_per_epoch // global_batch_size)  # At least 1 step per epoch
         max_steps = steps_per_epoch * self.config.num_train_epochs
