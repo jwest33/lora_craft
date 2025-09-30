@@ -811,17 +811,32 @@ ${solutionStart}4${solutionEnd}`;
         // Update saved templates list
         updateSavedTemplatesList() {
             const savedTemplatesList = document.getElementById('saved-templates-list');
-            if (!savedTemplatesList) return;
+            if (!savedTemplatesList) {
+                console.warn('saved-templates-list element not found');
+                return;
+            }
 
-            const savedTemplates = JSON.parse(localStorage.getItem('customPromptTemplates') || '{}');
+            try {
+                const savedTemplates = JSON.parse(localStorage.getItem('customPromptTemplates') || '{}');
+                const templateCount = Object.keys(savedTemplates).length;
 
-            savedTemplatesList.innerHTML = '<option value="">Select a saved template...</option>';
-            Object.keys(savedTemplates).forEach(name => {
-                const option = document.createElement('option');
-                option.value = name;
-                option.textContent = name;
-                savedTemplatesList.appendChild(option);
-            });
+                console.log(`Loading ${templateCount} saved templates:`, Object.keys(savedTemplates));
+
+                savedTemplatesList.innerHTML = '<option value="">Select a saved template...</option>';
+                Object.keys(savedTemplates).forEach(name => {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    savedTemplatesList.appendChild(option);
+                    console.log(`Added template option: ${name}`);
+                });
+
+                if (templateCount === 0) {
+                    console.log('No saved templates found in localStorage');
+                }
+            } catch (error) {
+                console.error('Error updating saved templates list:', error);
+            }
         },
 
         // Handle dataset type selection UI (popular / custom / upload)

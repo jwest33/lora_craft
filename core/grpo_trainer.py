@@ -544,6 +544,20 @@ class GRPOModelTrainer:
         data_collator.__call__ = dtype_aware_call
         logger.info(f"Data collator configured with dtype conversion to {model_dtype}")
 
+        # Determine precision flags for TrainingArguments based on actual model dtype
+        # This is critical because the model may be loaded in a different dtype than config suggests
+        use_fp16 = self.config.fp16
+        use_bf16 = self.config.bf16
+
+        if model_dtype == torch.bfloat16:
+            use_bf16 = True
+            use_fp16 = False
+            logger.info("Setting bf16=True in TrainingArguments to match model dtype")
+        elif model_dtype == torch.float16:
+            use_fp16 = True
+            use_bf16 = False
+            logger.info("Setting fp16=True in TrainingArguments to match model dtype")
+
         # Training arguments for pre-fine-tuning
         training_args = TrainingArguments(
             output_dir=f"{self.config.output_dir}/pre_finetune",
@@ -555,8 +569,8 @@ class GRPOModelTrainer:
             save_steps=self.config.save_steps,
             learning_rate=self.config.learning_rate * 0.5,  # Lower LR for pre-training
             weight_decay=self.config.weight_decay,
-            fp16=self.config.fp16,
-            bf16=self.config.bf16,
+            fp16=use_fp16,
+            bf16=use_bf16,
             optim=self.config.optim,
             seed=self.config.seed,
         )

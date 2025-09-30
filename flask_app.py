@@ -484,32 +484,50 @@ def run_training(session_id: str, config: Dict[str, Any]):
         # Send initial status
         q.put(('log', f"Initializing training for session {session_id}"))
 
+        # Unpack nested config structure from frontend
+        # Frontend sends: {model: {...}, dataset: {...}, training: {...}, template: {...}}
+        # Backend expects flat structure for GRPOTrainingConfig
+        model_config = config.get('model', {})
+        dataset_config = config.get('dataset', {})
+        training_config = config.get('training', {})
+        grpo_config_data = config.get('grpo', {})
+        template_config = config.get('template', {})
+        pre_training_config = config.get('pre_training', {})
+        output_config = config.get('output', {})
+
+        # Extract model name from nested structure, fall back to top-level for backward compatibility
+        model_name = model_config.get('modelName') or config.get('model_name', 'unsloth/Qwen3-0.6B')
+
+        # Log the selected model
+        logger.info(f"Starting training with model: {model_name}")
+        q.put(('log', f"Loading model: {model_name}"))
+
         # Create GRPO configuration with algorithm support
         grpo_config = GRPOTrainingConfig(
             # Model configuration
-            model_name=config.get('model_name', 'unsloth/Qwen3-0.6B'),
+            model_name=model_name,
 
-            # LoRA configuration
-            lora_r=config.get('lora_rank', 16),
-            lora_alpha=config.get('lora_alpha', 32),
-            lora_dropout=config.get('lora_dropout', 0.0),
-            lora_target_modules=config.get('lora_target_modules', None),
+            # LoRA configuration (from nested model config or top-level for backward compatibility)
+            lora_r=model_config.get('loraRank') or config.get('lora_rank', 16),
+            lora_alpha=model_config.get('loraAlpha') or config.get('lora_alpha', 32),
+            lora_dropout=model_config.get('loraDropout') or config.get('lora_dropout', 0.0),
+            lora_target_modules=model_config.get('targetModules') or config.get('lora_target_modules', None),
             lora_bias=config.get('lora_bias', 'none'),
 
-            # Training configuration
-            num_train_epochs=config.get('num_epochs', 3),
-            per_device_train_batch_size=config.get('batch_size', 1),
-            gradient_accumulation_steps=config.get('gradient_accumulation_steps', 1),
-            learning_rate=config.get('learning_rate', 2e-4),
+            # Training configuration (from nested training config or top-level for backward compatibility)
+            num_train_epochs=training_config.get('num_epochs') or config.get('num_epochs', 3),
+            per_device_train_batch_size=training_config.get('batch_size') or config.get('batch_size', 1),
+            gradient_accumulation_steps=training_config.get('gradient_accumulation') or config.get('gradient_accumulation_steps', 1),
+            learning_rate=training_config.get('learning_rate') or config.get('learning_rate', 2e-4),
             warmup_steps=config.get('warmup_steps', 10),
-            weight_decay=config.get('weight_decay', 0.001),
-            max_grad_norm=config.get('max_grad_norm', 0.3),
-            lr_scheduler_type=config.get('lr_scheduler_type', 'constant'),
+            weight_decay=training_config.get('weight_decay') or config.get('weight_decay', 0.001),
+            max_grad_norm=training_config.get('max_grad_norm') or config.get('max_grad_norm', 0.3),
+            lr_scheduler_type=training_config.get('lr_schedule') or config.get('lr_scheduler_type', 'constant'),
             optim=config.get('optim', 'paged_adamw_32bit'),
             logging_steps=config.get('logging_steps', 10),
-            save_steps=config.get('save_steps', 100),
-            eval_steps=config.get('eval_steps', 100),
-            seed=config.get('seed', 42),
+            save_steps=output_config.get('save_steps') or config.get('save_steps', 100),
+            eval_steps=output_config.get('eval_steps') or config.get('eval_steps', 100),
+            seed=training_config.get('seed') or config.get('seed', 42),
 
             # Generation configuration
             max_sequence_length=config.get('max_sequence_length', 2048),
@@ -518,15 +536,25 @@ def run_training(session_id: str, config: Dict[str, Any]):
             top_p=config.get('top_p', 0.95),
             top_k=config.get('top_k', 50),
             repetition_penalty=config.get('repetition_penalty', 1.0),
-            # Use batch_size as default for num_generations if not provided or None
-            num_generations_per_prompt=config.get('num_generations') or config.get('batch_size', 1),
-            num_generations=config.get('num_generations') or config.get('batch_size', 1),  # For TRL compatibility
+            # GRPO requires at least 2 generations to calculate advantages
+            # Priority: grpo.num_generations > top-level num_generations > max(2, batch_size)
+            # This ensures we always meet the minimum requirement
+            num_generations_per_prompt=(
+                grpo_config_data.get('num_generations') or
+                config.get('num_generations') or
+                max(2, training_config.get('batch_size') or config.get('batch_size', 2))
+            ),
+            num_generations=(
+                grpo_config_data.get('num_generations') or
+                config.get('num_generations') or
+                max(2, training_config.get('batch_size') or config.get('batch_size', 2))
+            ),  # For TRL compatibility
 
-            # GRPO/Algorithm specific
+            # GRPO/Algorithm specific (from nested grpo config or top-level for backward compatibility)
             loss_type=config.get('loss_type', 'grpo'),
             importance_sampling_level=config.get('importance_sampling_level', 'token'),
-            kl_penalty=config.get('kl_penalty', 0.05),  # Increased default to prevent KL divergence
-            clip_range=config.get('clip_range', 0.2),
+            kl_penalty=grpo_config_data.get('kl_weight') or config.get('kl_penalty', 0.05),  # Increased default to prevent KL divergence
+            clip_range=grpo_config_data.get('clip_range') or config.get('clip_range', 0.2),
             value_coefficient=config.get('value_coefficient', 1.0),
             epsilon=config.get('epsilon', 3e-4),
             epsilon_high=config.get('epsilon_high', 4e-4),
@@ -599,8 +627,8 @@ def run_training(session_id: str, config: Dict[str, Any]):
         #   -> Pre-training: 100 samples for pre_training_epochs (default 2)
         #   -> Main training: 1000 samples per epoch × 3 epochs = 3000 training steps
 
-        # Determine source type based on dataset_path
-        dataset_path = config.get('dataset_path', 'tatsu-lab/alpaca')
+        # Determine source type based on dataset_path (from nested dataset config or top-level)
+        dataset_path = dataset_config.get('path') or config.get('dataset_path', 'tatsu-lab/alpaca')
         source_type = config.get('dataset_source', 'huggingface')
 
         # Check if this is an uploaded file
@@ -609,41 +637,46 @@ def run_training(session_id: str, config: Dict[str, Any]):
             source_type = 'local'
             q.put(('log', f"Using uploaded dataset file: {os.path.basename(dataset_path)}"))
 
-        dataset_config = DatasetConfig(
+        # Get sample size from nested dataset config or top-level
+        dataset_sample_size = dataset_config.get('sample_size') or config.get('max_samples')
+        # Convert 0 to None (0 means "all" in the UI)
+        if dataset_sample_size == 0:
+            dataset_sample_size = None
+
+        dataset_config_obj = DatasetConfig(
             source_type=source_type,
             source_path=dataset_path,
             subset=config.get('dataset_config', None),  # Config for multi-config datasets
             split=config.get('dataset_split', 'train'),  # Use 'train' as default, let max_samples handle limiting
             instruction_field=config.get('instruction_field', 'instruction'),
             response_field=config.get('response_field', 'output'),
-            max_samples=config.get('max_samples')  # Don't default to 100, use None if not provided
+            max_samples=dataset_sample_size  # Don't default to 100, use None if not provided
         )
 
-        dataset_handler = DatasetHandler(dataset_config)
+        dataset_handler = DatasetHandler(dataset_config_obj)
         dataset = dataset_handler.load()
         actual_samples = len(dataset)
-        max_samples_config = config.get('max_samples')
-        if max_samples_config:
-            q.put(('log', f"Loaded dataset with {actual_samples} samples (max_samples: {max_samples_config})"))
+        if dataset_sample_size:
+            q.put(('log', f"Loaded dataset with {actual_samples} samples (max_samples: {dataset_sample_size})"))
         else:
             q.put(('log', f"Loaded dataset with {actual_samples} samples (no limit configured)"))
 
-        # Setup prompt template with chat template
-        template_config = TemplateConfig(
+        # Setup prompt template with chat template (from nested template config or top-level)
+        template_config_obj = TemplateConfig(
             name="training",
             description="Training template",
             instruction_template=config.get('instruction_template', "{instruction}"),
             response_template=config.get('response_template', "{response}"),
-            reasoning_start_marker=config.get('reasoning_start', '<start_working_out>'),
-            reasoning_end_marker=config.get('reasoning_end', '<end_working_out>'),
-            solution_start_marker=config.get('solution_start', '<SOLUTION>'),
-            solution_end_marker=config.get('solution_end', '</SOLUTION>'),
-            system_prompt=config.get('system_prompt', 'You are given a problem.\nThink about the problem and provide your working out.\nPlace it between <start_working_out> and <end_working_out>.\nThen, provide your solution between <SOLUTION></SOLUTION>'),
-            chat_template=config.get('chat_template'),  # Add chat template from config
+            reasoning_start_marker=template_config.get('reasoning_start') or config.get('reasoning_start', '<start_working_out>'),
+            reasoning_end_marker=template_config.get('reasoning_end') or config.get('reasoning_end', '<end_working_out>'),
+            solution_start_marker=template_config.get('solution_start') or config.get('solution_start', '<SOLUTION>'),
+            solution_end_marker=template_config.get('solution_end') or config.get('solution_end', '</SOLUTION>'),
+            system_prompt=template_config.get('system_prompt') or config.get('system_prompt', 'You are given a problem.\nThink about the problem and provide your working out.\nPlace it between <start_working_out> and <end_working_out>.\nThen, provide your solution between <SOLUTION></SOLUTION>'),
+            chat_template=template_config.get('chat_template') or config.get('chat_template'),  # Add chat template from config
             prepend_reasoning_start=True,  # For GRPO templates
-            model_type=config.get('chat_template_type', 'grpo')
+            model_type=template_config.get('chat_template_type') or config.get('chat_template_type', 'grpo')
         )
-        template = PromptTemplate(template_config)
+        template = PromptTemplate(template_config_obj)
 
         # Setup reward function based on configuration
         reward_builder = CustomRewardBuilder()
@@ -779,34 +812,34 @@ def run_training(session_id: str, config: Dict[str, Any]):
 
                     q.put(('log', f"\nGenerated response:\n{response[:500]}...\n"))
 
-                    # Check format compliance
-                    has_reasoning = '<reasoning>' in response.lower() and '</reasoning>' in response.lower()
-                    has_solution = '<solution>' in response.lower() and '</solution>' in response.lower()
-                    has_analysis = '<analysis>' in response.lower() and '</analysis>' in response.lower()
-                    has_signal = '<signal>' in response.lower() and '</signal>' in response.lower()
+                    # Check format compliance using custom markers from template config
+                    # Get markers from the template config we created earlier
+                    reasoning_start = template_config_obj.reasoning_start_marker.lower()
+                    reasoning_end = template_config_obj.reasoning_end_marker.lower()
+                    solution_start = template_config_obj.solution_start_marker.lower()
+                    solution_end = template_config_obj.solution_end_marker.lower()
 
-                    # Determine which format was expected
-                    if has_reasoning or has_solution:
-                        format_type = "Math/Reasoning Format"
-                        format_ok = has_reasoning and has_solution
-                    elif has_analysis or has_signal:
-                        format_type = "Technical Analysis Format"
-                        format_ok = has_analysis and has_signal
-                    else:
-                        format_type = "Unknown/Plain"
-                        format_ok = False
+                    response_lower = response.lower()
+                    has_reasoning_markers = reasoning_start in response_lower and reasoning_end in response_lower
+                    has_solution_markers = solution_start in response_lower and solution_end in response_lower
+
+                    # Format is compliant if it has both reasoning and solution markers
+                    format_ok = has_reasoning_markers and has_solution_markers
 
                     # Report results
                     q.put(('log', "Format Check Results:"))
-                    q.put(('log', f"  Format Type: {format_type}"))
-                    q.put(('log', f"  Has <reasoning> tags: {has_reasoning}"))
-                    q.put(('log', f"  Has <solution> tags: {has_solution}"))
-                    q.put(('log', f"  Has <analysis> tags: {has_analysis}"))
-                    q.put(('log', f"  Has <signal> tags: {has_signal}"))
+                    q.put(('log', f"  Expected Reasoning Markers: {template_config_obj.reasoning_start_marker} ... {template_config_obj.reasoning_end_marker}"))
+                    q.put(('log', f"  Expected Solution Markers: {template_config_obj.solution_start_marker} ... {template_config_obj.solution_end_marker}"))
+                    q.put(('log', f"  Has reasoning markers: {has_reasoning_markers}"))
+                    q.put(('log', f"  Has solution markers: {has_solution_markers}"))
                     q.put(('log', f"  Format Compliant: {'✓ YES' if format_ok else '✗ NO'}"))
 
                     if not format_ok:
                         q.put(('log', "  ⚠️  WARNING: Model may need more pre-training epochs!"))
+                        if not has_reasoning_markers:
+                            q.put(('log', f"    Missing: {template_config_obj.reasoning_start_marker} ... {template_config_obj.reasoning_end_marker}"))
+                        if not has_solution_markers:
+                            q.put(('log', f"    Missing: {template_config_obj.solution_start_marker} ... {template_config_obj.solution_end_marker}"))
                     else:
                         q.put(('log', "  ✅ Model has learned the expected format!"))
 
@@ -1451,11 +1484,33 @@ def get_system_status():
         # Get GPU info if available
         if torch.cuda.is_available():
             status['gpu'] = torch.cuda.get_device_name(0)
-            # Get VRAM usage
-            allocated = torch.cuda.memory_allocated(0) / 1024**3  # Convert to GB
-            reserved = torch.cuda.memory_reserved(0) / 1024**3
-            total = torch.cuda.get_device_properties(0).total_memory / 1024**3
-            status['vram'] = f"{allocated:.1f}GB / {total:.1f}GB"
+
+            # Try to get actual VRAM usage from GPU hardware using pynvml
+            vram_acquired = False
+            try:
+                import pynvml
+                pynvml.nvmlInit()
+                handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+                mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+
+                # Get actual hardware memory usage
+                used = mem_info.used / 1024**3  # Convert to GB
+                total = mem_info.total / 1024**3
+                status['vram'] = f"{used:.1f}GB / {total:.1f}GB"
+                vram_acquired = True
+
+                pynvml.nvmlShutdown()
+            except (ImportError, Exception) as e:
+                # pynvml not available or error, fall back to torch
+                pass
+
+            # Fallback to PyTorch memory tracking if pynvml failed
+            if not vram_acquired:
+                allocated = torch.cuda.memory_allocated(0) / 1024**3  # Convert to GB
+                reserved = torch.cuda.memory_reserved(0) / 1024**3
+                total = torch.cuda.get_device_properties(0).total_memory / 1024**3
+                # Use reserved as a proxy for "used" since it's closer to actual usage
+                status['vram'] = f"{reserved:.1f}GB / {total:.1f}GB"
         else:
             status['gpu'] = 'CPU Only'
 

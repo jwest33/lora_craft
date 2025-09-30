@@ -416,7 +416,15 @@
                 user_prefix: document.getElementById('user-prefix')?.value,
                 user_suffix: document.getElementById('user-suffix')?.value,
                 assistant_prefix: document.getElementById('assistant-prefix')?.value,
-                assistant_suffix: document.getElementById('assistant-suffix')?.value
+                assistant_suffix: document.getElementById('assistant-suffix')?.value,
+                // Add custom prompt markers and system prompt
+                reasoning_start: document.getElementById('custom-reasoning-start')?.value || '<start_working_out>',
+                reasoning_end: document.getElementById('custom-reasoning-end')?.value || '<end_working_out>',
+                solution_start: document.getElementById('custom-solution-start')?.value || '<SOLUTION>',
+                solution_end: document.getElementById('custom-solution-end')?.value || '</SOLUTION>',
+                system_prompt: document.getElementById('custom-system-prompt')?.value || '',
+                chat_template: document.getElementById('custom-chat-template')?.value || '',
+                chat_template_type: document.getElementById('prompt-template-select')?.value || 'grpo-default'
             };
         },
 

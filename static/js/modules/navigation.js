@@ -177,7 +177,12 @@
             }
 
             // Step-specific actions
-            if (stepNum === 4) {
+            if (stepNum === 2) {
+                // Update saved templates list when navigating to Dataset step
+                if (window.DatasetModule && typeof DatasetModule.updateSavedTemplatesList === 'function') {
+                    setTimeout(() => DatasetModule.updateSavedTemplatesList(), 100);
+                }
+            } else if (stepNum === 4) {
                 // Update configuration summary when navigating to Train & Review step
                 if (typeof window.updateConfigSummary === 'function') {
                     // Small delay to ensure DOM is ready
