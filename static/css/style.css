@@ -9,6 +9,23 @@
     font-display: swap; /* Improve loading performance */
 }
 
+/* Highlighted Input - Gentle attention draw */
+.input-highlight {
+    position: relative;
+    animation: gentle-pulse 2s ease-in-out infinite;
+}
+
+@keyframes gentle-pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(147, 51, 234, 0.4);
+        border-color: var(--border-color);
+    }
+    50% {
+        box-shadow: 0 0 0 3px rgba(147, 51, 234, 0.15);
+        border-color: var(--primary);
+    }
+}
+
 :root {
     /* ============================================================================ */
     /* Light Theme - Professional Neutral */
@@ -27,11 +44,22 @@
     --danger: #f43f5e;            /* Rose */
     --info: #06b6d4;              /* Cyan */
 
+    /* Bootstrap Color Overrides */
+    --bs-success: #14b8a6;
+    --bs-success-rgb: 20, 184, 166;
+    --bs-danger: #f43f5e;
+    --bs-danger-rgb: 244, 63, 94;
+    --bs-warning: #f97316;
+    --bs-warning-rgb: 249, 115, 22;
+    --bs-info: #06b6d4;
+    --bs-info-rgb: 6, 182, 212;
+
     /* Backgrounds - Light Mode */
     --bg-primary: #fafafa;
     --bg-secondary: #f3f4f6;
     --bg-tertiary: #e5e7eb;
     --bg-card: #ffffff;
+    --bg-success: #14b8a6;
 
     /* Text Colors - Light Mode */
     --text-primary: #1f2937;
@@ -48,7 +76,7 @@
     /* Gradients */
     --gradient-primary: linear-gradient(135deg, #9333ea, #a855f7);
     --gradient-secondary: linear-gradient(135deg, #ec4899, #f472b6);
-    --gradient-success: linear-gradient(135deg, #14b8a6, #5eead4);
+    --gradient-success: linear-gradient(135deg, #06b6d4, #72cada);
 
     /* Compatibility variables */
     --card-bg: var(--bg-card);
@@ -73,6 +101,16 @@
     --danger: #f43f5e;
     --info: #06b6d4;
 
+    /* Bootstrap Color Overrides */
+    --bs-success: #14b8a6;
+    --bs-success-rgb: 20, 184, 166;
+    --bs-danger: #f43f5e;
+    --bs-danger-rgb: 244, 63, 94;
+    --bs-warning: #f97316;
+    --bs-warning-rgb: 249, 115, 22;
+    --bs-info: #06b6d4;
+    --bs-info-rgb: 6, 182, 212;
+
     /* Backgrounds - Dark Synthwave */
     --bg-primary: #0f172a;        /* Deep Blue Black */
     --bg-secondary: #1e293b;      /* Dark Blue */
@@ -94,7 +132,7 @@
     /* Gradients - Synthwave */
     --gradient-primary: linear-gradient(135deg, #a855f7, #ec4899);
     --gradient-secondary: linear-gradient(135deg, #06b6d4, #3b82f6);
-    --gradient-success: linear-gradient(135deg, #14b8a6, #10b981);
+    --gradient-success: linear-gradient(135deg, #06b6d4, #72cada);;
 
     /* Compatibility variables */
     --card-bg: var(--bg-card);
@@ -443,12 +481,91 @@ body {
     opacity: 1;
 }
 
+/* Nested cards within step content - more visually distinct */
+.step-content .card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: var(--shadow-sm);
+    transition: all 0.2s ease;
+}
+
+.step-content .card:hover {
+    box-shadow: var(--shadow-md);
+    border-color: rgba(147, 51, 234, 0.3);
+}
+
+.step-content .card .card-header {
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+    padding: 0.75rem 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.step-content .card .card-body {
+    padding: 1rem;
+    background: var(--bg-card);
+}
+
+/* Dark theme nested cards */
+[data-theme="dark"] .step-content .card {
+    background: rgba(51, 65, 85, 0.5);
+    border-color: rgba(168, 85, 247, 0.15);
+}
+
+[data-theme="dark"] .step-content .card .card-header {
+    background: rgba(51, 65, 85, 0.7);
+    border-bottom-color: rgba(168, 85, 247, 0.15);
+}
+
+[data-theme="dark"] .step-content .card .card-body {
+    background: rgba(30, 41, 59, 0.6);
+}
+
+[data-theme="dark"] .step-content .card:hover {
+    border-color: rgba(168, 85, 247, 0.4);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
 /* Prevent content from causing reflow during animation */
 .step-content img,
-.step-content iframe,
-.step-content canvas {
+.step-content iframe {
     max-width: 100%;
     height: auto;
+}
+
+/* Chart containers with proper sizing */
+.chart-container {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.5rem;
+    min-height: 350px;
+    box-shadow: var(--shadow-sm);
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.chart-container:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary-light);
+}
+
+[data-theme="dark"] .chart-container {
+    background: var(--bg-secondary);
+    border-color: rgba(168, 85, 247, 0.2);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .chart-container:hover {
+    border-color: var(--primary);
+    box-shadow: 0 4px 16px rgba(168, 85, 247, 0.3);
+}
+
+.chart-container canvas {
+    max-width: 100%;
+    height: auto !important;
 }
 
 /* Optimize chart rendering during collapse */
@@ -634,6 +751,79 @@ body {
 .form-range {
     width: 100%;
     margin-bottom: 0.5rem;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+    outline: none;
+}
+
+/* Range slider thumb - Webkit (Chrome, Safari, Edge) */
+.form-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--primary);
+    cursor: pointer;
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s ease;
+}
+
+.form-range::-webkit-slider-thumb:hover {
+    background: var(--primary-light);
+    transform: scale(1.1);
+    box-shadow: 0 2px 8px rgba(147, 51, 234, 0.4);
+}
+
+/* Range slider thumb - Firefox */
+.form-range::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--primary);
+    cursor: pointer;
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s ease;
+}
+
+.form-range::-moz-range-thumb:hover {
+    background: var(--primary-light);
+    transform: scale(1.1);
+    box-shadow: 0 2px 8px rgba(147, 51, 234, 0.4);
+}
+
+/* Range slider track - Firefox */
+.form-range::-moz-range-track {
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+    height: 6px;
+}
+
+/* Range slider progress fill - Webkit */
+.form-range::-webkit-slider-runnable-track {
+    background: linear-gradient(to right, var(--primary) 0%, var(--primary) var(--value, 50%), var(--bg-tertiary) var(--value, 50%), var(--bg-tertiary) 100%);
+    height: 6px;
+    border-radius: 3px;
+}
+
+/* Dark theme adjustments */
+[data-theme="dark"] .form-range {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .form-range::-webkit-slider-thumb {
+    background: var(--primary);
+    border-color: var(--bg-secondary);
+}
+
+[data-theme="dark"] .form-range::-moz-range-thumb {
+    background: var(--primary);
+    border-color: var(--bg-secondary);
 }
 
 /* Config Sections */
@@ -786,35 +976,68 @@ body {
 
 /* Metrics Panel */
 .metrics-panel {
-    background: var(--bg-secondary);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
     border-radius: 12px;
-    padding: 1rem;
+    padding: 1.5rem;
     margin-bottom: 1.5rem;
+    box-shadow: var(--shadow-sm);
+}
+
+[data-theme="dark"] .metrics-panel {
+    background: var(--bg-secondary);
+    border-color: rgba(168, 85, 247, 0.2);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .metric-item {
     text-align: center;
-    padding: 0.5rem;
-    background: var(--bg-primary);
+    padding: 0.75rem 0.5rem;
+    background: var(--bg-secondary);
     border-radius: 8px;
     border: 1px solid var(--border-color);
+    transition: all 0.2s ease;
+}
+
+.metric-item:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
+    border-color: var(--primary-light);
+}
+
+[data-theme="dark"] .metric-item {
+    background: rgba(168, 85, 247, 0.05);
+    border-color: rgba(168, 85, 247, 0.2);
+}
+
+[data-theme="dark"] .metric-item:hover {
+    background: rgba(168, 85, 247, 0.1);
+    border-color: var(--primary);
+    box-shadow: 0 0 15px rgba(168, 85, 247, 0.2);
 }
 
 .metric-label {
     display: block;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     color: var(--text-secondary);
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.4rem;
     text-transform: uppercase;
-    font-weight: 500;
+    font-weight: 600;
+    letter-spacing: 0.5px;
 }
 
 .metric-value {
     display: block;
-    font-size: 1.25rem;
+    font-size: 1.1rem;
     font-weight: 700;
     color: var(--primary);
     font-family: 'Fira Code', monospace;
+    line-height: 1.2;
+}
+
+[data-theme="dark"] .metric-value {
+    color: var(--primary-light);
+    text-shadow: 0 0 10px rgba(168, 85, 247, 0.3);
 }
 
 .preview-header {
@@ -885,6 +1108,16 @@ body {
     margin-left: 0.75rem;
     cursor: pointer;
     flex: 1;
+    background-color: transparent;
+    padding: 0px;
+}
+
+[data-theme="dark"] .form-check-label {
+    margin-left: 0.75rem;
+    cursor: pointer;
+    flex: 1;
+    background-color: transparent;
+    padding: 0px;
 }
 
 /* Config Summary */
@@ -919,6 +1152,10 @@ body {
     font-size: 1.1rem;
     font-weight: 600;
     color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    width: 100%;
 }
 
 /* Train Button */
@@ -957,7 +1194,7 @@ body {
 
 /* Success state */
 .btn-train.btn-success {
-    background: linear-gradient(135deg, #14b8a6, #0d9488);
+    background: linear-gradient(135deg, #06b6d4, #72cada);
     color: white !important;
 }
 
@@ -1823,6 +2060,10 @@ body {
     background: linear-gradient(135deg, var(--success), #0d9488);
 }
 
+.models-section .bg-success {
+    background: linear-gradient(135deg, var(--success), #0d9488);
+}
+
 .model-testing-section .bg-primary {
     background: linear-gradient(135deg, var(--primary), #7e22ce);
 }
@@ -2069,6 +2310,25 @@ body {
 [data-theme="dark"] #reward-components .form-select {
     background-color: var(--bg-secondary);
     color: var(--text-primary);
+}
+
+/* Dark mode overrides for Step 3 Training Configuration */
+[data-theme="dark"] #step-3 .form-label {
+    color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] #step-3 .form-control,
+[data-theme="dark"] #step-3 .form-select {
+    background: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] #step-3 .form-control:focus,
+[data-theme="dark"] #step-3 .form-select:focus {
+    background: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--primary) !important;
 }
 
 /* Ensure all labels in step 6 are visible */
@@ -2790,24 +3050,88 @@ body {
 /* Alerts, Toasts & Notifications */
 /* ============================================================================ */
 
+/* Bootstrap utility class overrides */
+.bg-success {
+    background-color: #06b6d4 !important;
+}
+
+.bg-danger {
+    background-color: var(--danger) !important;
+}
+
+.bg-warning {
+    background-color: var(--warning) !important;
+}
+
+.bg-info {
+    background-color: var(--info) !important;
+}
+
+.text-danger {
+    color: var(--danger) !important;
+}
+
+.text-warning {
+    color: var(--warning) !important;
+}
+
+.text-info {
+    color: var(--info) !important;
+}
+
+/* Success toasts - cyan background with white text */
+.toast.bg-success {
+    background-color: #06b6d4 !important;
+    color: white !important;
+    border: none;
+}
+
+.toast.bg-success .toast-body {
+    color: white !important;
+}
+
+.toast.bg-danger {
+    background-color: var(--danger) !important;
+    color: white !important;
+    border: none;
+}
+
+.toast.bg-warning {
+    background-color: var(--warning) !important;
+    color: white !important;
+    border: none;
+}
+
+.toast.bg-info {
+    background-color: var(--info) !important;
+    color: white !important;
+    border: none;
+}
+
+/* Alert styles */
 .alert-success,
 .toast-success,
 .notification-success {
-    background-color: rgba(20, 184, 166, 0.1);
-    border: 1px solid var(--success);
+    background-color: rgba(6, 182, 212, 0.1);
+    border: 1px solid #06b6d4;
     color: var(--text-primary);
 }
 
 .alert-success strong {
-    color: var(--success);
+    color: #06b6d4;
 }
 
 [data-theme="dark"] .alert-success,
 [data-theme="dark"] .toast-success,
 [data-theme="dark"] .notification-success {
-    background-color: rgba(20, 184, 166, 0.15);
-    border-color: var(--success);
+    background-color: rgba(6, 182, 212, 0.15);
+    border-color: #06b6d4;
     color: var(--text-primary);
+}
+
+[data-theme="dark"] .toast.bg-success {
+    background-color: #06b6d4 !important;
+    color: white !important;
 }
 
 .alert-info {
@@ -2980,6 +3304,42 @@ body {
     color: white;
 }
 
+.btn-outline-success {
+    background: transparent;
+    border: 2px solid #06b6d4;
+    color: #06b6d4;
+}
+
+.btn-outline-success:hover {
+    background: #06b6d4;
+    border-color: #06b6d4;
+    color: white;
+}
+
+.btn-outline-warning {
+    background: transparent;
+    border: 2px solid var(--warning);
+    color: var(--warning);
+}
+
+.btn-outline-warning:hover {
+    background: var(--warning);
+    border-color: var(--warning);
+    color: white;
+}
+
+.btn-outline-info {
+    background: transparent;
+    border: 2px solid var(--info);
+    color: var(--info);
+}
+
+.btn-outline-info:hover {
+    background: var(--info);
+    border-color: var(--info);
+    color: white;
+}
+
 /* Action buttons (header icons) */
 .action-btn {
     width: 26px;
@@ -3088,3 +3448,36 @@ body {
     color: var(--text-secondary);
 }
 
+/* ============================================================================
+   Streaming Comparison Styles
+   ============================================================================ */
+
+.streaming-text {
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.02);
+    border-radius: 4px;
+    position: relative;
+}
+
+[data-theme="dark"] .streaming-text {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Smooth scrolling for streaming content */
+.streaming-text {
+    scroll-behavior: smooth;
+}
+
+/* Optional: Add blinking cursor effect when generating */
+#trained-status .fa-spinner,
+#base-status .fa-spinner {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}

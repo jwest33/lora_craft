@@ -129,6 +129,11 @@ const AppState = {
             this.stepValidation = state.stepValidation || {1: false, 2: false, 3: false, 4: false};
             this.configCache = state.configCache || {};
             this.config = state.config || {};
+
+            // Always reset steps 5 and 6 validation since they depend on runtime state
+            // (trained models list) which isn't persisted
+            this.stepValidation[5] = false;
+            this.stepValidation[6] = false;
         }
     }
 };

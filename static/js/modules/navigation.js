@@ -15,6 +15,10 @@
             }
 
             this.initializeCollapseInstances();
+
+            // Reset currentStep to match the initial UI state (step 1 is always shown by default)
+            AppState.setCurrentStep(1);
+
             this.updateStepIndicators();
             this.updateValidGenerations();
         },
@@ -59,6 +63,15 @@
 
             if (!collapseElement) {
                 return;
+            }
+
+            // Check if this step is being expanded
+            const isCurrentlyCollapsed = !collapseElement.classList.contains('show');
+
+            // Update current step and indicators when expanding a step
+            if (isCurrentlyCollapsed) {
+                AppState.setCurrentStep(stepNum);
+                this.updateStepIndicators();
             }
 
             // Check if Bootstrap is available

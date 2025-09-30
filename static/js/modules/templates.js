@@ -219,31 +219,54 @@
             const assistantPrefix = document.getElementById('assistant-prefix')?.value || '';
             const assistantSuffix = document.getElementById('assistant-suffix')?.value || '';
 
-            // Get the actual system prompt
+            // Get the actual system prompt based on template selection
             let systemPrompt = 'You are a helpful assistant.';
-            const templateSelect = document.getElementById('template-select');
-            if (templateSelect?.value === 'custom') {
-                // For custom template, use custom-system-prompt
-                const customSystemPrompt = document.getElementById('custom-system-prompt');
-                if (customSystemPrompt?.value) {
-                    systemPrompt = customSystemPrompt.value;
+            const templateSelect = document.getElementById('prompt-template-select');
+            const customSystemPrompt = document.getElementById('custom-system-prompt');
+            const systemPromptField = document.getElementById('system-prompt');
+            const templateEditor = document.getElementById('template-editor');
+
+            // Check if custom template editor is visible and has content
+            const isCustomEditorVisible = templateEditor && templateEditor.style.display !== 'none';
+            const hasCustomContent = customSystemPrompt?.value && customSystemPrompt.value.trim() !== '';
+
+            // Prioritize custom-system-prompt if the custom editor is visible
+            if (isCustomEditorVisible && hasCustomContent) {
+                systemPrompt = customSystemPrompt.value;
+                // Sync to hidden field for backend
+                if (systemPromptField) {
+                    systemPromptField.value = customSystemPrompt.value;
+                }
+            } else if (templateSelect?.value === 'custom' && hasCustomContent) {
+                // Fallback: use custom-system-prompt if custom is explicitly selected
+                systemPrompt = customSystemPrompt.value;
+                if (systemPromptField) {
+                    systemPromptField.value = customSystemPrompt.value;
                 }
             } else {
-                // For built-in templates, use system-prompt
-                const systemPromptField = document.getElementById('system-prompt');
+                // For built-in templates, use system-prompt (hidden field)
                 if (systemPromptField?.value) {
                     systemPrompt = systemPromptField.value;
                 }
             }
 
-            // Create example conversation
+            // Get reasoning and solution markers for GRPO format
+            const reasoningStart = document.getElementById('custom-reasoning-start')?.value || '<start_working_out>';
+            const reasoningEnd = document.getElementById('custom-reasoning-end')?.value || '<end_working_out>';
+            const solutionStart = document.getElementById('custom-solution-start')?.value || '<SOLUTION>';
+            const solutionEnd = document.getElementById('custom-solution-end')?.value || '</SOLUTION>';
+
+            // Create example conversation showing GRPO training format
+            const userMessage = 'What is 2 + 2?';
+            const assistantMessage = `${reasoningStart}Let me think about this. 2 + 2 equals 4.${reasoningEnd}\n${solutionStart}4${solutionEnd}`;
+
             const exampleConversation = this.formatConversation(
                 systemPrefix, systemSuffix,
                 userPrefix, userSuffix,
                 assistantPrefix, assistantSuffix,
                 systemPrompt,
-                'Hello! How are you?',
-                'I\'m doing well, thank you! How can I help you today?'
+                userMessage,
+                assistantMessage
             );
 
             // Display with syntax highlighting
@@ -254,11 +277,27 @@
         formatConversation(sysPrefix, sysSuffix, userPrefix, userSuffix, asstPrefix, asstSuffix, system, user, assistant) {
             let formatted = '';
 
+            // Add system prompt with proper spacing
             if (system) {
                 formatted += sysPrefix + system + sysSuffix;
+                // Add newline separation if suffixes don't already provide it
+                if (sysSuffix && !sysSuffix.endsWith('\n')) {
+                    formatted += '\n';
+                } else if (!sysSuffix) {
+                    formatted += '\n\n';
+                }
             }
 
+            // Add user message with proper spacing
             formatted += userPrefix + user + userSuffix;
+            // Add newline separation if suffixes don't already provide it
+            if (userSuffix && !userSuffix.endsWith('\n')) {
+                formatted += '\n';
+            } else if (!userSuffix) {
+                formatted += '\n\n';
+            }
+
+            // Add assistant response
             formatted += asstPrefix + assistant + asstSuffix;
 
             return formatted;

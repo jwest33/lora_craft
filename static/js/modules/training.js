@@ -56,6 +56,79 @@
                 return;
             }
 
+            // Common chart options
+            const commonOptions = {
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 2,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 15
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        padding: 12,
+                        titleFont: { size: 14, weight: 'bold' },
+                        bodyFont: { size: 12 },
+                        displayColors: true
+                    }
+                }
+            };
+
+            // Reward chart with std deviation bands
+            const rewardCtx = document.getElementById('reward-chart');
+            if (rewardCtx) {
+                AppState.charts.reward = new Chart(rewardCtx.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'Mean Reward',
+                            data: [],
+                            borderColor: 'rgb(251, 146, 60)',
+                            backgroundColor: 'rgba(251, 146, 60, 0.1)',
+                            borderWidth: 3,
+                            tension: 0.3,
+                            fill: false
+                        }, {
+                            label: 'Reward Std',
+                            data: [],
+                            borderColor: 'rgb(251, 191, 36)',
+                            backgroundColor: 'rgba(251, 191, 36, 0.05)',
+                            borderWidth: 1,
+                            borderDash: [5, 5],
+                            tension: 0.3,
+                            fill: false
+                        }]
+                    },
+                    options: {
+                        ...commonOptions,
+                        plugins: {
+                            ...commonOptions.plugins,
+                            title: { display: true, text: 'Reward Metrics', font: { size: 16, weight: 'bold' } }
+                        },
+                        scales: {
+                            x: {
+                                title: { display: true, text: 'Training Step', font: { size: 12 } },
+                                grid: { color: 'rgba(128, 128, 128, 0.1)' }
+                            },
+                            y: {
+                                title: { display: true, text: 'Reward Value', font: { size: 12 } },
+                                grid: { color: 'rgba(128, 128, 128, 0.1)' }
+                            }
+                        }
+                    }
+                });
+            }
+
             // Loss chart
             const lossCtx = document.getElementById('loss-chart');
             if (lossCtx) {
@@ -68,25 +141,193 @@
                             data: [],
                             borderColor: 'rgb(147, 51, 234)',
                             backgroundColor: 'rgba(147, 51, 234, 0.1)',
-                            tension: 0.1
+                            borderWidth: 3,
+                            tension: 0.3
                         }, {
                             label: 'Validation Loss',
                             data: [],
                             borderColor: 'rgb(59, 130, 246)',
                             backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                            tension: 0.1
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            tension: 0.3
                         }]
                     },
                     options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
+                        ...commonOptions,
                         plugins: {
-                            legend: { position: 'top' },
-                            title: { display: true, text: 'Training Loss' }
+                            ...commonOptions.plugins,
+                            title: { display: true, text: 'Training Loss', font: { size: 16, weight: 'bold' } }
                         },
                         scales: {
-                            x: { title: { display: true, text: 'Step' } },
-                            y: { title: { display: true, text: 'Loss' } }
+                            x: {
+                                title: { display: true, text: 'Training Step', font: { size: 12 } },
+                                grid: { color: 'rgba(128, 128, 128, 0.1)' }
+                            },
+                            y: {
+                                title: { display: true, text: 'Loss', font: { size: 12 } },
+                                grid: { color: 'rgba(128, 128, 128, 0.1)' }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // KL Divergence & Entropy chart
+            const klEntropyCtx = document.getElementById('kl-entropy-chart');
+            if (klEntropyCtx) {
+                AppState.charts.klEntropy = new Chart(klEntropyCtx.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'KL Divergence',
+                            data: [],
+                            borderColor: 'rgb(239, 68, 68)',
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            yAxisID: 'y'
+                        }, {
+                            label: 'Entropy',
+                            data: [],
+                            borderColor: 'rgb(34, 197, 94)',
+                            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            yAxisID: 'y1'
+                        }]
+                    },
+                    options: {
+                        ...commonOptions,
+                        plugins: {
+                            ...commonOptions.plugins,
+                            title: { display: true, text: 'KL Divergence & Entropy', font: { size: 16, weight: 'bold' } }
+                        },
+                        scales: {
+                            x: {
+                                title: { display: true, text: 'Training Step', font: { size: 12 } },
+                                grid: { color: 'rgba(128, 128, 128, 0.1)' }
+                            },
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                title: { display: true, text: 'KL Divergence', font: { size: 12 }, color: 'rgb(239, 68, 68)' },
+                                grid: { color: 'rgba(128, 128, 128, 0.1)' }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                title: { display: true, text: 'Entropy', font: { size: 12 }, color: 'rgb(34, 197, 94)' },
+                                grid: { drawOnChartArea: false }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Completion Statistics chart
+            const completionStatsCtx = document.getElementById('completion-stats-chart');
+            if (completionStatsCtx) {
+                AppState.charts.completionStats = new Chart(completionStatsCtx.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'Mean Length',
+                            data: [],
+                            borderColor: 'rgb(59, 130, 246)',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            borderWidth: 3,
+                            tension: 0.3
+                        }, {
+                            label: 'Min Length',
+                            data: [],
+                            borderColor: 'rgb(168, 85, 247)',
+                            backgroundColor: 'rgba(168, 85, 247, 0.05)',
+                            borderWidth: 1,
+                            borderDash: [3, 3],
+                            tension: 0.3
+                        }, {
+                            label: 'Max Length',
+                            data: [],
+                            borderColor: 'rgb(236, 72, 153)',
+                            backgroundColor: 'rgba(236, 72, 153, 0.05)',
+                            borderWidth: 1,
+                            borderDash: [3, 3],
+                            tension: 0.3
+                        }]
+                    },
+                    options: {
+                        ...commonOptions,
+                        plugins: {
+                            ...commonOptions.plugins,
+                            title: { display: true, text: 'Completion Length Statistics', font: { size: 16, weight: 'bold' } }
+                        },
+                        scales: {
+                            x: {
+                                title: { display: true, text: 'Training Step', font: { size: 12 } },
+                                grid: { color: 'rgba(128, 128, 128, 0.1)' }
+                            },
+                            y: {
+                                title: { display: true, text: 'Token Count', font: { size: 12 } },
+                                grid: { color: 'rgba(128, 128, 128, 0.1)' },
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Clip Ratio chart
+            const clipRatioCtx = document.getElementById('clip-ratio-chart');
+            if (clipRatioCtx) {
+                AppState.charts.clipRatio = new Chart(clipRatioCtx.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'Region Mean',
+                            data: [],
+                            borderColor: 'rgb(99, 102, 241)',
+                            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                            borderWidth: 3,
+                            tension: 0.3
+                        }, {
+                            label: 'Low Mean',
+                            data: [],
+                            borderColor: 'rgb(239, 68, 68)',
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.3
+                        }, {
+                            label: 'High Mean',
+                            data: [],
+                            borderColor: 'rgb(34, 197, 94)',
+                            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.3
+                        }]
+                    },
+                    options: {
+                        ...commonOptions,
+                        plugins: {
+                            ...commonOptions.plugins,
+                            title: { display: true, text: 'Policy Clip Ratios', font: { size: 16, weight: 'bold' } }
+                        },
+                        scales: {
+                            x: {
+                                title: { display: true, text: 'Training Step', font: { size: 12 } },
+                                grid: { color: 'rgba(128, 128, 128, 0.1)' }
+                            },
+                            y: {
+                                title: { display: true, text: 'Clip Ratio', font: { size: 12 } },
+                                grid: { color: 'rgba(128, 128, 128, 0.1)' },
+                                beginAtZero: true,
+                                max: 1.0
+                            }
                         }
                     }
                 });
@@ -104,52 +345,27 @@
                             data: [],
                             borderColor: 'rgb(34, 197, 94)',
                             backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                            tension: 0.1
+                            borderWidth: 3,
+                            tension: 0.3,
+                            fill: true
                         }]
                     },
                     options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
+                        ...commonOptions,
                         plugins: {
-                            legend: { position: 'top' },
-                            title: { display: true, text: 'Learning Rate Schedule' }
+                            ...commonOptions.plugins,
+                            title: { display: true, text: 'Learning Rate Schedule', font: { size: 16, weight: 'bold' } }
                         },
                         scales: {
-                            x: { title: { display: true, text: 'Step' } },
+                            x: {
+                                title: { display: true, text: 'Training Step', font: { size: 12 } },
+                                grid: { color: 'rgba(128, 128, 128, 0.1)' }
+                            },
                             y: {
-                                title: { display: true, text: 'Learning Rate' },
-                                type: 'logarithmic'
+                                title: { display: true, text: 'Learning Rate', font: { size: 12 } },
+                                type: 'logarithmic',
+                                grid: { color: 'rgba(128, 128, 128, 0.1)' }
                             }
-                        }
-                    }
-                });
-            }
-
-            // Reward chart (for GRPO)
-            const rewardCtx = document.getElementById('reward-chart');
-            if (rewardCtx) {
-                AppState.charts.reward = new Chart(rewardCtx.getContext('2d'), {
-                    type: 'line',
-                    data: {
-                        labels: [],
-                        datasets: [{
-                            label: 'Average Reward',
-                            data: [],
-                            borderColor: 'rgb(251, 146, 60)',
-                            backgroundColor: 'rgba(251, 146, 60, 0.1)',
-                            tension: 0.1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { position: 'top' },
-                            title: { display: true, text: 'Average Reward' }
-                        },
-                        scales: {
-                            x: { title: { display: true, text: 'Step' } },
-                            y: { title: { display: true, text: 'Reward' } }
                         }
                     }
                 });
@@ -237,7 +453,7 @@
                 // Dataset config
                 dataset: {
                     path: document.getElementById('dataset-path')?.value,
-                    sample_size: parseInt(document.getElementById('sample-size')?.value) || 0,
+                    sample_size: parseInt(document.getElementById('max-samples')?.value) || null,
                     train_split: parseInt(document.getElementById('train-split')?.value) || 80
                 },
                 // Map frontend datasetType to backend source_type
@@ -415,10 +631,9 @@
         },
 
         updateMetrics(data) {
-            if (data.metrics) {
-                this.updateCharts(data.metrics);
-            }
-            this.updateTrainingStats(data);
+            // Data is already flat, not nested under 'metrics'
+            this.updateCharts(data);
+            this.updateMetricsPanel(data);
         },
 
         handleComplete(data) {
@@ -451,38 +666,66 @@
             });
         },
 
-        // Update training statistics display
-        updateTrainingStats(data) {
-            const statsContainer = document.getElementById('training-stats');
-            if (!statsContainer) return;
+        // Update metrics panel display
+        updateMetricsPanel(data) {
+            // Helper function to safely update metric
+            const updateMetric = (id, value, formatter = null) => {
+                const element = document.getElementById(id);
+                if (element && value !== undefined && value !== null) {
+                    element.textContent = formatter ? formatter(value) : value;
+                }
+            };
 
-            statsContainer.innerHTML = `
-                <div class="row">
-                    <div class="col-md-3">
-                        <small class="text-muted">Epoch</small>
-                        <div class="h5">${data.current_epoch || 0} / ${data.total_epochs || 0}</div>
-                    </div>
-                    <div class="col-md-3">
-                        <small class="text-muted">Step</small>
-                        <div class="h5">${data.current_step || 0} / ${data.total_steps || 0}</div>
-                    </div>
-                    <div class="col-md-3">
-                        <small class="text-muted">Loss</small>
-                        <div class="h5">${(data.loss || 0).toFixed(4)}</div>
-                    </div>
-                    <div class="col-md-3">
-                        <small class="text-muted">Learning Rate</small>
-                        <div class="h5">${(data.learning_rate || 0).toExponential(2)}</div>
-                    </div>
-                </div>
-            `;
+            // Primary metrics
+            updateMetric('metric-step', data.step || 0);
+            // Display "Pre-training" for negative epochs, otherwise show epoch number
+            const epochValue = data.epoch !== undefined && data.epoch < 0
+                ? 'Pre-training'
+                : Math.floor(data.epoch || 0);
+            updateMetric('metric-epoch', epochValue);
+            updateMetric('metric-loss', data.loss, v => v.toFixed(4));
+            updateMetric('metric-reward', data.mean_reward, v => v.toFixed(4));
+            updateMetric('metric-reward-std', data.reward_std, v => v.toFixed(4));
+            updateMetric('metric-lr', data.learning_rate, v => v.toExponential(2));
+
+            // GRPO-specific metrics
+            updateMetric('metric-kl', data.kl, v => v.toFixed(6));
+            updateMetric('metric-entropy', data.entropy, v => v.toFixed(4));
+            updateMetric('metric-grad-norm', data.grad_norm, v => v.toFixed(4));
+
+            // Completion length (mean)
+            const meanLength = data['completions/mean_length'];
+            updateMetric('metric-comp-length', meanLength, v => v.toFixed(1));
+
+            // Clipped ratio (from completions)
+            const clippedRatio = data['completions/clipped_ratio'];
+            updateMetric('metric-clipped-ratio', clippedRatio, v => (v * 100).toFixed(1) + '%');
+
+            // Clip region mean
+            const clipRegion = data['clip_ratio/region_mean'];
+            updateMetric('metric-clip-region', clipRegion, v => (v * 100).toFixed(1) + '%');
         },
 
         // Update charts with new data
         updateCharts(metrics) {
+            const step = metrics.step;
+            if (!step) return;
+
+            // Update reward chart (mean + std)
+            if (AppState.charts.reward && metrics.mean_reward !== undefined) {
+                AppState.charts.reward.data.labels.push(step);
+                AppState.charts.reward.data.datasets[0].data.push(metrics.mean_reward);
+
+                if (metrics.reward_std !== undefined) {
+                    AppState.charts.reward.data.datasets[1].data.push(metrics.reward_std);
+                }
+
+                AppState.charts.reward.update('none');
+            }
+
             // Update loss chart
             if (AppState.charts.loss && metrics.loss !== undefined) {
-                AppState.charts.loss.data.labels.push(metrics.step);
+                AppState.charts.loss.data.labels.push(step);
                 AppState.charts.loss.data.datasets[0].data.push(metrics.loss);
 
                 if (metrics.val_loss !== undefined) {
@@ -492,18 +735,76 @@
                 AppState.charts.loss.update('none');
             }
 
-            // Update learning rate chart
-            if (AppState.charts.lr && metrics.learning_rate !== undefined) {
-                AppState.charts.lr.data.labels.push(metrics.step);
-                AppState.charts.lr.data.datasets[0].data.push(metrics.learning_rate);
-                AppState.charts.lr.update('none');
+            // Update KL & Entropy chart
+            if (AppState.charts.klEntropy) {
+                const hasKL = metrics.kl !== undefined;
+                const hasEntropy = metrics.entropy !== undefined;
+
+                if (hasKL || hasEntropy) {
+                    AppState.charts.klEntropy.data.labels.push(step);
+
+                    if (hasKL) {
+                        AppState.charts.klEntropy.data.datasets[0].data.push(metrics.kl);
+                    }
+                    if (hasEntropy) {
+                        AppState.charts.klEntropy.data.datasets[1].data.push(metrics.entropy);
+                    }
+
+                    AppState.charts.klEntropy.update('none');
+                }
             }
 
-            // Update reward chart
-            if (AppState.charts.reward && metrics.reward !== undefined) {
-                AppState.charts.reward.data.labels.push(metrics.step);
-                AppState.charts.reward.data.datasets[0].data.push(metrics.reward);
-                AppState.charts.reward.update('none');
+            // Update completion statistics chart
+            if (AppState.charts.completionStats) {
+                const meanLen = metrics['completions/mean_length'];
+                const minLen = metrics['completions/min_length'];
+                const maxLen = metrics['completions/max_length'];
+
+                if (meanLen !== undefined || minLen !== undefined || maxLen !== undefined) {
+                    AppState.charts.completionStats.data.labels.push(step);
+
+                    if (meanLen !== undefined) {
+                        AppState.charts.completionStats.data.datasets[0].data.push(meanLen);
+                    }
+                    if (minLen !== undefined) {
+                        AppState.charts.completionStats.data.datasets[1].data.push(minLen);
+                    }
+                    if (maxLen !== undefined) {
+                        AppState.charts.completionStats.data.datasets[2].data.push(maxLen);
+                    }
+
+                    AppState.charts.completionStats.update('none');
+                }
+            }
+
+            // Update clip ratio chart
+            if (AppState.charts.clipRatio) {
+                const regionMean = metrics['clip_ratio/region_mean'];
+                const lowMean = metrics['clip_ratio/low_mean'];
+                const highMean = metrics['clip_ratio/high_mean'];
+
+                if (regionMean !== undefined || lowMean !== undefined || highMean !== undefined) {
+                    AppState.charts.clipRatio.data.labels.push(step);
+
+                    if (regionMean !== undefined) {
+                        AppState.charts.clipRatio.data.datasets[0].data.push(regionMean);
+                    }
+                    if (lowMean !== undefined) {
+                        AppState.charts.clipRatio.data.datasets[1].data.push(lowMean);
+                    }
+                    if (highMean !== undefined) {
+                        AppState.charts.clipRatio.data.datasets[2].data.push(highMean);
+                    }
+
+                    AppState.charts.clipRatio.update('none');
+                }
+            }
+
+            // Update learning rate chart
+            if (AppState.charts.lr && metrics.learning_rate !== undefined) {
+                AppState.charts.lr.data.labels.push(step);
+                AppState.charts.lr.data.datasets[0].data.push(metrics.learning_rate);
+                AppState.charts.lr.update('none');
             }
         },
 
@@ -553,16 +854,54 @@
 
         // Estimate training time
         estimateTrainingTime(config) {
-            // Rough estimate based on configuration
+            // GRPO-specific calculation
             const samples = config.dataset.sample_size || 1000;
-            const epochs = config.training.num_epochs;
-            const batchSize = config.training.batch_size;
-            const stepsPerEpoch = Math.ceil(samples / batchSize);
-            const totalSteps = stepsPerEpoch * epochs;
+            const epochs = config.training.num_epochs || 1;
+            const batchSize = config.training.batch_size || 4;
+            const numGenerations = config.grpo.num_generations || 2;
 
-            // Assume ~1 second per step (very rough estimate)
-            const estimatedSeconds = totalSteps;
-            return this.formatTime(estimatedSeconds * 1000);
+            // GRPO step calculation: each step processes batch_size/num_generations prompts
+            // because we generate num_generations completions per prompt
+            const effectivePromptsPerStep = Math.max(1, Math.floor(batchSize / numGenerations));
+            const stepsPerEpoch = Math.ceil(samples / effectivePromptsPerStep);
+            const grpoSteps = stepsPerEpoch * epochs;
+
+            // Add pre-training steps if enabled
+            let preTrainingSteps = 0;
+            if (config.pre_training && config.pre_training.enabled) {
+                const preTrainingSamples = config.pre_training.max_samples || Math.min(samples, 100);
+                const preTrainingEpochs = config.pre_training.epochs || 2;
+                preTrainingSteps = Math.ceil(preTrainingSamples / batchSize) * preTrainingEpochs;
+            }
+
+            const totalSteps = preTrainingSteps + grpoSteps;
+
+            // Realistic time per step for GRPO:
+            // - Generation: 5-15s (depends on model size, sequence length, num_generations)
+            // - Reward computation: 1-2s
+            // - Optimization: 1-2s
+            // Base estimate: 10-20 seconds per step
+
+            // Adjust based on model size (rough heuristic)
+            let timePerStepMin = 10;  // seconds
+            let timePerStepMax = 20;  // seconds
+
+            // For pre-training steps, use faster estimate (no reward computation, simpler)
+            const preTrainingTime = preTrainingSteps * 3; // ~3s per step for SFT
+
+            // GRPO training time
+            const minGrpoTime = grpoSteps * timePerStepMin;
+            const maxGrpoTime = grpoSteps * timePerStepMax;
+
+            const minSeconds = preTrainingTime + minGrpoTime;
+            const maxSeconds = preTrainingTime + maxGrpoTime;
+
+            // Return as range for honesty about uncertainty
+            if (minSeconds === maxSeconds) {
+                return this.formatTime(minSeconds * 1000);
+            } else {
+                return `${this.formatTime(minSeconds * 1000)} - ${this.formatTime(maxSeconds * 1000)}`;
+            }
         },
 
         // Handle LR schedule change

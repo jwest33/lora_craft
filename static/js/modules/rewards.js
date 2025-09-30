@@ -5,10 +5,12 @@
 let rewardPresets = {};
 let rewardTemplates = {};
 // Make selectedRewardConfig global for integration with app.js
-window.selectedRewardConfig = { type: 'preset', preset: 'math' };
+// Default to first quick-start template (math_problem_solving)
+window.selectedRewardConfig = { type: 'preset', preset_name: 'math' };
 let currentlySelectedCard = null;
 let selectedRewardName = null;
 let selectedRewardType = null;
+let isRestoringSession = false; // Track if we're restoring a saved session
 
 // Compatibility function for notifications
 function showNotification(message, type = 'info') {
@@ -393,20 +395,6 @@ function displayPresetComponents(details) {
             <div class="card-body">
                 <div class="components-list">
                     ${componentsHtml}
-                </div>
-                <hr>
-                <div class="example-section mt-3">
-                    <h6 class="text-primary">Example</h6>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <label class="small text-muted">Input:</label>
-                            <pre class="bg-light p-2 rounded small">${details.example_input}</pre>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="small text-muted">Expected Output:</label>
-                            <pre class="bg-light p-2 rounded small">${details.example_output}</pre>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -1203,7 +1191,13 @@ function testSelectedReward() {
 // Load saved selection on page load
 function loadSavedSelection() {
     const saved = localStorage.getItem('selectedReward');
-    if (saved) {
+    // Check if we're loading an existing configuration (indicated by saved config ID or active session)
+    const savedConfigId = localStorage.getItem('selectedConfigId');
+    const hasActiveSession = document.getElementById('sessions-list')?.children?.length > 0;
+
+    // Only restore saved selection if we're resuming work on an existing config
+    // For new configs, let the default quick-start selection take effect
+    if (saved && (savedConfigId || isRestoringSession)) {
         try {
             const config = JSON.parse(saved);
             if (config.preset_name) {
@@ -1215,6 +1209,19 @@ function loadSavedSelection() {
         } catch (e) {
             console.error('Failed to load saved reward selection:', e);
         }
+    } else {
+        // For new configurations, select the first quick-start template by default
+        setTimeout(() => {
+            // Try to select math template, fallback to first available preset
+            if (rewardPresets['math']) {
+                selectPresetByName('math', true);
+            } else {
+                const firstPreset = Object.keys(rewardPresets)[0];
+                if (firstPreset) {
+                    selectPresetByName(firstPreset, true);
+                }
+            }
+        }, 500);
     }
 }
 

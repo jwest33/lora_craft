@@ -6,6 +6,9 @@
     'use strict';
 
     const CoreModule = {
+        // Interval ID for system status updates
+        systemStatusInterval: null,
+
         // Initialize the core module
         init() {
             this.setupEventListeners();
@@ -13,6 +16,7 @@
             this.setupIconScrollEffect();
             this.loadSavedState();
             this.updateSystemStatus();
+            this.startSystemStatusUpdates();
         },
 
         // Setup global event listeners
@@ -291,6 +295,22 @@
             });
 
             modal.show();
+        },
+
+        // Start periodic system status updates
+        startSystemStatusUpdates() {
+            // Update system status every 3 seconds
+            this.systemStatusInterval = setInterval(() => {
+                this.updateSystemStatus();
+            }, 3000);
+        },
+
+        // Stop periodic system status updates
+        stopSystemStatusUpdates() {
+            if (this.systemStatusInterval) {
+                clearInterval(this.systemStatusInterval);
+                this.systemStatusInterval = null;
+            }
         },
 
         // Update system status indicators

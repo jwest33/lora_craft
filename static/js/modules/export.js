@@ -14,6 +14,7 @@
         init() {
             this.setupEventListeners();
             this.loadExportableModels();
+            this.displayTrainedModelCards();
         },
 
         // Setup export-related event listeners
@@ -73,6 +74,122 @@
                 })
                 .catch(error => {
                     console.error('Failed to load server models:', error);
+                });
+        },
+
+        // Display trained model cards in the export view
+        displayTrainedModelCards() {
+            const modelsListContainer = document.getElementById('trained-models-list');
+            if (!modelsListContainer) return;
+
+            // Show loading state
+            modelsListContainer.innerHTML = '<div class="text-center text-muted p-4"><i class="fas fa-spinner fa-spin"></i> Loading models...</div>';
+
+            // Fetch trained models from server
+            fetch('/api/trained_models')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.models && data.models.length > 0) {
+                        // Update AppState
+                        AppState.trainedModels = data.models;
+
+                        // Generate model cards HTML
+                        const cardsHtml = data.models.map(model => {
+                            // Extract model name from various sources
+                            let modelName = model.model_name;
+                            if (!modelName || modelName === 'Unknown') {
+                                // Try to get from training_config
+                                modelName = model.training_config?.model?.modelName ||
+                                           model.display_name ||
+                                           model.session_id ||
+                                           'Unknown Model';
+                            }
+
+                            const createdDate = new Date(model.created_at || Date.now());
+                            const completedDate = new Date(model.modified_at || Date.now());
+                            const bestReward = model.best_reward !== null && model.best_reward !== undefined
+                                ? model.best_reward.toFixed(4)
+                                : 'N/A';
+
+                            // Get epochs from various sources
+                            const epochs = model.epochs ||
+                                          model.epochs_trained ||
+                                          model.training_config?.training?.num_epochs ||
+                                          0;
+
+                            // Extract dataset name if available
+                            const datasetPath = model.training_config?.dataset_path || model.training_config?.dataset?.path;
+                            let datasetName = '';
+                            if (datasetPath) {
+                                const pathParts = datasetPath.split('/');
+                                datasetName = pathParts[pathParts.length - 1];
+                                if (datasetName.length > 30) {
+                                    datasetName = datasetName.substring(0, 27) + '...';
+                                }
+                            }
+
+                            return `
+                                <div class="card model-card mb-3">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <div class="flex-grow-1">
+                                                <h6 class="card-title mb-0">
+                                                    <i class="fas fa-robot text-primary"></i>
+                                                    ${CoreModule.escapeHtml(modelName)}
+                                                </h6>
+                                                ${datasetName ? `<small class="text-muted"><i class="fas fa-database"></i> ${CoreModule.escapeHtml(datasetName)}</small>` : ''}
+                                            </div>
+                                            <span class="badge bg-success">Completed</span>
+                                        </div>
+
+                                        <div class="model-meta text-muted small mb-3">
+                                            <div><i class="fas fa-calendar"></i> Completed: ${completedDate.toLocaleString()}</div>
+                                            <div><i class="fas fa-layer-group"></i> Epochs: ${epochs}</div>
+                                            <div><i class="fas fa-award"></i> Best Reward: ${bestReward}</div>
+                                            ${model.has_final_checkpoint ? '<div><i class="fas fa-check-circle text-success"></i> Final checkpoint saved</div>' : ''}
+                                        </div>
+
+                                        <div class="d-flex gap-2">
+                                            <button class="btn btn-sm btn-primary flex-grow-1"
+                                                    onclick="ExportModule.showExportDialog('${CoreModule.escapeHtml(model.session_id)}', '${CoreModule.escapeHtml(model.path)}')">
+                                                <i class="fas fa-file-export"></i> Export
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-secondary"
+                                                    onclick="ExportModule.showModelDetails('${CoreModule.escapeHtml(model.session_id)}')">
+                                                <i class="fas fa-info-circle"></i> Details
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('');
+
+                        modelsListContainer.innerHTML = cardsHtml;
+                    } else {
+                        // No models found
+                        modelsListContainer.innerHTML = `
+                            <div class="text-center text-muted p-4">
+                                <i class="fas fa-inbox fa-3x mb-3 opacity-25"></i>
+                                <p class="mb-0">No trained models available</p>
+                                <small>Complete a training session to see models here</small>
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    console.error('Failed to load trained models:', error);
+                    modelsListContainer.innerHTML = `
+                        <div class="text-center text-danger p-4">
+                            <i class="fas fa-exclamation-triangle mb-2"></i>
+                            <p class="mb-0">Failed to load models</p>
+                            <small>${CoreModule.escapeHtml(error.message)}</small>
+                            <div class="mt-2">
+                                <button class="btn btn-sm btn-outline-primary" onclick="ExportModule.displayTrainedModelCards()">
+                                    <i class="fas fa-redo"></i> Retry
+                                </button>
+                            </div>
+                        </div>
+                    `;
                 });
         },
 
@@ -519,6 +636,9 @@
                         // Reload exportable models dropdown
                         this.loadExportableModels();
 
+                        // Reload model cards display
+                        this.displayTrainedModelCards();
+
                         CoreModule.showAlert('Model list refreshed successfully', 'success');
                     } else {
                         throw new Error('Invalid response format');
@@ -717,6 +837,79 @@
                 // Continue to next model despite error
                 this.exportModelsSequentially(models, format, quantize, index + 1);
             });
+        },
+
+        // Show export dialog for a specific model
+        showExportDialog(sessionId, modelPath) {
+            // Populate export form with the selected model
+            const modelSelect = document.getElementById('export-model-select');
+            if (modelSelect) {
+                modelSelect.value = `server:${modelPath}`;
+                this.onModelSelectChange();
+            }
+
+            // Scroll to export form or show it
+            const exportSection = document.querySelector('.export-config-section');
+            if (exportSection) {
+                exportSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        },
+
+        // Show detailed information about a model
+        showModelDetails(sessionId) {
+            const detailsPanel = document.getElementById('model-details-panel');
+            const detailsContent = document.getElementById('model-details-content');
+
+            if (!detailsPanel || !detailsContent) {
+                console.warn('Model details panel not found');
+                return;
+            }
+
+            // Show loading state
+            detailsContent.innerHTML = '<div class="text-center p-3"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+            detailsPanel.style.display = 'block';
+
+            // Fetch model details
+            fetch(`/api/export/checkpoints/${sessionId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.checkpoints) {
+                        const checkpointsList = data.checkpoints.map(cp => `
+                            <li class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>${CoreModule.escapeHtml(cp.name)}</strong>
+                                        <br>
+                                        <small class="text-muted">${cp.path}</small>
+                                    </div>
+                                </div>
+                            </li>
+                        `).join('');
+
+                        detailsContent.innerHTML = `
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0">Model Checkpoints</h6>
+                                </div>
+                                <div class="card-body">
+                                    <ul class="list-group list-group-flush">
+                                        ${checkpointsList}
+                                    </ul>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        detailsContent.innerHTML = '<div class="alert alert-info">No checkpoint details available</div>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Failed to load model details:', error);
+                    detailsContent.innerHTML = `
+                        <div class="alert alert-danger">
+                            Failed to load model details: ${CoreModule.escapeHtml(error.message)}
+                        </div>
+                    `;
+                });
         },
 
         // Hide model details panel

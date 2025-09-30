@@ -12,7 +12,10 @@
     transition: all 0.3s ease;
 }
 
-[data-theme="dark"] .reward-configuration {
+[data-theme="dark"] 
+.config-section, 
+.template-editor, 
+.reward-configuration {
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4),
                 0 0 30px rgba(168, 85, 247, 0.1);
 }
@@ -64,7 +67,7 @@
     background: transparent;
     border: none;
     border-radius: 0 0 12px 12px;
-    min-height: 400px;
+    min-height: 250px;
     padding: 1.5rem;
 }
 

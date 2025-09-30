@@ -343,6 +343,22 @@
         }
     };
 
+    window.toggleComparisonMode = function() {
+        if (window.TestingModule && TestingModule.toggleComparisonMode) {
+            TestingModule.toggleComparisonMode();
+        } else {
+            console.error('TestingModule.toggleComparisonMode not available');
+        }
+    };
+
+    window.updateComparisonModelInfo = function() {
+        if (window.TestingModule && TestingModule.updateComparisonModelInfo) {
+            TestingModule.updateComparisonModelInfo();
+        } else {
+            console.error('TestingModule.updateComparisonModelInfo not available');
+        }
+    };
+
     window.clearBatchTestFile = function() {
         if (window.TestingModule && TestingModule.clearBatchTestFile) {
             TestingModule.clearBatchTestFile();

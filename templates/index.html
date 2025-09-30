@@ -150,8 +150,12 @@
                         <button class="btn btn-outline-primary w-100 mb-2" onclick="loadSelectedConfig()">
                             <i class="fas fa-folder-open"></i> Load Selected
                         </button>
-                        <button class="btn btn-outline-danger w-100" onclick="deleteSelectedConfig()">
+                        <button class="btn btn-outline-danger w-100 mb-2" onclick="deleteSelectedConfig()">
                             <i class="fas fa-trash"></i> Delete Selected
+                        </button>
+                        <hr class="my-2">
+                        <button class="btn btn-outline-warning w-100" onclick="resetConfiguration()">
+                            <i class="fas fa-redo"></i> Reset Configuration
                         </button>
                     </div>
                 </div>
@@ -507,6 +511,31 @@
 
                                 <!-- Template Editor (for Custom mode) -->
                                 <div id="template-editor" style="display: none;">
+                                    <!-- Saved Templates List -->
+                                    <div class="row mb-3">
+                                        <div class="col-md-8">
+                                            <label class="form-label">Load Saved Template</label>
+                                            <select class="form-select form-select-sm" id="saved-templates-list">
+                                                <option value="">Select a saved template...</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">&nbsp;</label>
+                                            <button class="btn btn-sm btn-outline-primary w-100" onclick="loadSelectedTemplate()">
+                                                <i class="fas fa-folder-open"></i> Load Template
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div class="btn-group mb-3">
+                                        <button class="btn btn-sm btn-outline-primary" onclick="window.testTemplate()">
+                                            <i class="fas fa-vial"></i> Test Template
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-success" onclick="saveCustomTemplate()">
+                                            <i class="fas fa-save"></i> Save Template
+                                        </button>
+                                    </div>
+
                                     <div class="row mb-3">
                                         <div class="col-md-6">
                                             <label class="form-label">Reasoning Start Marker</label>
@@ -529,33 +558,10 @@
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label">System Prompt</label>
-                                        <textarea class="form-control" id="custom-system-prompt" rows="3" oninput="updateTemplatePreview()">You are given a problem.
+                                        <textarea class="form-control" id="custom-system-prompt" rows="6" oninput="updateTemplatePreview()">You are given a problem.
 Think about the problem and provide your working out.
 Place it between &lt;start_working_out&gt; and &lt;end_working_out&gt;.
 Then, provide your solution between &lt;SOLUTION&gt;&lt;/SOLUTION&gt;</textarea>
-                                    </div>
-
-                                    <div class="btn-group mb-3">
-                                        <button class="btn btn-sm btn-outline-primary" onclick="window.testTemplate()">
-                                            <i class="fas fa-vial"></i> Test Template
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-success" onclick="saveCustomTemplate()">
-                                            <i class="fas fa-save"></i> Save Template
-                                        </button>
-                                    </div>
-
-                                    <!-- Saved Templates List -->
-                                    <div class="row mb-3">
-                                        <div class="col-md-8">
-                                            <select class="form-select form-select-sm" id="saved-templates-list">
-                                                <option value="">Select a saved template...</option>
-                                            </select>
-                                        </div>
-                                        <div class="col-md-4">
-                                            <button class="btn btn-sm btn-outline-primary w-100" onclick="loadSelectedTemplate()">
-                                                <i class="fas fa-folder-open"></i> Load Template
-                                            </button>
-                                        </div>
                                     </div>
                                 </div>
 
@@ -640,8 +646,8 @@ Then, provide your solution between &lt;SOLUTION&gt;&lt;/SOLUTION&gt;</textarea>
                                                 </div>
                                                 <div class="col-md-6">
                                                     <label class="form-label small">Pre-training Sample Size</label>
-                                                    <input type="number" class="form-control form-control-sm" id="pre-training-samples" placeholder="Auto (filters from training dataset)" min="10" max="5000">
-                                                    <small class="text-muted">Pre-training uses the SAME dataset as main training (learns format on your actual data). Leave empty to use all samples, or specify a smaller subset. Official GRPO: ~59 filtered samples</small>
+                                                    <input type="number" class="form-control form-control-sm input-highlight" id="pre-training-samples" placeholder="Auto (filters from training dataset)" min="10" max="5000">
+                                                    <small class="text-muted">Leave empty to use all samples, or specify a smaller subset. Official GRPO: ~59 filtered samples</small>
                                                 </div>
                                             </div>
                                             <div class="row mt-2">
@@ -1029,7 +1035,7 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                     <div class="col-md-3">
                                         <div class="form-group">
                                             <label class="form-label">Samples Per Epoch <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Number of samples to use per epoch. Leave empty to use all available samples per epoch"></i></label>
-                                            <input type="number" class="form-control" id="max-samples" placeholder="All" min="1">
+                                            <input type="number" class="form-control input-highlight" id="max-samples" placeholder="All" min="1">
                                         </div>
                                     </div>
                                 </div>
@@ -1341,9 +1347,6 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                             <div id="training-monitor" class="training-monitor" style="display: none;">
                                 <h5 class="section-title">
                                     <i class="fas fa-chart-line"></i> Training Progress
-                                    <small class="text-muted ms-2" style="font-size: 0.7em; font-weight: normal;">
-                                        (Detailed metrics update every 10 steps)
-                                    </small>
                                 </h5>
 
                                 <!-- Progress Bar -->
@@ -1351,16 +1354,20 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                     <div id="training-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
                                 </div>
 
-                                <!-- Training Stats Container -->
-                                <div id="training-stats" class="mb-3"></div>
-
                                 <!-- Metrics Panel -->
-                                <div class="metrics-panel mb-3">
-                                    <div class="row">
+                                <div class="metrics-panel mb-4">
+                                    <!-- Primary Metrics -->
+                                    <div class="row mb-3">
                                         <div class="col-md-2">
                                             <div class="metric-item">
                                                 <span class="metric-label">Step</span>
                                                 <span class="metric-value" id="metric-step">0</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="metric-item">
+                                                <span class="metric-label">Epoch</span>
+                                                <span class="metric-value" id="metric-epoch">0</span>
                                             </div>
                                         </div>
                                         <div class="col-md-2">
@@ -1377,8 +1384,8 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                         </div>
                                         <div class="col-md-2">
                                             <div class="metric-item">
-                                                <span class="metric-label">Grad Norm</span>
-                                                <span class="metric-value" id="metric-grad-norm">--</span>
+                                                <span class="metric-label">Reward Std</span>
+                                                <span class="metric-value" id="metric-reward-std">--</span>
                                             </div>
                                         </div>
                                         <div class="col-md-2">
@@ -1387,25 +1394,89 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                                 <span class="metric-value" id="metric-lr">--</span>
                                             </div>
                                         </div>
+                                    </div>
+
+                                    <!-- GRPO-Specific Metrics -->
+                                    <div class="row">
                                         <div class="col-md-2">
                                             <div class="metric-item">
-                                                <span class="metric-label">Epoch</span>
-                                                <span class="metric-value" id="metric-epoch">0</span>
+                                                <span class="metric-label">KL Divergence</span>
+                                                <span class="metric-value" id="metric-kl">--</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="metric-item">
+                                                <span class="metric-label">Entropy</span>
+                                                <span class="metric-value" id="metric-entropy">--</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="metric-item">
+                                                <span class="metric-label">Comp. Length</span>
+                                                <span class="metric-value" id="metric-comp-length">--</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="metric-item">
+                                                <span class="metric-label">Clipped Ratio</span>
+                                                <span class="metric-value" id="metric-clipped-ratio">--</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="metric-item">
+                                                <span class="metric-label">Clip Region</span>
+                                                <span class="metric-value" id="metric-clip-region">--</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="metric-item">
+                                                <span class="metric-label">Grad Norm</span>
+                                                <span class="metric-value" id="metric-grad-norm">--</span>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
 
                                 <!-- Charts -->
-                                <div class="row">
-                                    <div class="col-md-4">
-                                        <canvas id="loss-chart"></canvas>
+                                <!-- Primary Charts -->
+                                <div class="row mb-4">
+                                    <div class="col-md-6">
+                                        <div class="chart-container">
+                                            <canvas id="reward-chart"></canvas>
+                                        </div>
                                     </div>
-                                    <div class="col-md-4">
-                                        <canvas id="reward-chart"></canvas>
+                                    <div class="col-md-6">
+                                        <div class="chart-container">
+                                            <canvas id="loss-chart"></canvas>
+                                        </div>
                                     </div>
-                                    <div class="col-md-4">
-                                        <canvas id="lr-chart"></canvas>
+                                </div>
+
+                                <!-- Secondary Charts -->
+                                <div class="row mb-4">
+                                    <div class="col-md-6">
+                                        <div class="chart-container">
+                                            <canvas id="kl-entropy-chart"></canvas>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="chart-container">
+                                            <canvas id="completion-stats-chart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Tertiary Charts -->
+                                <div class="row mb-4">
+                                    <div class="col-md-6">
+                                        <div class="chart-container">
+                                            <canvas id="clip-ratio-chart"></canvas>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="chart-container">
+                                            <canvas id="lr-chart"></canvas>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -1581,11 +1652,11 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                     <div class="comparison-mode mb-3">
                                         <label class="form-label fw-semibold">Comparison Mode</label>
                                         <div class="btn-group w-100" role="group" aria-label="Comparison mode">
-                                            <input type="radio" class="btn-check" name="comparison-mode" id="compare-base" value="base" checked onchange="toggleComparisonMode()">
+                                            <input type="radio" class="btn-check" name="comparison-mode" id="compare-base" value="base" checked>
                                             <label class="btn btn-outline-primary" for="compare-base">
                                                 <i class="fas fa-cube"></i> Compare with Base Model
                                             </label>
-                                            <input type="radio" class="btn-check" name="comparison-mode" id="compare-model" value="model" onchange="toggleComparisonMode()">
+                                            <input type="radio" class="btn-check" name="comparison-mode" id="compare-model" value="model">
                                             <label class="btn btn-outline-primary" for="compare-model">
                                                 <i class="fas fa-exchange-alt"></i> Compare with Another Model
                                             </label>
@@ -1599,7 +1670,7 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                                 <label class="form-label fw-semibold">
                                                     <i class="fas fa-star"></i> Primary Model
                                                 </label>
-                                                <select class="form-select" id="test-model-select" onchange="updateModelInfo()">
+                                                <select class="form-select" id="test-model-select">
                                                     <option value="">Loading models...</option>
                                                 </select>
                                                 <div class="mt-2">
@@ -1619,7 +1690,7 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                                 <label class="form-label fw-semibold">
                                                     <i class="fas fa-exchange-alt"></i> Comparison Model
                                                 </label>
-                                                <select class="form-select" id="comparison-model-select" onchange="updateComparisonModelInfo()">
+                                                <select class="form-select" id="comparison-model-select">
                                                     <option value="">Select a model to compare against...</option>
                                                 </select>
                                                 <div class="mt-2">
@@ -2436,7 +2507,7 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
     <script src="{{ url_for('static', filename='js/modules/export.js') }}"></script>
     <script src="{{ url_for('static', filename='js/modules/testing.js') }}"></script>
 
-    <script src="{{ url_for('static', filename='js/enhanced_rewards.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/rewards.js') }}"></script>
 
     <!-- Global function exports for onclick handlers -->
     <script src="{{ url_for('static', filename='js/globals.js') }}"></script>

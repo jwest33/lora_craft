@@ -9,17 +9,17 @@
         // Model definitions by family
         modelsByFamily: {
             qwen: [
-                { id: 'Qwen3 0.6B (600M, ~1.2GB)', name: 'Qwen3 0.6B', size: '600M', vram: '~1.2GB' },
-                { id: 'Qwen3 1.7B (1.7B, ~3.4GB)', name: 'Qwen3 1.7B', size: '1.7B', vram: '~3.4GB' },
-                { id: 'Qwen3 4B (4B, ~8GB)', name: 'Qwen3 4B', size: '4B', vram: '~8GB' },
-                { id: 'Qwen3 8B (8B, ~16GB)', name: 'Qwen3 8B', size: '8B', vram: '~16GB' }
+                { id: 'unsloth/Qwen3-0.6B', name: 'Qwen3 0.6B', size: '600M', vram: '~1.2GB' },
+                { id: 'unsloth/Qwen3-1.7B', name: 'Qwen3 1.7B', size: '1.7B', vram: '~3.4GB' },
+                { id: 'unsloth/Qwen3-4B', name: 'Qwen3 4B', size: '4B', vram: '~8GB' },
+                { id: 'unsloth/Qwen3-8B', name: 'Qwen3 8B', size: '8B', vram: '~16GB' }
             ],
             llama: [
-                { id: 'LLaMA 3.2 1B (1B, ~2GB)', name: 'LLaMA 3.2 1B', size: '1B', vram: '~2GB' },
-                { id: 'LLaMA 3.2 3B (3B, ~6GB)', name: 'LLaMA 3.2 3B', size: '3B', vram: '~6GB' }
+                { id: 'unsloth/Llama-3.2-1B-Instruct', name: 'LLaMA 3.2 1B', size: '1B', vram: '~2GB' },
+                { id: 'unsloth/Llama-3.2-3B-Instruct', name: 'LLaMA 3.2 3B', size: '3B', vram: '~6GB' }
             ],
             phi: [
-                { id: 'Phi-4 Reasoning (15B, ~30GB)', name: 'Phi-4 Reasoning', size: '15B', vram: '~30GB' }
+                { id: 'unsloth/phi-4-reasoning', name: 'Phi-4 Reasoning', size: '15B', vram: '~30GB' }
             ]
         },
 

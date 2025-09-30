@@ -130,6 +130,10 @@
             AppState.setConfigValue('datasetPath', datasetPath);
             AppState.setConfigValue('datasetName', datasetName);
 
+            // Set datasetType to 'popular' so it maps to 'huggingface' source_type
+            // This is crucial for the backend to know to download from HuggingFace
+            AppState.setConfigValue('datasetType', 'popular');
+
             // Update UI to show selection
             const datasetPathInput = document.getElementById('dataset-path');
             if (datasetPathInput) {
@@ -291,6 +295,7 @@
             // Update stats
             AppState.setConfigValue('datasetPath', data.path);
             AppState.setConfigValue('datasetSamples', data.sample_count);
+            AppState.setConfigValue('datasetType', 'upload');  // Explicitly set type to upload
             this.updateDatasetStats();
 
             // Update configuration summary
@@ -369,6 +374,7 @@
             // Store in app state
             AppState.setConfigValue('datasetPath', path);
             AppState.setConfigValue('datasetName', filename);
+            AppState.setConfigValue('datasetType', 'upload');  // Explicitly set type to upload
 
             // Update configuration summary
             if (typeof window.updateConfigSummary === 'function') {
@@ -715,12 +721,16 @@
             const solutionStart = document.getElementById('custom-solution-start');
             const solutionEnd = document.getElementById('custom-solution-end');
             const systemPrompt = document.getElementById('custom-system-prompt');
+            const hiddenSystemPrompt = document.getElementById('system-prompt');
 
             if (reasoningStart) reasoningStart.value = template.reasoning_start;
             if (reasoningEnd) reasoningEnd.value = template.reasoning_end;
             if (solutionStart) solutionStart.value = template.solution_start;
             if (solutionEnd) solutionEnd.value = template.solution_end;
             if (systemPrompt) systemPrompt.value = template.system_prompt;
+
+            // Update hidden field that backend uses
+            if (hiddenSystemPrompt) hiddenSystemPrompt.value = template.system_prompt;
 
             // Update preview display
             this.updateTemplatePreview(template);
@@ -803,6 +813,11 @@ ${solutionStart}4${solutionEnd}`;
                 document.getElementById('custom-solution-start').value = template.solution_start;
                 document.getElementById('custom-solution-end').value = template.solution_end;
                 document.getElementById('custom-system-prompt').value = template.system_prompt;
+
+                // Update template preview to reflect the loaded custom system prompt
+                if (window.updateTemplatePreview) {
+                    window.updateTemplatePreview();
+                }
 
                 CoreModule.showAlert('Template loaded', 'success');
             }

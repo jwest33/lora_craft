@@ -16,6 +16,7 @@
         // Initialize the module
         init() {
             this.setupEventListeners();
+            this.loadTestableModels();
             this.checkForActiveBatchTests();
             this.loadTestHistory();
         },
@@ -32,6 +33,22 @@
             const modelSelect = document.getElementById('test-model-select');
             if (modelSelect) {
                 modelSelect.addEventListener('change', () => this.onTestModelChange());
+            }
+
+            // Comparison model selection
+            const comparisonSelect = document.getElementById('comparison-model-select');
+            if (comparisonSelect) {
+                comparisonSelect.addEventListener('change', () => this.updateComparisonModelInfo());
+            }
+
+            // Comparison mode radio buttons
+            const compareBaseRadio = document.getElementById('compare-base');
+            const compareModelRadio = document.getElementById('compare-model');
+            if (compareBaseRadio) {
+                compareBaseRadio.addEventListener('change', () => this.toggleComparisonMode());
+            }
+            if (compareModelRadio) {
+                compareModelRadio.addEventListener('change', () => this.toggleComparisonMode());
             }
 
             // Temperature slider
@@ -106,6 +123,103 @@
 
             // Load model capabilities
             this.loadModelCapabilities(selectedValue);
+
+            // Update model info display
+            this.updateModelInfo();
+        },
+
+        // Toggle between comparison modes
+        toggleComparisonMode() {
+            const mode = document.querySelector('input[name="comparison-mode"]:checked')?.value;
+            const secondModelSection = document.getElementById('second-model-section');
+
+            if (mode === 'model') {
+                // Show second model selector for model-to-model comparison
+                if (secondModelSection) {
+                    secondModelSection.style.display = 'block';
+                }
+                // Populate comparison model dropdown if not already done
+                this.populateComparisonModelSelect();
+            } else {
+                // Hide second model selector for base model comparison
+                if (secondModelSection) {
+                    secondModelSection.style.display = 'none';
+                }
+            }
+        },
+
+        // Update primary model info display
+        updateModelInfo() {
+            const modelSelect = document.getElementById('test-model-select');
+            const modelInfo = document.getElementById('model-info');
+
+            if (!modelSelect || !modelInfo) return;
+
+            const selectedOption = modelSelect.options[modelSelect.selectedIndex];
+            if (!selectedOption || !selectedOption.value) {
+                modelInfo.innerHTML = '<i class="fas fa-info-circle"></i> No model selected';
+                return;
+            }
+
+            const baseModel = selectedOption.dataset.baseModel || 'Unknown';
+            const epochs = selectedOption.dataset.epochs || 'N/A';
+
+            modelInfo.innerHTML = `
+                <i class="fas fa-check-circle text-success"></i>
+                <strong>${CoreModule.escapeHtml(selectedOption.text)}</strong><br>
+                <small>Base: ${CoreModule.escapeHtml(baseModel)} | Epochs: ${CoreModule.escapeHtml(epochs)}</small>
+            `;
+        },
+
+        // Update comparison model info display
+        updateComparisonModelInfo() {
+            const comparisonSelect = document.getElementById('comparison-model-select');
+            const comparisonInfo = document.getElementById('comparison-model-info');
+
+            if (!comparisonSelect || !comparisonInfo) return;
+
+            const selectedOption = comparisonSelect.options[comparisonSelect.selectedIndex];
+            if (!selectedOption || !selectedOption.value) {
+                comparisonInfo.innerHTML = '<i class="fas fa-info-circle"></i> No comparison model selected';
+                return;
+            }
+
+            const baseModel = selectedOption.dataset.baseModel || 'Unknown';
+            const epochs = selectedOption.dataset.epochs || 'N/A';
+
+            comparisonInfo.innerHTML = `
+                <i class="fas fa-check-circle text-success"></i>
+                <strong>${CoreModule.escapeHtml(selectedOption.text)}</strong><br>
+                <small>Base: ${CoreModule.escapeHtml(baseModel)} | Epochs: ${CoreModule.escapeHtml(epochs)}</small>
+            `;
+        },
+
+        // Populate comparison model select dropdown
+        populateComparisonModelSelect() {
+            const comparisonSelect = document.getElementById('comparison-model-select');
+            if (!comparisonSelect) return;
+
+            // If already populated, skip
+            if (comparisonSelect.options.length > 1) return;
+
+            fetch('/api/models/trained')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.models && data.models.length > 0) {
+                        comparisonSelect.innerHTML = '<option value="">Select a model to compare against...</option>';
+                        data.models.forEach(model => {
+                            const option = document.createElement('option');
+                            option.value = model.session_id;
+                            option.textContent = `${model.name} (${model.epochs} epochs)`;
+                            option.dataset.baseModel = model.base_model;
+                            option.dataset.epochs = model.epochs;
+                            comparisonSelect.appendChild(option);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Failed to load comparison models:', error);
+                });
         },
 
         // Load model capabilities
@@ -665,7 +779,18 @@
                             option.value = model.session_id;
                             option.dataset.baseModel = model.base_model;
                             option.dataset.checkpointPath = model.checkpoint_path;
-                            option.textContent = `${model.display_name || model.model_name} (${model.epochs} epochs)`;
+
+                            // Get display name with fallbacks
+                            let displayName = model.display_name || model.model_name;
+                            if (!displayName || displayName === 'Unknown') {
+                                displayName = model.base_model || model.session_id;
+                            }
+
+                            // Get epochs with fallback
+                            const epochs = model.epochs || model.num_epochs || 0;
+                            option.dataset.epochs = epochs;
+
+                            option.textContent = `${displayName} (${epochs} epochs)`;
                             modelSelect.appendChild(option);
                         });
                     } else {
@@ -683,6 +808,7 @@
         compareModels() {
             const modelSelect = document.getElementById('test-model-select');
             const prompt = document.getElementById('test-prompt')?.value;
+            const comparisonMode = document.querySelector('input[name="comparison-mode"]:checked')?.value;
 
             if (!modelSelect?.value) {
                 CoreModule.showAlert('Please select a model to compare', 'warning');
@@ -698,11 +824,6 @@
             const selectedOption = modelSelect.options[modelSelect.selectedIndex];
             const baseModel = selectedOption.dataset.baseModel;
 
-            if (!baseModel) {
-                CoreModule.showAlert('Base model information not available', 'danger');
-                return;
-            }
-
             // Show loading state
             const resultsContainer = document.getElementById('comparison-results');
             if (resultsContainer) {
@@ -715,33 +836,121 @@
                 `;
             }
 
-            // Prepare comparison config
-            const config = {
-                session_id: sessionId,
-                base_model: baseModel,
-                prompt: prompt,
+            // Prepare generation config
+            const genConfig = {
                 temperature: parseFloat(document.getElementById('test-temperature')?.value) || 0.7,
-                top_p: parseFloat(document.getElementById('test-top-p')?.value) || 0.9,
-                max_tokens: parseInt(document.getElementById('test-max-tokens')?.value) || 256,
-                repetition_penalty: parseFloat(document.getElementById('test-rep-penalty')?.value) || 1.1
+                top_p: parseFloat(document.getElementById('test-top-p')?.value) || 0.95,
+                max_new_tokens: parseInt(document.getElementById('test-max-tokens')?.value) || 512,
+                repetition_penalty: parseFloat(document.getElementById('test-rep-penalty')?.value) || 1.0,
+                do_sample: true
             };
 
-            // Execute comparison
-            fetch('/api/test/compare-models', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(config)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success || data.results) {
-                    this.displayComparisonResults(data);
-                } else {
-                    throw new Error(data.error || 'Comparison failed');
+            const useChatTemplate = document.getElementById('use-chat-template')?.checked ?? true;
+
+            let endpoint, config;
+
+            if (comparisonMode === 'model') {
+                // Model-to-model comparison
+                const comparisonSelect = document.getElementById('comparison-model-select');
+                if (!comparisonSelect?.value) {
+                    CoreModule.showAlert('Please select a comparison model', 'warning');
+                    if (resultsContainer) {
+                        resultsContainer.style.display = 'none';
+                    }
+                    return;
                 }
-            })
-            .catch(error => {
-                console.error('Comparison error:', error);
+
+                endpoint = '/api/test/compare-models';
+                config = {
+                    prompt: prompt,
+                    model1_session_id: sessionId,
+                    model2_session_id: comparisonSelect.value,
+                    config: genConfig,
+                    use_chat_template: useChatTemplate
+                };
+            } else {
+                // Base model comparison
+                if (!baseModel) {
+                    CoreModule.showAlert('Base model information not available', 'danger');
+                    if (resultsContainer) {
+                        resultsContainer.style.display = 'none';
+                    }
+                    return;
+                }
+
+                endpoint = '/api/test/compare';
+                config = {
+                    prompt: prompt,
+                    session_id: sessionId,
+                    base_model: baseModel,
+                    config: genConfig,
+                    use_chat_template: useChatTemplate
+                };
+            }
+
+            // Execute comparison with streaming
+            this.compareWithStreaming(endpoint + '/stream', config, resultsContainer);
+        },
+
+        // Compare models with streaming token-by-token display
+        async compareWithStreaming(endpoint, config, resultsContainer) {
+            try {
+                // Initialize streaming display
+                this.initStreamingDisplay(resultsContainer);
+
+                // Debug logging
+                console.log('Streaming comparison request:', { endpoint, config });
+
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+
+                if (!response.ok) {
+                    // Try to get detailed error message from response
+                    let errorMessage = `HTTP error! status: ${response.status}`;
+                    try {
+                        const errorData = await response.json();
+                        errorMessage = errorData.error || errorData.message || errorMessage;
+                    } catch (e) {
+                        // Response might not be JSON
+                        try {
+                            const textError = await response.text();
+                            if (textError) {
+                                errorMessage = textError;
+                            }
+                        } catch (e2) {
+                            // Keep generic message
+                        }
+                    }
+                    console.error('Streaming fetch failed:', errorMessage);
+                    throw new Error(errorMessage);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop(); // Keep incomplete line in buffer
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = JSON.parse(line.slice(6));
+                            this.handleStreamEvent(data);
+                        }
+                    }
+                }
+
+            } catch (error) {
+                console.error('Streaming comparison error:', error);
                 if (resultsContainer) {
                     resultsContainer.innerHTML = `
                         <div class="alert alert-danger">
@@ -751,7 +960,135 @@
                     `;
                 }
                 CoreModule.showAlert(`Comparison failed: ${error.message}`, 'danger');
-            });
+            }
+        },
+
+        // Initialize streaming display UI
+        initStreamingDisplay(resultsContainer) {
+            resultsContainer.style.display = 'block';
+            resultsContainer.innerHTML = `
+                <div class="row">
+                    <!-- Trained Model Column -->
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-header bg-primary text-white">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0"><i class="fas fa-robot me-2"></i>Trained Model</h6>
+                                    <span class="badge bg-light text-primary" id="trained-status">
+                                        <i class="fas fa-spinner fa-spin me-1"></i>Generating...
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div id="trained-response" class="streaming-text mb-3" style="white-space: pre-wrap; min-height: 200px; max-height: 400px; overflow-y: auto;"></div>
+                                <div id="trained-stats" class="small text-muted" style="display: none;"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Base/Comparison Model Column -->
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-header bg-secondary text-white">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0"><i class="fas fa-cube me-2"></i>Base Model</h6>
+                                    <span class="badge bg-light text-dark" id="base-status">
+                                        <i class="fas fa-spinner fa-spin me-1"></i>Generating...
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div id="base-response" class="streaming-text mb-3" style="white-space: pre-wrap; min-height: 200px; max-height: 400px; overflow-y: auto;"></div>
+                                <div id="base-stats" class="small text-muted" style="display: none;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        },
+
+        // Handle streaming events
+        handleStreamEvent(data) {
+            const trainedResponse = document.getElementById('trained-response');
+            const baseResponse = document.getElementById('base-response');
+            const trainedStatus = document.getElementById('trained-status');
+            const baseStatus = document.getElementById('base-status');
+            const trainedStats = document.getElementById('trained-stats');
+            const baseStats = document.getElementById('base-stats');
+
+            switch (data.type) {
+                case 'trained':
+                    // Append token to trained model response
+                    if (trainedResponse) {
+                        trainedResponse.textContent += data.token;
+                        trainedResponse.scrollTop = trainedResponse.scrollHeight;
+                    }
+                    break;
+
+                case 'base':
+                    // Append token to base model response
+                    if (baseResponse) {
+                        baseResponse.textContent += data.token;
+                        baseResponse.scrollTop = baseResponse.scrollHeight;
+                    }
+                    break;
+
+                case 'trained_complete':
+                    // Mark trained model as complete
+                    if (trainedStatus) {
+                        trainedStatus.innerHTML = '<i class="fas fa-check-circle me-1"></i>Complete';
+                        trainedStatus.classList.remove('bg-light', 'text-primary');
+                        trainedStatus.classList.add('bg-success');
+                    }
+                    break;
+
+                case 'base_complete':
+                    // Mark base model as complete
+                    if (baseStatus) {
+                        baseStatus.innerHTML = '<i class="fas fa-check-circle me-1"></i>Complete';
+                        baseStatus.classList.remove('bg-light', 'text-dark');
+                        baseStatus.classList.add('bg-success');
+                    }
+                    break;
+
+                case 'complete':
+                    // Show final statistics
+                    const trainedResult = data.trained || {};
+                    const baseResult = data.base || {};
+
+                    if (trainedStats && trainedResult.success) {
+                        trainedStats.style.display = 'block';
+                        trainedStats.innerHTML = `
+                            <strong>Time:</strong> ${trainedResult.generation_time?.toFixed(2) || 'N/A'}s |
+                            <strong>Tokens:</strong> ${trainedResult.token_count || 'N/A'} |
+                            <strong>Speed:</strong> ${trainedResult.tokens_per_second?.toFixed(1) || 'N/A'} tok/s
+                        `;
+                    }
+
+                    if (baseStats && baseResult.success) {
+                        baseStats.style.display = 'block';
+                        baseStats.innerHTML = `
+                            <strong>Time:</strong> ${baseResult.generation_time?.toFixed(2) || 'N/A'}s |
+                            <strong>Tokens:</strong> ${baseResult.token_count || 'N/A'} |
+                            <strong>Speed:</strong> ${baseResult.tokens_per_second?.toFixed(1) || 'N/A'} tok/s
+                        `;
+                    }
+                    break;
+
+                case 'error':
+                    // Show error
+                    const resultsContainer = document.getElementById('comparison-results');
+                    if (resultsContainer) {
+                        resultsContainer.innerHTML = `
+                            <div class="alert alert-danger">
+                                <i class="fas fa-exclamation-circle me-2"></i>
+                                ${CoreModule.escapeHtml(data.error)}
+                            </div>
+                        `;
+                    }
+                    CoreModule.showAlert(`Error: ${data.error}`, 'danger');
+                    break;
+            }
         },
 
         // Display comparison results

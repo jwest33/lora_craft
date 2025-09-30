@@ -1124,6 +1124,112 @@
             }
 
             CoreModule.showAlert('Switched to test tab. Enter sample data to test the reward function.', 'info');
+        },
+
+        // Reset configuration to defaults
+        resetConfiguration() {
+            CoreModule.showConfirmModal(
+                'Reset Configuration',
+                'Are you sure you want to reset all settings to their default values? This cannot be undone.',
+                () => {
+                    // Clear localStorage items
+                    localStorage.removeItem('selectedReward');
+                    localStorage.removeItem('selectedConfigId');
+                    localStorage.removeItem('rewardConfig');
+                    localStorage.removeItem('selectedRewardTemplate');
+
+                    // Reset model configuration
+                    if (document.getElementById('model-family')) {
+                        document.getElementById('model-family').value = 'qwen';
+                        // Trigger change event to update model sizes
+                        if (typeof ModelsModule !== 'undefined' && ModelsModule.onModelFamilyChange) {
+                            ModelsModule.onModelFamilyChange();
+                        }
+                    }
+
+                    // Reset LoRA settings
+                    if (document.getElementById('lora-rank')) document.getElementById('lora-rank').value = '16';
+                    if (document.getElementById('lora-rank-slider')) document.getElementById('lora-rank-slider').value = '16';
+                    if (document.getElementById('lora-alpha')) document.getElementById('lora-alpha').value = '32';
+                    if (document.getElementById('lora-alpha-slider')) document.getElementById('lora-alpha-slider').value = '32';
+                    if (document.getElementById('lora-dropout')) document.getElementById('lora-dropout').value = '0.05';
+                    if (document.getElementById('lora-dropout-slider')) document.getElementById('lora-dropout-slider').value = '0.05';
+
+                    // Reset dataset configuration
+                    if (document.getElementById('dataset-path')) document.getElementById('dataset-path').value = 'yahma/alpaca-cleaned';
+                    if (document.getElementById('dataset-split')) document.getElementById('dataset-split').value = 'train';
+                    if (document.getElementById('sample-size')) document.getElementById('sample-size').value = '';
+                    if (document.getElementById('train-split')) document.getElementById('train-split').value = '80';
+
+                    // Reset training settings
+                    if (document.getElementById('num-epochs')) document.getElementById('num-epochs').value = '3';
+                    if (document.getElementById('batch-size')) document.getElementById('batch-size').value = '4';
+                    if (document.getElementById('gradient-accumulation')) document.getElementById('gradient-accumulation').value = '1';
+                    if (document.getElementById('learning-rate')) document.getElementById('learning-rate').value = '0.0002';
+                    if (document.getElementById('warmup-steps')) document.getElementById('warmup-steps').value = '10';
+                    if (document.getElementById('weight-decay')) document.getElementById('weight-decay').value = '0.001';
+                    if (document.getElementById('max-grad-norm')) document.getElementById('max-grad-norm').value = '0.3';
+                    if (document.getElementById('max-sequence-length')) document.getElementById('max-sequence-length').value = '2048';
+                    if (document.getElementById('max-new-tokens')) document.getElementById('max-new-tokens').value = '256';
+                    if (document.getElementById('max-samples')) document.getElementById('max-samples').value = '';
+
+                    // Reset GRPO settings
+                    if (document.getElementById('temperature')) document.getElementById('temperature').value = '0.7';
+                    if (document.getElementById('top-p')) document.getElementById('top-p').value = '0.95';
+                    if (document.getElementById('top-k')) document.getElementById('top-k').value = '50';
+                    if (document.getElementById('repetition-penalty')) document.getElementById('repetition-penalty').value = '1.0';
+                    if (document.getElementById('kl-penalty')) document.getElementById('kl-penalty').value = '0.05';
+                    if (document.getElementById('clip-range')) document.getElementById('clip-range').value = '0.2';
+                    if (document.getElementById('value-coefficient')) document.getElementById('value-coefficient').value = '1.0';
+
+                    // Reset optimizations
+                    if (document.getElementById('use-flash-attention')) document.getElementById('use-flash-attention').checked = false;
+                    if (document.getElementById('gradient-checkpointing')) document.getElementById('gradient-checkpointing').checked = false;
+                    if (document.getElementById('mixed-precision')) document.getElementById('mixed-precision').checked = true;
+                    if (document.getElementById('use-bf16')) document.getElementById('use-bf16').checked = false;
+
+                    // Reset advanced settings
+                    if (document.getElementById('lr-scheduler-type')) document.getElementById('lr-scheduler-type').value = 'constant';
+                    if (document.getElementById('optimizer')) document.getElementById('optimizer').value = 'paged_adamw_32bit';
+                    if (document.getElementById('logging-steps')) document.getElementById('logging-steps').value = '10';
+                    if (document.getElementById('save-steps')) document.getElementById('save-steps').value = '100';
+                    if (document.getElementById('eval-steps')) document.getElementById('eval-steps').value = '100';
+
+                    // Reset output name
+                    if (document.getElementById('output-name')) document.getElementById('output-name').value = '';
+
+                    // Reset config dropdown
+                    const configSelect = document.getElementById('saved-configs-list');
+                    if (configSelect) configSelect.value = '';
+
+                    // Reset reward function to default (math preset)
+                    if (typeof window.selectedRewardConfig !== 'undefined') {
+                        window.selectedRewardConfig = { type: 'preset', preset_name: 'math' };
+                    }
+                    if (typeof isRestoringSession !== 'undefined') {
+                        window.isRestoringSession = false;
+                    }
+
+                    // Reload reward system to reset to default
+                    if (typeof loadSavedSelection === 'function') {
+                        // Clear saved selection and load default
+                        setTimeout(() => {
+                            loadSavedSelection();
+                        }, 100);
+                    }
+
+                    // Update UI elements
+                    if (typeof updateValidGenerations === 'function') updateValidGenerations();
+                    if (typeof updateConfigSummary === 'function') updateConfigSummary();
+
+                    // Go back to step 1
+                    if (typeof goToStep === 'function') {
+                        goToStep(1);
+                    }
+
+                    CoreModule.showAlert('Configuration has been reset to default values', 'success');
+                }
+            );
         }
     };
 
@@ -1132,5 +1238,6 @@
 
     // Export functions for compatibility layer
     window.loadConfigListLegacy = () => ConfigModule.loadConfigList();
+    window.resetConfiguration = () => ConfigModule.resetConfiguration();
 
 })(window);

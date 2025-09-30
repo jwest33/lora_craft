@@ -132,7 +132,7 @@ class GRPOTrainingConfig:
     loss_type: str = "grpo"  # Always use "grpo" for TRL compatibility
     importance_sampling_level: str = "token"  # Options: "token" (GRPO), "sequence" (GSPO)
     max_sequence_length: int = 2048
-    max_new_tokens: int = 256  # Maximum tokens to generate (reduced for performance)
+    max_new_tokens: int = 512  # Maximum tokens to generate (reduced for performance)
     num_generations_per_prompt: int = 2  # Reduced from 4 for faster training
     num_generations: int = 2  # Same as num_generations_per_prompt for TRL compatibility
     temperature: float = 0.7
@@ -199,6 +199,7 @@ class GRPOModelTrainer:
         self.best_reward = float('-inf')
         self.training_history = []
         self.training_phase = 'idle'  # 'idle', 'pre-training', 'training'
+        self.grpo_start_step = 0  # Track step when GRPO training starts (after pre-training)
 
         # Callbacks
         self.progress_callback = None
@@ -474,7 +475,7 @@ class GRPOModelTrainer:
 
             # Log sample format for debugging (only first example)
             if not hasattr(apply_template, 'logged'):
-                logger.info(f"Pre-training format sample (first 500 chars): {formatted[:500]}")
+                logger.info(f"Pre-training format sample (first 1000 chars): {formatted[:1000]}")
                 apply_template.logged = True
 
             return {'text': formatted}
@@ -641,7 +642,7 @@ class GRPOModelTrainer:
 
             # Log first prompt for comparison with pre-training
             if not first_logged:
-                logger.info(f"GRPO prompt format sample (first 500 chars): {prompt[:500]}")
+                logger.info(f"GRPO prompt format sample (first 1000 chars): {prompt[:1000]}")
                 first_logged = True
 
             # TRL expects a specific format with prompt field
@@ -745,6 +746,9 @@ class GRPOModelTrainer:
 
         logger.info("Starting GRPO training with TRL...")
         self.training_phase = 'training'  # Set training phase
+        # Capture the current step as the GRPO start point (will be > 0 if pre-training occurred)
+        self.grpo_start_step = self.global_step
+        logger.info(f"GRPO training starting at step {self.grpo_start_step} (epoch counter will reset to 0)")
 
         # Disable Torch compilation for TRL to avoid Dynamo errors with Unsloth
         # This is necessary due to incompatibility between Unsloth's optimizations and TRL's gradient computation
@@ -815,13 +819,19 @@ class GRPOModelTrainer:
         samples_per_epoch = len(formatted_dataset)
         logger.info(f"Using {samples_per_epoch} samples per epoch")
 
-        steps_per_epoch = max(1, samples_per_epoch // global_batch_size)  # At least 1 step per epoch
+        # IMPORTANT: TRL's GRPO internally divides batch_size by num_generations
+        # to determine the number of unique prompts processed per step.
+        # Each unique prompt generates num_generations completions.
+        effective_prompts_per_step = global_batch_size // num_gens
+        steps_per_epoch = max(1, samples_per_epoch // effective_prompts_per_step)
         max_steps = steps_per_epoch * self.config.num_train_epochs
 
-        logger.info(f"Training steps calculation: {samples_per_epoch} samples/epoch / {global_batch_size} batch size = {steps_per_epoch} steps/epoch")
+        logger.info(f"Training steps calculation: {samples_per_epoch} samples/epoch / {effective_prompts_per_step} prompts per step (batch_size {global_batch_size} ÷ {num_gens} generations) = {steps_per_epoch} steps/epoch")
         logger.info(f"Total training steps: {steps_per_epoch} steps/epoch * {self.config.num_train_epochs} epochs = {max_steps} steps")
+        logger.info(f"Note: Each step processes {effective_prompts_per_step} unique prompts, generating {num_gens} completions per prompt ({effective_prompts_per_step * num_gens} total completions per step)")
 
         # Create TRL GRPO configuration with algorithm support
+        logger.info(f"Configuring GRPO training with logging_steps={self.config.logging_steps} for frequent updates")
         grpo_config = TRLGRPOConfig(
             learning_rate=self.config.learning_rate,
             per_device_train_batch_size=batch_size,  # Use adjusted batch_size
@@ -996,24 +1006,36 @@ class GRPOModelTrainer:
                 if hasattr(trainer, 'state') and hasattr(trainer.state, 'global_step'):
                     current_step = trainer.state.global_step
 
-                # Send lightweight step updates if step changed
+                # Debug: Log available keys when step changes to understand TRL's log structure
                 if current_step and current_step > last_step_reported:
                     last_step_reported = current_step
-                    # Send simple step update
-                    if parent.metrics_callback:
-                        parent.metrics_callback({'step': current_step, 'total_steps': max_steps})
+                    logger.debug(f"Step {current_step} - Available log keys: {list(logs.keys())}")
 
-                # Only process logs that contain actual training metrics (not intermediate logs)
-                has_reward_data = 'reward' in logs or 'rewards/reward_wrapper/mean' in logs
+                # Check for actual training metrics (not just progress bars or intermediate logs)
+                # TRL GRPO may use different key names than expected
+                has_reward_data = (
+                    'reward' in logs or
+                    'rewards/reward_wrapper/mean' in logs or
+                    'loss' in logs or
+                    'train_loss' in logs or
+                    'train/loss' in logs
+                )
 
                 if has_reward_data:
                     # Extract actual values from the logs
-                    actual_loss = float(logs.get('loss', 0.0))
-                    actual_reward = float(logs.get('reward', logs.get('rewards/reward_wrapper/mean', 0.0)))
+                    # Try multiple possible key names for loss
+                    actual_loss = float(logs.get('loss', logs.get('train_loss', logs.get('train/loss', 0.0))))
+                    # Try multiple possible key names for reward
+                    actual_reward = float(logs.get('reward', logs.get('rewards/reward_wrapper/mean', logs.get('rewards/mean', 0.0))))
                     grad_norm = float(logs.get('grad_norm', 0.0))
 
-                    # Calculate epoch correctly based on training phase
-                    current_step = trainer.state.global_step if hasattr(trainer, 'state') else 0
+                    # Debug: Log the actual values we extracted
+                    logger.debug(f"Step {current_step} - Extracted metrics: loss={actual_loss}, reward={actual_reward}, grad_norm={grad_norm}")
+
+                    # Use the current_step we already captured above (don't recalculate)
+                    # If we don't have it yet, get it now
+                    if current_step is None:
+                        current_step = trainer.state.global_step if hasattr(trainer, 'state') else 0
 
                     # Calculate epoch based on step and total steps
                     if parent.training_phase == 'pre-training':
@@ -1021,8 +1043,10 @@ class GRPOModelTrainer:
                         calculated_epoch = -1
                     else:
                         # For main training, calculate actual epoch (0-based)
+                        # Subtract the GRPO start step to reset epoch counter at the start of GRPO training
+                        grpo_steps = current_step - parent.grpo_start_step
                         steps_per_epoch = max(1, max_steps / parent.config.num_train_epochs)
-                        calculated_epoch = current_step / steps_per_epoch
+                        calculated_epoch = grpo_steps / steps_per_epoch
 
                     # Convert to our format
                     metrics = {
@@ -1036,10 +1060,38 @@ class GRPOModelTrainer:
                         'training_phase': parent.training_phase,  # Add phase indicator
                     }
 
-                    # Add all reward components
+                    # Add all GRPO-specific metrics from TRL
+                    # Completion statistics
+                    for key in ['completions/mean_length', 'completions/min_length', 'completions/max_length',
+                                'completions/mean_terminated_length', 'completions/min_terminated_length',
+                                'completions/max_terminated_length', 'completions/clipped_ratio']:
+                        if key in logs:
+                            metrics[key] = float(logs[key])
+
+                    # Reward metrics
+                    for key in ['reward', 'reward_std', 'frac_reward_zero_std']:
+                        if key in logs:
+                            metrics[key] = float(logs[key])
+
+                    # KL divergence and entropy
+                    if 'kl' in logs:
+                        metrics['kl'] = float(logs['kl'])
+                    if 'entropy' in logs:
+                        metrics['entropy'] = float(logs['entropy'])
+
+                    # Clip ratio metrics
+                    for key in ['clip_ratio/region_mean', 'clip_ratio/low_mean', 'clip_ratio/low_min',
+                                'clip_ratio/high_mean', 'clip_ratio/high_max']:
+                        if key in logs:
+                            metrics[key] = float(logs[key])
+
+                    # Add all reward function outputs (reward/*)
                     for key, value in logs.items():
-                        if key.startswith('rewards/') or key.startswith('completions/'):
-                            metrics[key] = value
+                        if key.startswith('reward/') and key not in metrics:
+                            try:
+                                metrics[key] = float(value)
+                            except (ValueError, TypeError):
+                                pass  # Skip non-numeric values
 
                     # Update tracking
                     if metrics['mean_reward'] > parent.best_reward:
@@ -1050,7 +1102,10 @@ class GRPOModelTrainer:
 
                     # Callback to frontend
                     if parent.metrics_callback:
+                        logger.info(f"Sending metrics update to frontend for step {current_step}: loss={actual_loss:.4f}, reward={actual_reward:.4f}")
                         parent.metrics_callback(metrics)
+                    else:
+                        logger.warning(f"No metrics callback registered - metrics not sent for step {current_step}")
 
                     # Log to console with actual values - use higher precision for small values
                     if abs(actual_loss) < 0.01:
@@ -1083,6 +1138,11 @@ class GRPOModelTrainer:
                 warnings.filterwarnings("ignore", message=".*Dynamo.*")
                 warnings.filterwarnings("ignore", message=".*compilation.*")
                 trainer.train()
+
+            # Capture final training state from trainer before saving checkpoint
+            if hasattr(trainer, 'state'):
+                self.global_step = trainer.state.global_step
+                self.current_epoch = int(trainer.state.epoch) if hasattr(trainer.state, 'epoch') else self.current_epoch
 
             # Save final checkpoint immediately after training completes
             logger.info("Training complete, saving final checkpoint...")
@@ -1129,6 +1189,12 @@ class GRPOModelTrainer:
                     logger.info("Retrying training with reset model state...")
                     trainer.train()
                     logger.info("Training completed after model state reset")
+
+                    # Capture final training state from trainer before saving checkpoint
+                    if hasattr(trainer, 'state'):
+                        self.global_step = trainer.state.global_step
+                        self.current_epoch = int(trainer.state.epoch) if hasattr(trainer.state, 'epoch') else self.current_epoch
+
                     self.save_checkpoint("final")
 
                 except Exception as retry_error:
@@ -1153,6 +1219,12 @@ class GRPOModelTrainer:
                 try:
                     trainer.train()
                     logger.info("Training completed in eager mode")
+
+                    # Capture final training state from trainer before saving checkpoint
+                    if hasattr(trainer, 'state'):
+                        self.global_step = trainer.state.global_step
+                        self.current_epoch = int(trainer.state.epoch) if hasattr(trainer.state, 'epoch') else self.current_epoch
+
                     self.save_checkpoint("final")
                 except Exception as retry_error:
                     logger.error(f"Training failed even in eager mode: {retry_error}")

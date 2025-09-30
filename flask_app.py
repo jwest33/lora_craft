@@ -301,9 +301,16 @@ def process_training_queue(session_id: str):
                         # Update current_step if present
                         if 'step' in msg_data and msg_data['step'] > 0:
                             session_obj.metrics['current_step'] = msg_data['step']
+                            # Debug: Log that we're processing metrics
+                            logger.debug(f"Processing metrics for session {session_id}, step {msg_data['step']}: loss={msg_data.get('loss', 'N/A')}, reward={msg_data.get('mean_reward', 'N/A')}")
                         # Store metrics history for reconnection
                         session_obj.metrics_history.append(msg_data.copy())
-                    emit_to_session(session_id, 'training_metrics', msg_data)
+                    # Emit to frontend via socket.io
+                    emit_to_session(session_id, 'training_metrics', {
+                        **msg_data,
+                        'session_id': session_id
+                    })
+                    logger.debug(f"Emitted training_metrics event for session {session_id}")
 
                 elif msg_type == 'log':
                     if session_obj:
@@ -531,7 +538,7 @@ def run_training(session_id: str, config: Dict[str, Any]):
 
             # Generation configuration
             max_sequence_length=config.get('max_sequence_length', 2048),
-            max_new_tokens=config.get('max_new_tokens', 256),
+            max_new_tokens=config.get('max_new_tokens', 512),
             temperature=config.get('temperature', 0.7),
             top_p=config.get('top_p', 0.95),
             top_k=config.get('top_k', 50),
@@ -597,6 +604,7 @@ def run_training(session_id: str, config: Dict[str, Any]):
             q.put(('progress', progress))
 
         def metrics_callback(metrics):
+            logger.debug(f"Metrics callback invoked for session {session_id}: step={metrics.get('step', 'N/A')}, loss={metrics.get('loss', 'N/A')}, reward={metrics.get('mean_reward', 'N/A')}")
             q.put(('metrics', metrics))
 
         def log_callback(log_entry):
@@ -892,16 +900,21 @@ def run_training(session_id: str, config: Dict[str, Any]):
         if final_reward is not None and (final_reward == float('-inf') or final_reward == float('inf')):
             final_reward = None
 
+        # Flatten key config values for easier access
+        config_copy = config.copy()
+        config_copy['model_name'] = model_name
+        config_copy['system_prompt'] = template_config.get('system_prompt', config.get('system_prompt'))
+
         session_info = SessionInfo(
             session_id=session_id,
-            model_name=config.get('model_name', 'Unknown'),
+            model_name=model_name,
             status='completed',
             checkpoint_path=f"outputs/{session_id}/checkpoints/final",
             created_at=session_obj.created_at.isoformat() if session_obj.created_at else None,
             completed_at=datetime.now().isoformat(),
             best_reward=final_reward,
-            epochs_trained=config.get('num_epochs', 0),
-            training_config=config,
+            epochs_trained=metrics.get('epochs_trained', config.get('num_epochs', 0)),
+            training_config=config_copy,
             display_name=session_obj.display_name
         )
         session_registry.add_session(session_info)
@@ -1428,7 +1441,7 @@ def evaluate_model():
             output = tester.generate(
                 input_text,
                 temperature=config.get('temperature', 0.1),
-                max_new_tokens=config.get('max_new_tokens', 256),
+                max_new_tokens=config.get('max_new_tokens', 512),
                 top_p=config.get('top_p', 0.95)
             )
 
@@ -1539,13 +1552,13 @@ def get_active_sessions():
         # Get active sessions from the training_sessions global
         active = []
         for session_id, session_data in training_sessions.items():
-            if session_data.get('status') == 'running':
+            if session_data.status == 'running':
                 active.append({
                     'id': session_id,
-                    'name': session_data.get('config', {}).get('output_name', session_id),
+                    'name': session_data.display_name,
                     'status': 'running',
-                    'progress': session_data.get('progress', 0),
-                    'start_time': session_data.get('start_time')
+                    'progress': session_data.progress,
+                    'start_time': session_data.started_at.isoformat() if session_data.started_at else None
                 })
         return jsonify({'sessions': active})
     except Exception as e:
@@ -1662,7 +1675,7 @@ def upload_dataset_alias():
 @app.route('/api/list_datasets', methods=['GET'])
 def list_datasets_alias():
     """Alias for /api/datasets/list."""
-    return list_datasets()
+    return list_popular_datasets()
 
 
 @app.route('/api/save_configuration', methods=['POST'])
@@ -1728,7 +1741,7 @@ def stop_training_alias():
             return jsonify({'error': 'Session ID required', 'success': False}), 400
 
         # Route to the actual stop endpoint
-        return stop_training_session(session_id)
+        return stop_training(session_id)
 
     except Exception as e:
         logger.error(f"Error stopping training: {e}")
@@ -1889,7 +1902,7 @@ def start_batch_test():
         parameters = {
             'temperature': float(request.form.get('temperature', 0.7)),
             'top_p': float(request.form.get('top_p', 0.9)),
-            'max_tokens': int(request.form.get('max_tokens', 256))
+            'max_tokens': int(request.form.get('max_tokens', 512))
         }
 
         # Get batch test runner
@@ -3352,8 +3365,12 @@ def get_testable_models():
 
         testable_models = []
         for session in sessions:
-            # Get base model name from training config
-            base_model = session.training_config.get('model_name', 'Unknown')
+            # Get base model name from training config (with fallback for old sessions)
+            base_model = (
+                session.training_config.get('model_name') or
+                session.training_config.get('model', {}).get('modelName') or
+                'Unknown'
+            )
 
             # Extract dataset name from config
             dataset_path = session.training_config.get('dataset_path', 'unknown')
@@ -3548,15 +3565,29 @@ def get_prompt_preview():
 
         # Get training config
         training_config = session_info.training_config
-        system_prompt = training_config.get('system_prompt', 'You are given a problem.\nThink about the problem and provide your working out.\nPlace it between <start_working_out> and <end_working_out>.\nThen, provide your solution between <SOLUTION></SOLUTION>')
+
+        # Get system prompt with fallback for nested structure (old sessions)
+        default_prompt = 'You are given a problem.\nThink about the problem and provide your working out.\nPlace it between <start_working_out> and <end_working_out>.\nThen, provide your solution between <SOLUTION></SOLUTION>'
+        system_prompt = (
+            training_config.get('system_prompt') or
+            training_config.get('template', {}).get('system_prompt') or
+            default_prompt
+        )
 
         # Get the formatted prompt preview
         formatted_prompt = prompt  # Default to just the prompt
 
         if use_chat_template:
-            # Try to use the chat template from the training config
-            chat_template_type = training_config.get('chat_template_type', 'grpo')
-            chat_template = training_config.get('chat_template')
+            # Try to use the chat template from the training config (with fallback for nested structure)
+            chat_template_type = (
+                training_config.get('chat_template_type') or
+                training_config.get('template', {}).get('chat_template_type') or
+                'grpo'
+            )
+            chat_template = (
+                training_config.get('chat_template') or
+                training_config.get('template', {}).get('chat_template')
+            )
 
             # If we have a specific chat template, try to apply it
             if chat_template:
