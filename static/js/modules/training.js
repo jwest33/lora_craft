@@ -59,8 +59,7 @@
             // Common chart options
             const commonOptions = {
                 responsive: true,
-                maintainAspectRatio: true,
-                aspectRatio: 2,
+                maintainAspectRatio: false,  // Allow charts to fill container height
                 interaction: {
                     mode: 'index',
                     intersect: false,
@@ -173,7 +172,7 @@
                 });
             }
 
-            // KL Divergence & Entropy chart
+            // KL Divergence chart
             const klEntropyCtx = document.getElementById('kl-entropy-chart');
             if (klEntropyCtx) {
                 AppState.charts.klEntropy = new Chart(klEntropyCtx.getContext('2d'), {
@@ -186,23 +185,14 @@
                             borderColor: 'rgb(239, 68, 68)',
                             backgroundColor: 'rgba(239, 68, 68, 0.1)',
                             borderWidth: 2,
-                            tension: 0.3,
-                            yAxisID: 'y'
-                        }, {
-                            label: 'Entropy',
-                            data: [],
-                            borderColor: 'rgb(34, 197, 94)',
-                            backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                            borderWidth: 2,
-                            tension: 0.3,
-                            yAxisID: 'y1'
+                            tension: 0.3
                         }]
                     },
                     options: {
                         ...commonOptions,
                         plugins: {
                             ...commonOptions.plugins,
-                            title: { display: true, text: 'KL Divergence & Entropy', font: { size: 16, weight: 'bold' } }
+                            title: { display: true, text: 'KL Divergence', font: { size: 16, weight: 'bold' } }
                         },
                         scales: {
                             x: {
@@ -213,15 +203,8 @@
                                 type: 'linear',
                                 display: true,
                                 position: 'left',
-                                title: { display: true, text: 'KL Divergence', font: { size: 12 }, color: 'rgb(239, 68, 68)' },
+                                title: { display: true, text: 'KL Divergence', font: { size: 12 } },
                                 grid: { color: 'rgba(128, 128, 128, 0.1)' }
-                            },
-                            y1: {
-                                type: 'linear',
-                                display: true,
-                                position: 'right',
-                                title: { display: true, text: 'Entropy', font: { size: 12 }, color: 'rgb(34, 197, 94)' },
-                                grid: { drawOnChartArea: false }
                             }
                         }
                     }
@@ -409,6 +392,83 @@
                     socket.off('training_error', this.trainingErrorListener);
                 }
             }
+        },
+
+        // Connect to active training session after page reload
+        connectToActiveSession(sessionId) {
+            // Set training state
+            this.isTraining = true;
+            AppState.currentSessionId = sessionId;
+
+            // Show training UI
+            this.updateTrainingUI(true);
+
+            // Fetch current session status and metrics
+            fetch(`/api/training/${sessionId}/status`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.status) {
+                        // Restore progress
+                        if (data.status.progress) {
+                            this.trainingProgress = data.status.progress;
+                            this.handleTrainingProgress(data.status.progress);
+                        }
+
+                        // Restore metrics history
+                        if (data.status.metrics_history && data.status.metrics_history.length > 0) {
+                            // Clear and repopulate charts
+                            this.clearCharts();
+                            data.status.metrics_history.forEach(metric => {
+                                this.updateCharts(metric);
+                            });
+                        }
+
+                        // Restore logs if available
+                        if (data.status.logs) {
+                            const logsContainer = document.getElementById('training-logs');
+                            if (logsContainer) {
+                                logsContainer.textContent = data.status.logs;
+                                // Scroll to bottom
+                                logsContainer.scrollTop = logsContainer.scrollHeight;
+                            }
+                        }
+
+                        // Set training start time
+                        if (data.status.start_time) {
+                            this.trainingStartTime = new Date(data.status.start_time);
+                        }
+
+                        CoreModule.showAlert('Reconnected to active training session', 'success');
+                    } else {
+                        throw new Error(data.error || 'Failed to get session status');
+                    }
+                })
+                .catch(error => {
+                    console.error('Failed to connect to active session:', error);
+                    CoreModule.showAlert(`Failed to reconnect: ${error.message}`, 'danger');
+                    this.isTraining = false;
+                    this.updateTrainingUI(false);
+                });
+
+            // Ensure socket listeners are active (they should be from init)
+            if (!this.trainingProgressListener) {
+                this.setupTrainingMonitoring();
+            }
+        },
+
+        // Clear all chart data
+        clearCharts() {
+            const charts = ['reward', 'loss', 'kl', 'lr'];
+            charts.forEach(chartName => {
+                const chart = AppState.charts[chartName];
+                if (chart) {
+                    chart.data.labels = [];
+                    chart.data.datasets.forEach(dataset => {
+                        dataset.data = [];
+                    });
+                    chart.update('none'); // Update without animation
+                }
+            });
         },
 
         // Start training
@@ -632,6 +692,8 @@
 
         updateMetrics(data) {
             // Data is already flat, not nested under 'metrics'
+            console.log('updateMetrics called with keys:', Object.keys(data));
+            console.log('updateMetrics data sample - kl:', data.kl, 'epoch:', data.epoch, 'step:', data.step);
             this.updateCharts(data);
             this.updateMetricsPanel(data);
         },
@@ -684,40 +746,53 @@
                 : Math.floor(data.epoch || 0);
             updateMetric('metric-epoch', epochValue);
             updateMetric('metric-loss', data.loss, v => v.toFixed(4));
-            updateMetric('metric-reward', data.mean_reward, v => v.toFixed(4));
-            updateMetric('metric-reward-std', data.reward_std, v => v.toFixed(4));
+
+            // Use mean_reward with fallback to reward or rewards/reward_wrapper/mean
+            const rewardValue = data.mean_reward ?? data.reward ?? data['rewards/reward_wrapper/mean'];
+            updateMetric('metric-reward', rewardValue, v => v.toFixed(4));
+
+            // Use reward_std with fallback to rewards/reward_wrapper/std
+            const rewardStdValue = data.reward_std ?? data['rewards/reward_wrapper/std'];
+            updateMetric('metric-reward-std', rewardStdValue, v => v.toFixed(4));
+
             updateMetric('metric-lr', data.learning_rate, v => v.toExponential(2));
 
             // GRPO-specific metrics
+            console.log('Updating GRPO metrics - kl:', data.kl);
             updateMetric('metric-kl', data.kl, v => v.toFixed(6));
-            updateMetric('metric-entropy', data.entropy, v => v.toFixed(4));
             updateMetric('metric-grad-norm', data.grad_norm, v => v.toFixed(4));
 
             // Completion length (mean)
             const meanLength = data['completions/mean_length'];
+            console.log('Updating completion metrics - meanLength:', meanLength);
             updateMetric('metric-comp-length', meanLength, v => v.toFixed(1));
 
-            // Clipped ratio (from completions)
-            const clippedRatio = data['completions/clipped_ratio'];
+            // Clipped ratio - try both possible field names
+            const clippedRatio = data['completions/clipped_ratio'] ?? data['clip_ratio/clipped_ratio'];
+            console.log('Updating clipped ratio:', clippedRatio);
             updateMetric('metric-clipped-ratio', clippedRatio, v => (v * 100).toFixed(1) + '%');
 
-            // Clip region mean
-            const clipRegion = data['clip_ratio/region_mean'];
+            // Clip region mean - try multiple possible field names
+            const clipRegion = data['clip_ratio/region_mean'] ?? data['completions/clipped_ratio'];
+            console.log('Updating clip region:', clipRegion);
             updateMetric('metric-clip-region', clipRegion, v => (v * 100).toFixed(1) + '%');
         },
 
         // Update charts with new data
         updateCharts(metrics) {
             const step = metrics.step;
-            if (!step) return;
+            if (step === undefined || step === null) return;
 
-            // Update reward chart (mean + std)
-            if (AppState.charts.reward && metrics.mean_reward !== undefined) {
+            // Update reward chart (mean + std) with fallbacks
+            const rewardValue = metrics.mean_reward ?? metrics.reward ?? metrics['rewards/reward_wrapper/mean'];
+            if (AppState.charts.reward && rewardValue !== undefined) {
                 AppState.charts.reward.data.labels.push(step);
-                AppState.charts.reward.data.datasets[0].data.push(metrics.mean_reward);
+                AppState.charts.reward.data.datasets[0].data.push(rewardValue);
 
-                if (metrics.reward_std !== undefined) {
-                    AppState.charts.reward.data.datasets[1].data.push(metrics.reward_std);
+                // Add reward std with fallback
+                const rewardStdValue = metrics.reward_std ?? metrics['rewards/reward_wrapper/std'];
+                if (rewardStdValue !== undefined && AppState.charts.reward.data.datasets[1]) {
+                    AppState.charts.reward.data.datasets[1].data.push(rewardStdValue);
                 }
 
                 AppState.charts.reward.update('none');
@@ -735,23 +810,12 @@
                 AppState.charts.loss.update('none');
             }
 
-            // Update KL & Entropy chart
-            if (AppState.charts.klEntropy) {
-                const hasKL = metrics.kl !== undefined;
-                const hasEntropy = metrics.entropy !== undefined;
-
-                if (hasKL || hasEntropy) {
-                    AppState.charts.klEntropy.data.labels.push(step);
-
-                    if (hasKL) {
-                        AppState.charts.klEntropy.data.datasets[0].data.push(metrics.kl);
-                    }
-                    if (hasEntropy) {
-                        AppState.charts.klEntropy.data.datasets[1].data.push(metrics.entropy);
-                    }
-
-                    AppState.charts.klEntropy.update('none');
-                }
+            // Update KL Divergence chart
+            if (AppState.charts.klEntropy && metrics.kl !== undefined) {
+                AppState.charts.klEntropy.data.labels.push(step);
+                AppState.charts.klEntropy.data.datasets[0].data.push(metrics.kl);
+                AppState.charts.klEntropy.update('none');
+                console.log(`KL chart updated: step=${step}, kl=${metrics.kl}`);
             }
 
             // Update completion statistics chart
@@ -763,40 +827,38 @@
                 if (meanLen !== undefined || minLen !== undefined || maxLen !== undefined) {
                     AppState.charts.completionStats.data.labels.push(step);
 
-                    if (meanLen !== undefined) {
-                        AppState.charts.completionStats.data.datasets[0].data.push(meanLen);
-                    }
-                    if (minLen !== undefined) {
-                        AppState.charts.completionStats.data.datasets[1].data.push(minLen);
-                    }
-                    if (maxLen !== undefined) {
-                        AppState.charts.completionStats.data.datasets[2].data.push(maxLen);
-                    }
+                    // Always push to all datasets to keep them synchronized (use null for missing)
+                    AppState.charts.completionStats.data.datasets[0].data.push(meanLen ?? null);
+                    AppState.charts.completionStats.data.datasets[1].data.push(minLen ?? null);
+                    AppState.charts.completionStats.data.datasets[2].data.push(maxLen ?? null);
 
                     AppState.charts.completionStats.update('none');
+                    console.log(`Completion stats chart updated: step=${step}, mean=${meanLen}, min=${minLen}, max=${maxLen}`);
                 }
             }
 
             // Update clip ratio chart
             if (AppState.charts.clipRatio) {
-                const regionMean = metrics['clip_ratio/region_mean'];
-                const lowMean = metrics['clip_ratio/low_mean'];
-                const highMean = metrics['clip_ratio/high_mean'];
+                // TRL GRPO provides completions/clipped_ratio (overall clipping rate)
+                // Use it for the main "Region Mean" dataset, others remain null
+                const clippedRatio = metrics['completions/clipped_ratio'];
+                const regionMean = metrics['clip_ratio/region_mean']; // May not exist in TRL
+                const lowMean = metrics['clip_ratio/low_mean']; // May not exist in TRL
+                const highMean = metrics['clip_ratio/high_mean']; // May not exist in TRL
 
-                if (regionMean !== undefined || lowMean !== undefined || highMean !== undefined) {
+                // Use clipped_ratio as fallback for region_mean if region_mean doesn't exist
+                const effectiveRegionMean = regionMean ?? clippedRatio;
+
+                if (effectiveRegionMean !== undefined || lowMean !== undefined || highMean !== undefined) {
                     AppState.charts.clipRatio.data.labels.push(step);
 
-                    if (regionMean !== undefined) {
-                        AppState.charts.clipRatio.data.datasets[0].data.push(regionMean);
-                    }
-                    if (lowMean !== undefined) {
-                        AppState.charts.clipRatio.data.datasets[1].data.push(lowMean);
-                    }
-                    if (highMean !== undefined) {
-                        AppState.charts.clipRatio.data.datasets[2].data.push(highMean);
-                    }
+                    // Push data to all datasets to keep them synchronized
+                    AppState.charts.clipRatio.data.datasets[0].data.push(effectiveRegionMean ?? null);
+                    AppState.charts.clipRatio.data.datasets[1].data.push(lowMean ?? null);
+                    AppState.charts.clipRatio.data.datasets[2].data.push(highMean ?? null);
 
                     AppState.charts.clipRatio.update('none');
+                    console.log(`Clip ratio chart updated: step=${step}, region=${effectiveRegionMean}, low=${lowMean}, high=${highMean}`);
                 }
             }
 

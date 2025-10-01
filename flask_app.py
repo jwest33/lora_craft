@@ -212,6 +212,7 @@ class TrainingSession:
         self.logs = []
         self.metrics_history = []  # Store historical metrics for reconnection
         self.progress = 0  # Training progress percentage
+        self.step_counter = 0  # Incremental step counter for metrics without step field
 
     def _generate_display_name(self, config):
         """Generate a display name for the model."""
@@ -297,6 +298,28 @@ def process_training_queue(session_id: str):
 
                 elif msg_type == 'metrics':
                     if session_obj:
+                        # Detect phase transitions (pre-training -> training)
+                        current_phase = msg_data.get('training_phase')
+                        previous_phase = getattr(session_obj, 'current_training_phase', None)
+
+                        # If transitioning to GRPO training phase, reset metrics
+                        if current_phase == 'training' and previous_phase != 'training':
+                            logger.info(f"Transitioning to GRPO training phase - resetting metrics for session {session_id}")
+                            session_obj.step_counter = 0
+                            session_obj.current_training_phase = 'training'
+                            # Emit reset event to frontend
+                            emit_to_session(session_id, 'reset_metrics', {
+                                'phase': 'training',
+                                'session_id': session_id
+                            })
+                        elif current_phase:
+                            session_obj.current_training_phase = current_phase
+
+                        # If no step provided or step is 0, use and increment our step counter
+                        if not msg_data.get('step'):
+                            session_obj.step_counter += 1
+                            msg_data['step'] = session_obj.step_counter
+
                         session_obj.metrics.update(msg_data)
                         # Update current_step if present
                         if 'step' in msg_data and msg_data['step'] > 0:
@@ -305,6 +328,11 @@ def process_training_queue(session_id: str):
                             logger.debug(f"Processing metrics for session {session_id}, step {msg_data['step']}: loss={msg_data.get('loss', 'N/A')}, reward={msg_data.get('mean_reward', 'N/A')}")
                         # Store metrics history for reconnection
                         session_obj.metrics_history.append(msg_data.copy())
+
+                    # Debug: Log all metric keys before emitting
+                    logger.info(f"Emitting metrics with keys: {list(msg_data.keys())}")
+                    logger.debug(f"Sample values - kl: {msg_data.get('kl', 'N/A')}, epoch: {msg_data.get('epoch', 'N/A')}, completions/mean_length: {msg_data.get('completions/mean_length', 'N/A')}")
+
                     # Emit to frontend via socket.io
                     emit_to_session(session_id, 'training_metrics', {
                         **msg_data,
@@ -407,15 +435,16 @@ def run_training(session_id: str, config: Dict[str, Any]):
                                             metrics_dict.get('iteration') or
                                             metrics_dict.get('steps') or 0)
 
-                                processed_metrics = {
-                                    'step': step_value,
-                                    'epoch': metrics_dict.get('epoch', 0),
-                                    'loss': metrics_dict.get('loss', 0),
-                                    'mean_reward': metrics_dict.get('reward', metrics_dict.get('rewards/reward_wrapper/mean', 0)),
-                                    'learning_rate': metrics_dict.get('learning_rate', config.get('learning_rate', 2e-4)),
-                                    'grad_norm': metrics_dict.get('grad_norm', 0),
-                                    'reward_std': metrics_dict.get('reward_std', metrics_dict.get('rewards/reward_wrapper/std', 0))
-                                }
+                                # Start with all metrics from the training log
+                                processed_metrics = dict(metrics_dict)
+
+                                # Add/override computed fields for backward compatibility
+                                processed_metrics['step'] = step_value
+                                processed_metrics['mean_reward'] = metrics_dict.get('reward', metrics_dict.get('rewards/reward_wrapper/mean', 0))
+
+                                # Ensure learning_rate exists if not in metrics
+                                if 'learning_rate' not in processed_metrics:
+                                    processed_metrics['learning_rate'] = config.get('learning_rate', 2e-4)
 
                                 # Log the extracted step for debugging
                                 if step_value > 0:
@@ -531,7 +560,7 @@ def run_training(session_id: str, config: Dict[str, Any]):
             max_grad_norm=training_config.get('max_grad_norm') or config.get('max_grad_norm', 0.3),
             lr_scheduler_type=training_config.get('lr_schedule') or config.get('lr_scheduler_type', 'constant'),
             optim=config.get('optim', 'paged_adamw_32bit'),
-            logging_steps=config.get('logging_steps', 10),
+            logging_steps=config.get('logging_steps', 1),  # Default to 1 for real-time frontend updates
             save_steps=output_config.get('save_steps') or config.get('save_steps', 100),
             eval_steps=output_config.get('eval_steps') or config.get('eval_steps', 100),
             seed=training_config.get('seed') or config.get('seed', 42),

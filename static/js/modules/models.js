@@ -57,6 +57,53 @@
                     this.searchModels(modelSearchInput.value);
                 }, 300));
             }
+
+            // Setup mode radio buttons
+            const setupModeRadios = document.querySelectorAll('input[name="setup-mode"]');
+            setupModeRadios.forEach(radio => {
+                radio.addEventListener('change', () => this.handleSetupModeChange());
+            });
+        },
+
+        // Handle setup mode changes (Recommended/Custom/Advanced)
+        handleSetupModeChange() {
+            const loraConfigSection = document.getElementById('lora-config-section');
+            const loraPresetsSection = document.getElementById('lora-presets');
+            const advancedConfigSection = document.getElementById('advanced-config-section');
+
+            // Get selected mode
+            const selectedMode = document.querySelector('input[name="setup-mode"]:checked');
+            if (!selectedMode) return;
+
+            const mode = selectedMode.id;
+
+            // Handle visibility based on mode
+            switch (mode) {
+                case 'setup-recommended':
+                    // Hide all advanced options
+                    if (loraConfigSection) loraConfigSection.style.display = 'none';
+                    if (advancedConfigSection) advancedConfigSection.style.display = 'none';
+                    break;
+
+                case 'setup-custom':
+                    // Show LoRA config with presets, hide advanced
+                    if (loraConfigSection) loraConfigSection.style.display = 'block';
+                    if (loraPresetsSection) loraPresetsSection.style.display = 'block';
+                    if (advancedConfigSection) advancedConfigSection.style.display = 'none';
+                    break;
+
+                case 'setup-advanced':
+                    // Show both LoRA and advanced config
+                    if (loraConfigSection) loraConfigSection.style.display = 'block';
+                    if (loraPresetsSection) loraPresetsSection.style.display = 'block';
+                    if (advancedConfigSection) advancedConfigSection.style.display = 'block';
+                    break;
+            }
+
+            // Save the selected mode to state
+            if (window.AppState && AppState.setConfigValue) {
+                AppState.setConfigValue('setupMode', mode);
+            }
         },
 
         // Update model list based on selected family

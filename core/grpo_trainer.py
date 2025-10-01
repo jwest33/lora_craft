@@ -113,7 +113,7 @@ class GRPOTrainingConfig:
     learning_rate: float = 2e-4
     warmup_steps: int = 10
     warmup_ratio: float = 0.1
-    logging_steps: int = 1  # Log every step for real-time metrics
+    logging_steps: int = 1  # Log every step for real-time frontend metrics
     save_steps: int = 100
     eval_steps: int = 100
     max_grad_norm: float = 0.3
@@ -992,6 +992,18 @@ class GRPOModelTrainer:
             train_dataset=formatted_dataset,
         )
 
+        # Re-apply generation config after GRPOTrainer init (TRL may reset it)
+        if hasattr(trainer.model, 'generation_config'):
+            logger.info("Re-applying generation config after GRPOTrainer initialization")
+            trainer.model.generation_config.top_k = self.config.top_k
+            trainer.model.generation_config.top_p = self.config.top_p
+            trainer.model.generation_config.temperature = self.config.temperature
+            trainer.model.generation_config.max_length = self.config.max_sequence_length
+            trainer.model.generation_config.max_new_tokens = self.config.max_new_tokens
+            trainer.model.generation_config.repetition_penalty = self.config.repetition_penalty
+            logger.info(f"Generation config set: top_k={self.config.top_k}, top_p={self.config.top_p}, "
+                       f"temperature={self.config.temperature}, max_length={self.config.max_sequence_length}")
+
         # Custom logging callback
         original_log = trainer.log
         parent = self  # Reference to GRPOModelTrainer for callbacks
@@ -1011,26 +1023,36 @@ class GRPOModelTrainer:
                     last_step_reported = current_step
                     logger.debug(f"Step {current_step} - Available log keys: {list(logs.keys())}")
 
-                # Check for actual training metrics (not just progress bars or intermediate logs)
-                # TRL GRPO may use different key names than expected
-                has_reward_data = (
-                    'reward' in logs or
-                    'rewards/reward_wrapper/mean' in logs or
-                    'loss' in logs or
-                    'train_loss' in logs or
-                    'train/loss' in logs
-                )
+                # Send metrics only when we have complete data from TRL
+                # TRL calls log() multiple times per step - first with basic metrics, then with all metrics
+                # We only send when we detect the complete metrics (presence of 'kl' or 'epoch' indicates complete data)
+                has_complete_metrics = 'kl' in logs or 'epoch' in logs or 'completions/mean_length' in logs
 
-                if has_reward_data:
-                    # Extract actual values from the logs
+                if current_step is not None and has_complete_metrics and (parent.config.logging_steps == 1 or current_step % parent.config.logging_steps == 0):
+                    logger.debug(f"Metrics logging triggered at step {current_step} with complete metrics (logging_steps={parent.config.logging_steps})")
+                    # Extract actual values from the logs with comprehensive fallbacks
                     # Try multiple possible key names for loss
                     actual_loss = float(logs.get('loss', logs.get('train_loss', logs.get('train/loss', 0.0))))
-                    # Try multiple possible key names for reward
-                    actual_reward = float(logs.get('reward', logs.get('rewards/reward_wrapper/mean', logs.get('rewards/mean', 0.0))))
+
+                    # Try multiple possible key names for reward (TRL uses different keys)
+                    actual_reward = float(
+                        logs.get('rewards/reward_wrapper/mean',  # TRL's primary key
+                        logs.get('reward',                        # TRL's secondary key
+                        logs.get('rewards/mean',                  # Alternative
+                        logs.get('mean_reward', 0.0))))           # Our own key
+                    )
+
+                    # Extract reward std with fallbacks
+                    actual_reward_std = float(
+                        logs.get('rewards/reward_wrapper/std',   # TRL's primary key
+                        logs.get('reward_std',                    # TRL's secondary key
+                        logs.get('rewards/std', 0.0)))            # Alternative
+                    )
+
                     grad_norm = float(logs.get('grad_norm', 0.0))
 
                     # Debug: Log the actual values we extracted
-                    logger.debug(f"Step {current_step} - Extracted metrics: loss={actual_loss}, reward={actual_reward}, grad_norm={grad_norm}")
+                    logger.debug(f"Step {current_step} - Extracted metrics: loss={actual_loss}, reward={actual_reward}, reward_std={actual_reward_std}, grad_norm={grad_norm}")
 
                     # Use the current_step we already captured above (don't recalculate)
                     # If we don't have it yet, get it now
@@ -1048,15 +1070,15 @@ class GRPOModelTrainer:
                         steps_per_epoch = max(1, max_steps / parent.config.num_train_epochs)
                         calculated_epoch = grpo_steps / steps_per_epoch
 
-                    # Convert to our format
+                    # Convert to our format - use current_step for continuous step numbering across phases
                     metrics = {
                         'epoch': calculated_epoch,
-                        'step': current_step,
+                        'step': current_step,  # Use global current_step for continuous numbering
                         'loss': actual_loss,
                         'mean_reward': actual_reward,
                         'learning_rate': logs.get('learning_rate', parent.config.learning_rate),
                         'grad_norm': grad_norm,
-                        'reward_std': logs.get('reward_std', logs.get('rewards/reward_wrapper/std', 0.0)),
+                        'reward_std': actual_reward_std,  # Use extracted value with fallbacks
                         'training_phase': parent.training_phase,  # Add phase indicator
                     }
 
@@ -1102,7 +1124,8 @@ class GRPOModelTrainer:
 
                     # Callback to frontend
                     if parent.metrics_callback:
-                        logger.info(f"Sending metrics update to frontend for step {current_step}: loss={actual_loss:.4f}, reward={actual_reward:.4f}")
+                        logger.info(f"Sending metrics update to frontend for step {current_step}: loss={actual_loss:.4f}, reward={actual_reward:.4f}, reward_std={actual_reward_std:.4f}")
+                        logger.debug(f"Full metrics dict keys being sent: {list(metrics.keys())}")
                         parent.metrics_callback(metrics)
                     else:
                         logger.warning(f"No metrics callback registered - metrics not sent for step {current_step}")
@@ -1182,6 +1205,16 @@ class GRPOModelTrainer:
                         args=grpo_config,
                         train_dataset=formatted_dataset,
                     )
+
+                    # Re-apply generation config after recreation (TRL may reset it)
+                    if hasattr(trainer.model, 'generation_config'):
+                        logger.info("Re-applying generation config after trainer recreation")
+                        trainer.model.generation_config.top_k = self.config.top_k
+                        trainer.model.generation_config.top_p = self.config.top_p
+                        trainer.model.generation_config.temperature = self.config.temperature
+                        trainer.model.generation_config.max_length = self.config.max_sequence_length
+                        trainer.model.generation_config.max_new_tokens = self.config.max_new_tokens
+                        trainer.model.generation_config.repetition_penalty = self.config.repetition_penalty
 
                     # Reattach logging callback
                     trainer.log = custom_log

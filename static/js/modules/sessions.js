@@ -13,8 +13,9 @@
         // Initialize the module
         init() {
             this.setupEventListeners();
-            this.checkForRunningSessions();
-            this.refreshSessions();
+            this.checkForRunningSessions();  // Will call updateSidebarSessions() after fetch
+            this.refreshSessions();           // Will call updateSidebarSessions() after fetch
+            // Don't call updateSidebarSessions() here - it runs before async fetches complete
         },
 
         // Setup session-related event listeners
@@ -41,6 +42,7 @@
                 .then(data => {
                     this.activeSessions = data.sessions || [];
                     this.updateActiveSessionsDisplay();
+                    this.updateSidebarSessions();
 
                     if (this.activeSessions.length > 0) {
                         CoreModule.showAlert(`${this.activeSessions.length} active session(s) found`, 'info');
@@ -64,6 +66,7 @@
                 .then(data => {
                     this.sessionHistory = data.sessions || [];
                     this.displaySessions();
+                    this.updateSidebarSessions();
                 })
                 .catch(error => {
                     console.error('Failed to load sessions:', error);
@@ -116,15 +119,16 @@
                             ${session.model ? `<span class="badge bg-info ms-2">${CoreModule.escapeHtml(session.model)}</span>` : ''}
                         </div>
                         <div class="btn-group">
-                            <button class="btn btn-sm btn-outline-primary" onclick="SessionsModule.viewSession('${session.id}')">
-                                <i class="fas fa-eye"></i>
-                            </button>
                             ${isActive ? `
-                                <button class="btn btn-sm btn-outline-warning" onclick="SessionsModule.resumeSession('${session.id}')">
-                                    <i class="fas fa-play"></i>
+                                <button class="btn btn-sm btn-success" onclick="SessionsModule.resumeSession('${session.id}')" title="Monitor active training">
+                                    <i class="fas fa-chart-line me-1"></i>Monitor
                                 </button>
-                            ` : ''}
-                            <button class="btn btn-sm btn-outline-danger" onclick="SessionsModule.deleteSession('${session.id}')">
+                            ` : `
+                                <button class="btn btn-sm btn-outline-primary" onclick="SessionsModule.viewSession('${session.id}')" title="View session details">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            `}
+                            <button class="btn btn-sm btn-outline-danger" onclick="SessionsModule.deleteSession('${session.id}')" title="Delete session">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </div>
@@ -308,32 +312,17 @@
 
         // Resume session
         resumeSession(sessionId) {
-            CoreModule.showConfirmModal(
-                'Resume Session',
-                'Do you want to resume this training session?',
-                () => {
-                    fetch('/api/resume_session', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ session_id: sessionId })
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            AppState.currentSessionId = sessionId;
-                            NavigationModule.goToStep(4);
-                            CoreModule.showAlert('Session resumed', 'success');
-                        } else {
-                            throw new Error(data.error || 'Failed to resume session');
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Failed to resume session:', error);
-                        CoreModule.showAlert(`Failed to resume session: ${error.message}`, 'danger');
-                    });
-                },
-                'btn-warning'
-            );
+            // Navigate to training step
+            NavigationModule.goToStep(4);
+
+            // Connect to active session to restore progress
+            if (window.TrainingModule && TrainingModule.connectToActiveSession) {
+                TrainingModule.connectToActiveSession(sessionId);
+            } else {
+                // Fallback if TrainingModule not available
+                AppState.currentSessionId = sessionId;
+                CoreModule.showAlert('Session resumed (monitoring unavailable)', 'info');
+            }
         },
 
         // Delete session
@@ -420,6 +409,97 @@
             } else {
                 return `${secs}s`;
             }
+        },
+
+        // Update sidebar sessions list
+        updateSidebarSessions() {
+            const sessionsList = document.getElementById('sessions-list');
+            if (!sessionsList) {
+                console.warn('Sessions list element not found');
+                return;
+            }
+
+            console.log(`Updating sidebar sessions: ${this.activeSessions.length} active, ${this.sessionHistory.length} history`);
+
+            // Combine active and recent sessions
+            const allSessions = [];
+
+            // Add active sessions first
+            if (this.activeSessions && this.activeSessions.length > 0) {
+                console.log('Adding active sessions:', this.activeSessions);
+                this.activeSessions.forEach(session => {
+                    allSessions.push({
+                        ...session,
+                        isActive: true
+                    });
+                });
+            }
+
+            // Add recent completed sessions (max 5 total)
+            const remainingSlots = 5 - allSessions.length;
+            if (remainingSlots > 0 && this.sessionHistory && this.sessionHistory.length > 0) {
+                const recentSessions = this.sessionHistory
+                    .filter(s => !allSessions.some(as => as.id === s.id))
+                    .slice(0, remainingSlots);
+
+                console.log(`Adding ${recentSessions.length} recent sessions from history`);
+                recentSessions.forEach(session => {
+                    allSessions.push({
+                        ...session,
+                        isActive: false
+                    });
+                });
+            }
+
+            // Render sessions list
+            if (allSessions.length === 0) {
+                console.log('No sessions to display');
+                sessionsList.innerHTML = '<p class="text-muted small mb-0">No sessions found</p>';
+                return;
+            }
+
+            console.log(`Rendering ${allSessions.length} sessions to sidebar`);
+
+            sessionsList.innerHTML = '';
+
+            allSessions.forEach(session => {
+                const sessionItem = document.createElement('div');
+                sessionItem.className = 'session-item';
+
+                const statusBadge = session.isActive
+                    ? '<span class="badge bg-success">Active</span>'
+                    : '<span class="badge bg-secondary">Completed</span>';
+
+                const actionButton = session.isActive
+                    ? `<button class="btn btn-sm btn-success" onclick="SessionsModule.resumeSession('${session.id}')" title="Monitor">
+                           <i class="fas fa-chart-line"></i>
+                       </button>`
+                    : `<button class="btn btn-sm btn-outline-primary" onclick="SessionsModule.viewSession('${session.id}')" title="View">
+                           <i class="fas fa-eye"></i>
+                       </button>`;
+
+                sessionItem.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div class="flex-grow-1">
+                            <div class="fw-bold small">${CoreModule.escapeHtml(session.name || session.id)}</div>
+                            <div class="text-muted" style="font-size: 0.75rem;">
+                                ${new Date(session.start_time).toLocaleString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                })}
+                            </div>
+                            ${statusBadge}
+                        </div>
+                        <div>
+                            ${actionButton}
+                        </div>
+                    </div>
+                `;
+
+                sessionsList.appendChild(sessionItem);
+            });
         }
     };
 

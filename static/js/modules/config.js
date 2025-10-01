@@ -280,12 +280,18 @@
         // Gather current configuration
         gatherCurrentConfig() {
             return {
-                model: ModelsModule.exportModelConfig(),
+                setupMode: document.querySelector('input[name="setup-mode"]:checked')?.id || 'setup-recommended',
+                model: {
+                    ...ModelsModule.exportModelConfig(),
+                    family: document.getElementById('model-family')?.value || 'qwen'
+                },
                 dataset: {
                     type: document.getElementById('dataset-type')?.value,
                     path: document.getElementById('dataset-path')?.value,
+                    split: document.getElementById('dataset-split')?.value,
                     sample_size: parseInt(document.getElementById('sample-size')?.value) || 0,
-                    train_split: parseInt(document.getElementById('train-split')?.value) || 80
+                    train_split: parseInt(document.getElementById('train-split')?.value) || 80,
+                    max_samples: parseInt(document.getElementById('max-samples')?.value) || 0
                 },
                 template: TemplatesModule.exportTemplateConfig(),
                 training: {
@@ -294,28 +300,74 @@
                     gradient_accumulation: parseInt(document.getElementById('gradient-accumulation')?.value) || 1,
                     learning_rate: parseFloat(document.getElementById('learning-rate')?.value) || 2e-4,
                     lr_schedule: document.getElementById('lr-schedule')?.value || 'cosine',
+                    lr_scheduler_type: document.getElementById('lr-scheduler-type')?.value || 'constant',
                     warmup_ratio: parseFloat(document.getElementById('warmup-ratio')?.value) || 0.1,
+                    warmup_steps: parseInt(document.getElementById('warmup-steps')?.value) || 10,
                     weight_decay: parseFloat(document.getElementById('weight-decay')?.value) || 0.01,
                     max_grad_norm: parseFloat(document.getElementById('max-grad-norm')?.value) || 1.0,
-                    seed: parseInt(document.getElementById('seed')?.value) || 42
+                    max_sequence_length: parseInt(document.getElementById('max-sequence-length')?.value) || 2048,
+                    max_new_tokens: parseInt(document.getElementById('max-new-tokens')?.value) || 256,
+                    seed: parseInt(document.getElementById('seed')?.value) || 42,
+                    optimizer: document.getElementById('optimizer')?.value || 'paged_adamw_32bit'
                 },
                 grpo: {
                     num_generations: parseInt(document.getElementById('num-generations')?.value) || 2,
+                    temperature: parseFloat(document.getElementById('temperature')?.value) || 0.7,
+                    top_p: parseFloat(document.getElementById('top-p')?.value) || 0.95,
+                    top_k: parseInt(document.getElementById('top-k')?.value) || 50,
+                    repetition_penalty: parseFloat(document.getElementById('repetition-penalty')?.value) || 1.0,
                     kl_weight: parseFloat(document.getElementById('kl-weight')?.value) || 0.1,
-                    clip_range: parseFloat(document.getElementById('clip-range')?.value) || 0.2
+                    kl_penalty: parseFloat(document.getElementById('kl-penalty')?.value) || 0.05,
+                    clip_range: parseFloat(document.getElementById('clip-range')?.value) || 0.2,
+                    value_coefficient: parseFloat(document.getElementById('value-coefficient')?.value) || 1.0
+                },
+                optimizations: {
+                    use_flash_attention: document.getElementById('use-flash-attention')?.checked || false,
+                    gradient_checkpointing: document.getElementById('gradient-checkpointing')?.checked || false,
+                    mixed_precision: document.getElementById('mixed-precision')?.checked || true,
+                    use_bf16: document.getElementById('use-bf16')?.checked || false
                 },
                 output: {
                     name: document.getElementById('output-name')?.value || '',
                     save_steps: parseInt(document.getElementById('save-steps')?.value) || 100,
-                    eval_steps: parseInt(document.getElementById('eval-steps')?.value) || 100
-                }
+                    eval_steps: parseInt(document.getElementById('eval-steps')?.value) || 100,
+                    logging_steps: parseInt(document.getElementById('logging-steps')?.value) || 10
+                },
+                pre_training: {
+                    enabled: document.getElementById('enable-pre-training')?.checked ?? true,
+                    epochs: parseInt(document.getElementById('pre-training-epochs')?.value) || 2,
+                    max_samples: parseInt(document.getElementById('pre-training-samples')?.value) || null,
+                    filter_by_length: document.getElementById('pre-training-filter-length')?.checked ?? false,
+                    validate_format: document.getElementById('validate-format')?.checked ?? true
+                },
+                reward: AppState.getConfigValue('rewardConfig') || null
             };
         },
 
         // Apply configuration
         applyConfiguration(config) {
-            // Apply model configuration
+            // Apply setup mode first
+            if (config.setupMode) {
+                const setupModeRadio = document.getElementById(config.setupMode);
+                if (setupModeRadio) {
+                    setupModeRadio.checked = true;
+                    if (ModelsModule && ModelsModule.handleSetupModeChange) {
+                        ModelsModule.handleSetupModeChange();
+                    }
+                }
+            }
+
+            // Apply model configuration - family first, then model details
             if (config.model) {
+                if (config.model.family) {
+                    const familySelect = document.getElementById('model-family');
+                    if (familySelect) {
+                        familySelect.value = config.model.family;
+                        if (ModelsModule && ModelsModule.updateModelList) {
+                            ModelsModule.updateModelList();
+                        }
+                    }
+                }
                 ModelsModule.importModelConfig(config.model);
             }
 
@@ -323,17 +375,29 @@
             if (config.dataset) {
                 if (config.dataset.type) {
                     document.getElementById('dataset-type').value = config.dataset.type;
-                    DatasetModule.onDatasetTypeChange();
+                    if (DatasetModule && DatasetModule.onDatasetTypeChange) {
+                        DatasetModule.onDatasetTypeChange();
+                    }
                 }
                 if (config.dataset.path) {
                     document.getElementById('dataset-path').value = config.dataset.path;
+                }
+                if (config.dataset.split) {
+                    const splitElement = document.getElementById('dataset-split');
+                    if (splitElement) splitElement.value = config.dataset.split;
                 }
                 if (config.dataset.sample_size !== undefined) {
                     document.getElementById('sample-size').value = config.dataset.sample_size;
                 }
                 if (config.dataset.train_split !== undefined) {
                     document.getElementById('train-split').value = config.dataset.train_split;
-                    DatasetModule.updateSplitDisplay();
+                    if (DatasetModule && DatasetModule.updateSplitDisplay) {
+                        DatasetModule.updateSplitDisplay();
+                    }
+                }
+                if (config.dataset.max_samples !== undefined) {
+                    const maxSamplesElement = document.getElementById('max-samples');
+                    if (maxSamplesElement) maxSamplesElement.value = config.dataset.max_samples;
                 }
             }
 
@@ -344,32 +408,71 @@
 
             // Apply training configuration
             if (config.training) {
-                const trainingFields = [
-                    'num-epochs', 'batch-size', 'gradient-accumulation',
-                    'learning-rate', 'lr-schedule', 'warmup-ratio',
-                    'weight-decay', 'max-grad-norm', 'seed'
-                ];
+                const trainingFields = {
+                    'num-epochs': 'num_epochs',
+                    'batch-size': 'batch_size',
+                    'gradient-accumulation': 'gradient_accumulation',
+                    'learning-rate': 'learning_rate',
+                    'lr-schedule': 'lr_schedule',
+                    'lr-scheduler-type': 'lr_scheduler_type',
+                    'warmup-ratio': 'warmup_ratio',
+                    'warmup-steps': 'warmup_steps',
+                    'weight-decay': 'weight_decay',
+                    'max-grad-norm': 'max_grad_norm',
+                    'max-sequence-length': 'max_sequence_length',
+                    'max-new-tokens': 'max_new_tokens',
+                    'seed': 'seed',
+                    'optimizer': 'optimizer'
+                };
 
-                trainingFields.forEach(field => {
-                    const key = field.replace(/-/g, '_');
-                    if (config.training[key] !== undefined) {
-                        const element = document.getElementById(field);
-                        if (element) element.value = config.training[key];
+                Object.entries(trainingFields).forEach(([elementId, configKey]) => {
+                    if (config.training[configKey] !== undefined) {
+                        const element = document.getElementById(elementId);
+                        if (element) element.value = config.training[configKey];
                     }
                 });
             }
 
             // Apply GRPO configuration
             if (config.grpo) {
-                if (config.grpo.num_generations !== undefined) {
-                    document.getElementById('num-generations').value = config.grpo.num_generations;
-                }
-                if (config.grpo.kl_weight !== undefined) {
-                    document.getElementById('kl-weight').value = config.grpo.kl_weight;
-                }
-                if (config.grpo.clip_range !== undefined) {
-                    document.getElementById('clip-range').value = config.grpo.clip_range;
-                }
+                const grpoFields = {
+                    'num-generations': 'num_generations',
+                    'temperature': 'temperature',
+                    'top-p': 'top_p',
+                    'top-k': 'top_k',
+                    'repetition-penalty': 'repetition_penalty',
+                    'kl-weight': 'kl_weight',
+                    'kl-penalty': 'kl_penalty',
+                    'clip-range': 'clip_range',
+                    'value-coefficient': 'value_coefficient'
+                };
+
+                Object.entries(grpoFields).forEach(([elementId, configKey]) => {
+                    if (config.grpo[configKey] !== undefined) {
+                        const element = document.getElementById(elementId);
+                        if (element) element.value = config.grpo[configKey];
+                    }
+                });
+            }
+
+            // Apply optimizations
+            if (config.optimizations) {
+                const optimizationFields = [
+                    'use-flash-attention',
+                    'gradient-checkpointing',
+                    'mixed-precision',
+                    'use-bf16'
+                ];
+
+                optimizationFields.forEach(field => {
+                    const key = field.replace(/-/g, '_');
+                    if (config.optimizations[key] !== undefined) {
+                        const element = document.getElementById(field);
+                        if (element && element.type === 'checkbox') {
+                            element.checked = config.optimizations[key];
+                        }
+                    }
+                });
             }
 
             // Apply output configuration
@@ -383,11 +486,60 @@
                 if (config.output.eval_steps !== undefined) {
                     document.getElementById('eval-steps').value = config.output.eval_steps;
                 }
+                if (config.output.logging_steps !== undefined) {
+                    const loggingStepsElement = document.getElementById('logging-steps');
+                    if (loggingStepsElement) loggingStepsElement.value = config.output.logging_steps;
+                }
+            }
+
+            // Apply pre-training configuration
+            if (config.pre_training) {
+                if (config.pre_training.enabled !== undefined) {
+                    const enablePreTraining = document.getElementById('enable-pre-training');
+                    if (enablePreTraining && enablePreTraining.type === 'checkbox') {
+                        enablePreTraining.checked = config.pre_training.enabled;
+                    }
+                }
+                if (config.pre_training.epochs !== undefined) {
+                    const preTrainingEpochs = document.getElementById('pre-training-epochs');
+                    if (preTrainingEpochs) preTrainingEpochs.value = config.pre_training.epochs;
+                }
+                if (config.pre_training.max_samples !== undefined && config.pre_training.max_samples !== null) {
+                    const preTrainingSamples = document.getElementById('pre-training-samples');
+                    if (preTrainingSamples) preTrainingSamples.value = config.pre_training.max_samples;
+                } else {
+                    // Clear the field if max_samples is null or undefined
+                    const preTrainingSamples = document.getElementById('pre-training-samples');
+                    if (preTrainingSamples) preTrainingSamples.value = '';
+                }
+                if (config.pre_training.filter_by_length !== undefined) {
+                    const filterByLength = document.getElementById('pre-training-filter-length');
+                    if (filterByLength && filterByLength.type === 'checkbox') {
+                        filterByLength.checked = config.pre_training.filter_by_length;
+                    }
+                }
+                if (config.pre_training.validate_format !== undefined) {
+                    const validateFormat = document.getElementById('validate-format');
+                    if (validateFormat && validateFormat.type === 'checkbox') {
+                        validateFormat.checked = config.pre_training.validate_format;
+                    }
+                }
+            }
+
+            // Apply reward configuration
+            if (config.reward) {
+                AppState.setConfigValue('rewardConfig', config.reward);
+                // Update reward display if available
+                if (typeof updateRewardDisplay === 'function') {
+                    updateRewardDisplay();
+                }
             }
 
             // Validate all steps
             for (let i = 1; i <= 3; i++) {
-                NavigationModule.validateStep(i);
+                if (NavigationModule && NavigationModule.validateStep) {
+                    NavigationModule.validateStep(i);
+                }
             }
         },
 

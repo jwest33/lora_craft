@@ -166,7 +166,17 @@
     color: var(--success) !important;
 }
 
+/* Bootstrap bg-light Override for Dark Mode */
+[data-theme="dark"] .bg-light {
+    background-color: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+}
 
+[data-theme="dark"] .bg-light pre,
+[data-theme="dark"] .bg-light code {
+    background-color: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+}
 
 /* Dataset Card Styles */
 .dataset-catalog-card {
@@ -294,6 +304,7 @@ body {
     line-height: 1.6;
     transition: background-color 0.3s ease, color 0.3s ease;
     font-size: 0.875rem; /* Scale down base font from 16px to 14px */
+    /*zoom: 0.9; /* Global scale - adjust as needed (0.9 = 90%) */
 }
 
 
@@ -541,10 +552,12 @@ body {
     border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 1.5rem;
-    min-height: 350px;
+    height: 400px;  /* Fixed height for vertical fill */
     box-shadow: var(--shadow-sm);
     transition: all 0.3s ease;
     position: relative;
+    display: flex;
+    flex-direction: column;
 }
 
 .chart-container:hover {
@@ -565,7 +578,7 @@ body {
 
 .chart-container canvas {
     max-width: 100%;
-    height: auto !important;
+    flex: 1;  /* Allow canvas to fill container height */
 }
 
 /* Optimize chart rendering during collapse */

@@ -229,7 +229,7 @@ trainer = SFTTrainer(
         warmup_steps = 5,
         num_train_epochs = 2, # Set this for 1 full training run.
         learning_rate = 2e-4, # Reduce to 2e-5 for long training runs
-        logging_steps = 5,
+        logging_steps = 1,
         optim = "adamw_8bit",
         weight_decay = 0.01,
         lr_scheduler_type = "linear",
@@ -412,7 +412,7 @@ print(match_numbers.findall("<SOLUTION>17</SOLUTION>"))
 global PRINTED_TIMES
 PRINTED_TIMES = 0
 global PRINT_EVERY_STEPS
-PRINT_EVERY_STEPS = 5
+PRINT_EVERY_STEPS = 1
 
 def check_numbers(prompts, completions, answer, **kwargs):
     question = prompts[0][-1]["content"]

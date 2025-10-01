@@ -91,6 +91,13 @@
                         chevron.classList.remove('fa-chevron-down');
                         chevron.classList.add('fa-chevron-up');
                     }
+                    // Scroll to top of step when expanding
+                    setTimeout(() => {
+                        const targetStep = document.getElementById(`step-${stepNum}`);
+                        if (targetStep) {
+                            targetStep.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
+                    }, 100);
                 }
                 return;
             }
@@ -111,6 +118,13 @@
                         if (collapseElement.classList.contains('show')) {
                             chevron.classList.remove('fa-chevron-down');
                             chevron.classList.add('fa-chevron-up');
+                            // Scroll to top of step when expanding
+                            setTimeout(() => {
+                                const targetStep = document.getElementById(`step-${stepNum}`);
+                                if (targetStep) {
+                                    targetStep.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                }
+                            }, 100);
                         } else {
                             chevron.classList.remove('fa-chevron-up');
                             chevron.classList.add('fa-chevron-down');
@@ -136,6 +150,13 @@
                         chevron.classList.remove('fa-chevron-down');
                         chevron.classList.add('fa-chevron-up');
                     }
+                    // Scroll to top of step when expanding (after Bootstrap animation)
+                    setTimeout(() => {
+                        const targetStep = document.getElementById(`step-${stepNum}`);
+                        if (targetStep) {
+                            targetStep.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
+                    }, 350); // Bootstrap collapse animation is typically 350ms
                 }
             } catch (error) {
                 // Fallback
@@ -144,6 +165,13 @@
                     if (collapseElement.classList.contains('show')) {
                         chevron.classList.remove('fa-chevron-down');
                         chevron.classList.add('fa-chevron-up');
+                        // Scroll to top of step when expanding
+                        setTimeout(() => {
+                            const targetStep = document.getElementById(`step-${stepNum}`);
+                            if (targetStep) {
+                                targetStep.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }
+                        }, 100);
                     } else {
                         chevron.classList.remove('fa-chevron-up');
                         chevron.classList.add('fa-chevron-down');

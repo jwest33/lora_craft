@@ -19,9 +19,6 @@
     <!-- Font Awesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 
-    <!-- Chart.js for metrics -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.css">
-
     <!-- Style -->
     <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/rewards.css') }}" rel="stylesheet">
@@ -1349,11 +1346,6 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                     <i class="fas fa-chart-line"></i> Training Progress
                                 </h5>
 
-                                <!-- Progress Bar -->
-                                <div class="progress mb-3" style="height: 25px;">
-                                    <div id="training-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
-                                </div>
-
                                 <!-- Metrics Panel -->
                                 <div class="metrics-panel mb-4">
                                     <!-- Primary Metrics -->
@@ -1398,19 +1390,13 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
 
                                     <!-- GRPO-Specific Metrics -->
                                     <div class="row">
-                                        <div class="col-md-2">
+                                        <div class="col-md-3">
                                             <div class="metric-item">
                                                 <span class="metric-label">KL Divergence</span>
                                                 <span class="metric-value" id="metric-kl">--</span>
                                             </div>
                                         </div>
-                                        <div class="col-md-2">
-                                            <div class="metric-item">
-                                                <span class="metric-label">Entropy</span>
-                                                <span class="metric-value" id="metric-entropy">--</span>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-2">
+                                        <div class="col-md-3">
                                             <div class="metric-item">
                                                 <span class="metric-label">Comp. Length</span>
                                                 <span class="metric-value" id="metric-comp-length">--</span>

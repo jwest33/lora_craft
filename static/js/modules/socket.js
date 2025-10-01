@@ -40,7 +40,9 @@
 
             socket.on('training_metrics', (data) => {
                 if (data.session_id === AppState.currentSessionId) {
-                    console.log('Training metrics received:', data);
+                    console.log('Training metrics received with keys:', Object.keys(data));
+                    console.log('Sample values - kl:', data.kl, 'epoch:', data.epoch, 'completions/mean_length:', data['completions/mean_length']);
+                    console.log('Full data object:', data);
                     if (window.TrainingModule) {
                         window.TrainingModule.updateMetrics(data);
                     }
@@ -52,6 +54,26 @@
                     console.log('Training log:', data.message);
                     if (window.TrainingModule) {
                         window.TrainingModule.appendLog(data.message);
+                    }
+                }
+            });
+
+            socket.on('reset_metrics', (data) => {
+                if (data.session_id === AppState.currentSessionId) {
+                    console.log('Resetting metrics for phase:', data.phase);
+                    if (window.TrainingModule) {
+                        window.TrainingModule.clearCharts();
+                        // Reset all metrics panel values to default
+                        const metricIds = ['metric-step', 'metric-epoch', 'metric-loss', 'metric-reward',
+                                         'metric-reward-std', 'metric-lr', 'metric-kl',
+                                         'metric-grad-norm', 'metric-comp-length', 'metric-clipped-ratio',
+                                         'metric-clip-region'];
+                        metricIds.forEach(id => {
+                            const element = document.getElementById(id);
+                            if (element) {
+                                element.textContent = '--';
+                            }
+                        });
                     }
                 }
             });
