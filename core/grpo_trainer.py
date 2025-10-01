@@ -750,6 +750,16 @@ class GRPOModelTrainer:
         self.grpo_start_step = self.global_step
         logger.info(f"GRPO training starting at step {self.grpo_start_step} (epoch counter will reset to 0)")
 
+        # Immediately notify frontend of phase change to reset visualizations
+        if self.metrics_callback:
+            phase_change_notification = {
+                'training_phase': 'training',
+                'step': self.global_step,
+                'epoch': 0
+            }
+            self.metrics_callback(phase_change_notification)
+            logger.info("Sent phase change notification to frontend to reset visualizations")
+
         # Disable Torch compilation for TRL to avoid Dynamo errors with Unsloth
         # This is necessary due to incompatibility between Unsloth's optimizations and TRL's gradient computation
         os.environ['TORCHDYNAMO_DISABLE'] = '1'
