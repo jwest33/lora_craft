@@ -1574,6 +1574,160 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                 </div>
                             </div>
 
+                            <!-- Export Configuration Form -->
+                            <div class="export-config-section mt-4" style="display: none;">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-file-export"></i> Export Model
+                                        </h6>
+                                        <button type="button" class="btn-close float-end" onclick="document.querySelector('.export-config-section').style.display='none'"></button>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <!-- Model Selection -->
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-semibold">Model</label>
+                                                    <select id="export-model-select" class="form-select" onchange="ExportModule.onModelSelectChange()">
+                                                        <option value="">Select a trained model...</option>
+                                                    </select>
+                                                </div>
+
+                                                <!-- Export Format -->
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-semibold">Export Format</label>
+                                                    <select id="export-format" class="form-select" onchange="ExportModule.onFormatChange()">
+                                                        <option value="safetensors">SafeTensors (Recommended)</option>
+                                                        <option value="gguf">GGUF (llama.cpp)</option>
+                                                        <option value="pytorch">PyTorch (.pt)</option>
+                                                        <option value="onnx">ONNX</option>
+                                                    </select>
+                                                </div>
+
+                                                <!-- Output Name -->
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-semibold">Output Name</label>
+                                                    <input type="text" id="export-output-name" class="form-control" placeholder="my-model">
+                                                    <small class="text-muted">Extension will be added automatically</small>
+                                                </div>
+                                            </div>
+
+                                            <div class="col-md-6">
+                                                <!-- Quantization Options -->
+                                                <div class="mb-3">
+                                                    <div class="form-check form-switch">
+                                                        <input class="form-check-input" type="checkbox" id="enable-quantization" onchange="ExportModule.toggleQuantizationOptions()">
+                                                        <label class="form-check-label fw-semibold" for="enable-quantization">
+                                                            Enable Quantization
+                                                        </label>
+                                                    </div>
+                                                </div>
+
+                                                <div id="quantization-options" style="display: none;">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Quantization Type</label>
+                                                        <select id="quantization-type" class="form-select">
+                                                            <option value="int8">INT8</option>
+                                                            <option value="int4">INT4</option>
+                                                            <option value="fp16">FP16</option>
+                                                        </select>
+                                                    </div>
+
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Quantization Bits</label>
+                                                        <input type="number" id="quantization-bits" class="form-control" value="8" min="4" max="16">
+                                                    </div>
+                                                </div>
+
+                                                <!-- Format-specific options -->
+                                                <div id="format-options">
+                                                    <!-- SafeTensors options -->
+                                                    <div id="safetensors-options" class="format-option">
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="checkbox" id="st-metadata" checked>
+                                                            <label class="form-check-label" for="st-metadata">Include Metadata</label>
+                                                        </div>
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="checkbox" id="st-compress">
+                                                            <label class="form-check-label" for="st-compress">Compress</label>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- GGUF options -->
+                                                    <div id="gguf-options" class="format-option" style="display: none;">
+                                                        <div class="mb-3">
+                                                            <label class="form-label fw-semibold">Quantization Type</label>
+                                                            <select id="gguf-quantization" class="form-select">
+                                                                <option value="f16">F16 - No quantization (largest, best quality)</option>
+                                                                <option value="q8_0">Q8_0 - 8-bit quantization (very good quality)</option>
+                                                                <option value="q6_k">Q6_K - 6-bit quantization (good quality)</option>
+                                                                <option value="q5_k_m">Q5_K_M - 5-bit quantization (balanced)</option>
+                                                                <option value="q4_k_m" selected>Q4_K_M - 4-bit quantization (recommended)</option>
+                                                                <option value="q4_0">Q4_0 - 4-bit quantization (smaller)</option>
+                                                                <option value="q3_k_m">Q3_K_M - 3-bit quantization (smallest)</option>
+                                                            </select>
+                                                            <small class="text-muted">Lower bits = smaller file size, lower quality</small>
+                                                        </div>
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="checkbox" id="gguf-metadata" checked>
+                                                            <label class="form-check-label" for="gguf-metadata">Include Metadata</label>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- PyTorch options -->
+                                                    <div id="pytorch-options" class="format-option" style="display: none;">
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="checkbox" id="pt-state-dict" checked>
+                                                            <label class="form-check-label" for="pt-state-dict">State Dict Only</label>
+                                                        </div>
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="checkbox" id="pt-trace">
+                                                            <label class="form-check-label" for="pt-trace">Include Traced</label>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- ONNX options -->
+                                                    <div id="onnx-options" class="format-option" style="display: none;">
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="checkbox" id="onnx-optimize" checked>
+                                                            <label class="form-check-label" for="onnx-optimize">Optimize</label>
+                                                        </div>
+                                                        <div class="mb-2">
+                                                            <label class="form-label">Opset Version</label>
+                                                            <input type="number" id="onnx-opset" class="form-control" value="15" min="10" max="18">
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Model Info Display -->
+                                        <div id="export-model-info" class="alert alert-info mt-3" style="display: none;">
+                                            <!-- Model info will be displayed here -->
+                                        </div>
+
+                                        <!-- Export Progress -->
+                                        <div id="export-progress" style="display: none;" class="mt-3">
+                                            <div class="progress">
+                                                <div id="export-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                                            </div>
+                                            <small class="text-muted" id="export-progress-text">Preparing export...</small>
+                                        </div>
+
+                                        <!-- Action Buttons -->
+                                        <div class="d-flex gap-2 mt-3">
+                                            <button id="start-export-btn" class="btn btn-success flex-grow-1" onclick="ExportModule.startExport()">
+                                                <i class="fas fa-file-export me-2"></i>Export Model
+                                            </button>
+                                            <button class="btn btn-outline-secondary" onclick="document.querySelector('.export-config-section').style.display='none'">
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- Step Navigation -->
                             <div class="step-navigation mt-4" id="step-5-nav">
                                 <button class="btn btn-outline-secondary" onclick="goToStep(4)">
@@ -1764,6 +1918,16 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                     <i class="fas fa-edit"></i> Test Prompt
                                 </h6>
                                 <textarea class="form-control" id="test-prompt" rows="4" placeholder="Enter your test prompt here...">What is 25 * 47?</textarea>
+
+                                <!-- Expected Answer (Optional) -->
+                                <div class="mt-3">
+                                    <label class="form-label">
+                                        <i class="fas fa-check-circle"></i> Expected Answer (Optional)
+                                    </label>
+                                    <textarea class="form-control" id="test-expected-answer" rows="2" placeholder="Enter expected answer for automatic comparison (leave empty to skip)"></textarea>
+                                    <small class="text-muted">If provided, responses will be checked against this expected answer using case-insensitive exact matching</small>
+                                </div>
+
                                 <div class="form-check mt-2">
                                     <input class="form-check-input" type="checkbox" id="use-chat-template" checked>
                                     <label class="form-check-label" for="use-chat-template">
@@ -1830,6 +1994,12 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                                 <div class="mt-2 small text-muted">
                                                     Tokens: <span id="trained-tokens">-</span>
                                                 </div>
+                                                <!-- Match Status -->
+                                                <div id="trained-match-status" style="display: none;" class="mt-2">
+                                                    <div class="alert alert-sm mb-0" id="trained-match-alert">
+                                                        <i class="fas fa-check-circle"></i> <span id="trained-match-text"></span>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -1849,6 +2019,12 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                                 </div>
                                                 <div class="mt-2 small text-muted">
                                                     Tokens: <span id="base-tokens">-</span>
+                                                </div>
+                                                <!-- Match Status -->
+                                                <div id="base-match-status" style="display: none;" class="mt-2">
+                                                    <div class="alert alert-sm mb-0" id="base-match-alert">
+                                                        <i class="fas fa-check-circle"></i> <span id="base-match-text"></span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>

@@ -50,7 +50,9 @@
             AppState.trainedModels.forEach((model, index) => {
                 const option = document.createElement('option');
                 option.value = index;
-                option.textContent = `${model.name} (${new Date(model.timestamp).toLocaleString()})`;
+                const modelName = model.name || model.model_name || 'Unknown Model';
+                const timestamp = model.timestamp || model.modified_at || model.created_at;
+                option.textContent = `${modelName} (${new Date(timestamp).toLocaleString()})`;
                 modelSelect.appendChild(option);
             });
 
@@ -65,7 +67,10 @@
                         data.models.forEach(model => {
                             const option = document.createElement('option');
                             option.value = `server:${model.path}`;
-                            option.textContent = model.name;
+                            // Use model_name or session_id as fallback
+                            const modelName = model.model_name || model.session_id || 'Unknown';
+                            const timestamp = model.modified_at || model.created_at;
+                            option.textContent = `${modelName} (${new Date(timestamp).toLocaleString()})`;
                             optgroup.appendChild(option);
                         });
 
@@ -342,28 +347,61 @@
             const infoContainer = document.getElementById('export-model-info');
             if (!infoContainer) return;
 
-            infoContainer.innerHTML = `
+            // Handle both old and new model structures
+            const modelName = model.name || model.model_name || model.session_id || 'Unknown Model';
+            const timestamp = model.timestamp || model.modified_at || model.created_at;
+            const size = model.size || 0;
+
+            // Build info HTML with available data
+            let infoHtml = `
                 <div class="card">
                     <div class="card-body">
                         <h6 class="card-title">Model Information</h6>
                         <dl class="row mb-0">
                             <dt class="col-sm-4">Name:</dt>
-                            <dd class="col-sm-8">${CoreModule.escapeHtml(model.name)}</dd>
+                            <dd class="col-sm-8">${CoreModule.escapeHtml(modelName)}</dd>
 
-                            <dt class="col-sm-4">Size:</dt>
-                            <dd class="col-sm-8">${this.formatFileSize(model.size || 0)}</dd>
+                            ${model.session_id ? `
+                                <dt class="col-sm-4">Session ID:</dt>
+                                <dd class="col-sm-8"><small>${CoreModule.escapeHtml(model.session_id)}</small></dd>
+                            ` : ''}
 
-                            <dt class="col-sm-4">Created:</dt>
-                            <dd class="col-sm-8">${new Date(model.timestamp || Date.now()).toLocaleString()}</dd>
+                            ${size > 0 ? `
+                                <dt class="col-sm-4">Size:</dt>
+                                <dd class="col-sm-8">${this.formatFileSize(size)}</dd>
+                            ` : ''}
 
-                            ${model.metrics ? `
+                            ${timestamp ? `
+                                <dt class="col-sm-4">Date:</dt>
+                                <dd class="col-sm-8">${new Date(timestamp).toLocaleString()}</dd>
+                            ` : ''}
+
+                            ${model.epochs !== undefined && model.epochs !== null ? `
+                                <dt class="col-sm-4">Epochs:</dt>
+                                <dd class="col-sm-8">${model.epochs}</dd>
+                            ` : ''}
+
+                            ${model.best_reward !== undefined && model.best_reward !== null ? `
+                                <dt class="col-sm-4">Best Reward:</dt>
+                                <dd class="col-sm-8">${model.best_reward.toFixed(4)}</dd>
+                            ` : ''}
+
+                            ${model.metrics?.final_loss !== undefined ? `
                                 <dt class="col-sm-4">Final Loss:</dt>
-                                <dd class="col-sm-8">${model.metrics.final_loss?.toFixed(4) || 'N/A'}</dd>
+                                <dd class="col-sm-8">${model.metrics.final_loss.toFixed(4)}</dd>
+                            ` : ''}
+
+                            ${model.path ? `
+                                <dt class="col-sm-4">Path:</dt>
+                                <dd class="col-sm-8"><small class="text-muted">${CoreModule.escapeHtml(model.path)}</small></dd>
                             ` : ''}
                         </dl>
                     </div>
                 </div>
             `;
+
+            infoContainer.innerHTML = infoHtml;
+            infoContainer.style.display = 'block';
         },
 
         // Start export process
@@ -408,24 +446,40 @@
             const selectedValue = modelSelect.value;
 
             let modelPath;
+            let sessionId;
+
             if (selectedValue.startsWith('server:')) {
                 modelPath = selectedValue.substring(7);
+                // Extract session ID from path (e.g., "./outputs/session-id")
+                const pathParts = modelPath.split('/');
+                sessionId = pathParts[pathParts.length - 1];
             } else {
                 const modelIndex = parseInt(selectedValue);
-                modelPath = AppState.trainedModels[modelIndex]?.path;
+                const model = AppState.trainedModels[modelIndex];
+                modelPath = model?.path;
+                sessionId = model?.session_id;
             }
 
-            return {
-                model_path: modelPath,
-                format: document.getElementById('export-format')?.value,
-                output_name: document.getElementById('export-output-name')?.value,
-                quantization: {
-                    enabled: document.getElementById('enable-quantization')?.checked,
-                    type: document.getElementById('quantization-type')?.value,
-                    bits: parseInt(document.getElementById('quantization-bits')?.value) || 8
-                },
-                format_options: this.gatherFormatOptions()
+            const format = document.getElementById('export-format')?.value;
+            const formatOptions = this.gatherFormatOptions();
+
+            // Build config for backend
+            const config = {
+                format: format,
+                name: document.getElementById('export-output-name')?.value,
+                merge_lora: false // Could add UI option for this later
             };
+
+            // For GGUF format, add quantization from format options
+            if (format === 'gguf' && formatOptions.quantization) {
+                config.quantization = formatOptions.quantization;
+            }
+
+            // Add session ID and model path for reference
+            config.session_id = sessionId;
+            config.model_path = modelPath;
+
+            return config;
         },
 
         // Gather format-specific options
@@ -435,7 +489,7 @@
 
             switch (format) {
                 case 'gguf':
-                    options.use_f16 = document.getElementById('gguf-f16')?.checked;
+                    options.quantization = document.getElementById('gguf-quantization')?.value || 'q4_k_m';
                     options.include_metadata = document.getElementById('gguf-metadata')?.checked;
                     break;
 
@@ -460,10 +514,16 @@
 
         // Execute export
         executeExport(config) {
+            if (!config.session_id) {
+                CoreModule.showAlert('Cannot determine session ID for export', 'danger');
+                return;
+            }
+
             this.exportInProgress = true;
             this.updateExportUI(true);
 
-            fetch('/api/export_model', {
+            // Use the correct API endpoint with session ID
+            fetch(`/api/export/${config.session_id}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(config)
@@ -624,14 +684,8 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.models) {
-                        // Update AppState with server models
-                        AppState.trainedModels = data.models.map(model => ({
-                            name: model.name,
-                            path: model.path,
-                            timestamp: model.timestamp || Date.now(),
-                            size: model.size || 0,
-                            metrics: model.metrics || {}
-                        }));
+                        // Update AppState with server models (keep full structure)
+                        AppState.trainedModels = data.models;
 
                         // Reload exportable models dropdown
                         this.loadExportableModels();
@@ -841,16 +895,24 @@
 
         // Show export dialog for a specific model
         showExportDialog(sessionId, modelPath) {
-            // Populate export form with the selected model
-            const modelSelect = document.getElementById('export-model-select');
-            if (modelSelect) {
-                modelSelect.value = `server:${modelPath}`;
-                this.onModelSelectChange();
-            }
+            // Load available models first
+            this.loadExportableModels();
 
-            // Scroll to export form or show it
+            // Show export form
             const exportSection = document.querySelector('.export-config-section');
             if (exportSection) {
+                exportSection.style.display = 'block';
+
+                // Wait for models to load then select the model
+                setTimeout(() => {
+                    const modelSelect = document.getElementById('export-model-select');
+                    if (modelSelect) {
+                        modelSelect.value = `server:${modelPath}`;
+                        this.onModelSelectChange();
+                    }
+                }, 100);
+
+                // Scroll to export form
                 exportSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
         },
@@ -865,51 +927,71 @@
                 return;
             }
 
-            // Show loading state
-            detailsContent.innerHTML = '<div class="text-center p-3"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+            // Find model in AppState
+            const model = AppState.trainedModels.find(m => m.session_id === sessionId);
+
+            if (!model) {
+                detailsContent.innerHTML = '<div class="alert alert-warning">Model not found</div>';
+                detailsPanel.style.display = 'block';
+                return;
+            }
+
+            // Show panel
             detailsPanel.style.display = 'block';
 
-            // Fetch model details
-            fetch(`/api/export/checkpoints/${sessionId}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.checkpoints) {
-                        const checkpointsList = data.checkpoints.map(cp => `
-                            <li class="list-group-item">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <strong>${CoreModule.escapeHtml(cp.name)}</strong>
-                                        <br>
-                                        <small class="text-muted">${cp.path}</small>
-                                    </div>
-                                </div>
-                            </li>
-                        `).join('');
+            // Extract model name
+            let modelName = model.model_name;
+            if (!modelName || modelName === 'Unknown') {
+                modelName = model.training_config?.model?.modelName ||
+                           model.display_name ||
+                           model.session_id ||
+                           'Unknown Model';
+            }
 
-                        detailsContent.innerHTML = `
-                            <div class="card">
-                                <div class="card-header">
-                                    <h6 class="mb-0">Model Checkpoints</h6>
-                                </div>
-                                <div class="card-body">
-                                    <ul class="list-group list-group-flush">
-                                        ${checkpointsList}
-                                    </ul>
-                                </div>
-                            </div>
-                        `;
-                    } else {
-                        detailsContent.innerHTML = '<div class="alert alert-info">No checkpoint details available</div>';
-                    }
-                })
-                .catch(error => {
-                    console.error('Failed to load model details:', error);
-                    detailsContent.innerHTML = `
-                        <div class="alert alert-danger">
-                            Failed to load model details: ${CoreModule.escapeHtml(error.message)}
+            // Build details HTML
+            let detailsHtml = `
+                <div class="mb-3">
+                    <h6 class="fw-bold mb-2">${CoreModule.escapeHtml(modelName)}</h6>
+                    <div class="small text-muted">
+                        <div class="mb-1"><strong>Session ID:</strong> ${CoreModule.escapeHtml(model.session_id)}</div>
+                        <div class="mb-1"><strong>Path:</strong> ${CoreModule.escapeHtml(model.path)}</div>
+                        <div class="mb-1"><strong>Created:</strong> ${new Date(model.created_at).toLocaleString()}</div>
+                        <div class="mb-1"><strong>Completed:</strong> ${new Date(model.modified_at).toLocaleString()}</div>
+                        <div class="mb-1"><strong>Epochs:</strong> ${model.epochs || 0}</div>
+                        <div class="mb-1"><strong>Best Reward:</strong> ${model.best_reward !== null && model.best_reward !== undefined ? model.best_reward.toFixed(4) : 'N/A'}</div>
+                    </div>
+                </div>
+            `;
+
+            // Add checkpoints if available
+            if (model.checkpoints && model.checkpoints.length > 0) {
+                const checkpointsList = model.checkpoints.map(cp => `
+                    <li class="list-group-item">
+                        <div>
+                            <strong>${CoreModule.escapeHtml(cp.name)}</strong>
+                            <br>
+                            <small class="text-muted">${CoreModule.escapeHtml(cp.path)}</small>
                         </div>
-                    `;
-                });
+                    </li>
+                `).join('');
+
+                detailsHtml += `
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">Model Checkpoints</h6>
+                        </div>
+                        <div class="card-body p-0">
+                            <ul class="list-group list-group-flush">
+                                ${checkpointsList}
+                            </ul>
+                        </div>
+                    </div>
+                `;
+            } else {
+                detailsHtml += '<div class="alert alert-info mb-0">No checkpoints available</div>';
+            }
+
+            detailsContent.innerHTML = detailsHtml;
         },
 
         // Hide model details panel

@@ -68,6 +68,16 @@
             if (promptInput) {
                 promptInput.addEventListener('input', () => this.updatePromptCounter());
             }
+
+            // Batch comparison mode radio buttons
+            const batchCompareBaseRadio = document.getElementById('batch-compare-base');
+            const batchCompareModelRadio = document.getElementById('batch-compare-model');
+            if (batchCompareBaseRadio) {
+                batchCompareBaseRadio.addEventListener('change', () => this.updateBatchModelSelection());
+            }
+            if (batchCompareModelRadio) {
+                batchCompareModelRadio.addEventListener('change', () => this.updateBatchModelSelection());
+            }
         },
 
         // Check for active batch tests
@@ -126,6 +136,9 @@
 
             // Update model info display
             this.updateModelInfo();
+
+            // Update prompt preview with training chat template
+            this.updateTestPromptPreview();
         },
 
         // Toggle between comparison modes
@@ -763,45 +776,77 @@
         // Load list of trained models available for testing
         loadTestableModels() {
             const modelSelect = document.getElementById('test-model-select');
-            if (!modelSelect) return;
+            const batchModelSelect = document.getElementById('batch-test-model-select');
 
             // Show loading state
-            modelSelect.innerHTML = '<option value="">Loading models...</option>';
+            if (modelSelect) {
+                modelSelect.innerHTML = '<option value="">Loading models...</option>';
+            }
+            if (batchModelSelect) {
+                batchModelSelect.innerHTML = '<option value="">Loading models...</option>';
+            }
 
             fetch('/api/test/models')
                 .then(response => response.json())
                 .then(data => {
                     if (data.models && data.models.length > 0) {
-                        modelSelect.innerHTML = '<option value="">Select a trained model...</option>';
+                        // Populate single test model select
+                        if (modelSelect) {
+                            modelSelect.innerHTML = '<option value="">Select a trained model...</option>';
+                            data.models.forEach(model => {
+                                const option = this.createModelOption(model);
+                                modelSelect.appendChild(option);
+                            });
+                        }
 
-                        data.models.forEach(model => {
-                            const option = document.createElement('option');
-                            option.value = model.session_id;
-                            option.dataset.baseModel = model.base_model;
-                            option.dataset.checkpointPath = model.checkpoint_path;
-
-                            // Get display name with fallbacks
-                            let displayName = model.display_name || model.model_name;
-                            if (!displayName || displayName === 'Unknown') {
-                                displayName = model.base_model || model.session_id;
-                            }
-
-                            // Get epochs with fallback
-                            const epochs = model.epochs || model.num_epochs || 0;
-                            option.dataset.epochs = epochs;
-
-                            option.textContent = `${displayName} (${epochs} epochs)`;
-                            modelSelect.appendChild(option);
-                        });
+                        // Populate batch test model select
+                        if (batchModelSelect) {
+                            batchModelSelect.innerHTML = '<option value="">Select a trained model...</option>';
+                            data.models.forEach(model => {
+                                const option = this.createModelOption(model);
+                                batchModelSelect.appendChild(option);
+                            });
+                        }
                     } else {
-                        modelSelect.innerHTML = '<option value="">No trained models available</option>';
+                        if (modelSelect) {
+                            modelSelect.innerHTML = '<option value="">No trained models available</option>';
+                        }
+                        if (batchModelSelect) {
+                            batchModelSelect.innerHTML = '<option value="">No trained models available</option>';
+                        }
                     }
                 })
                 .catch(error => {
                     console.error('Failed to load testable models:', error);
-                    modelSelect.innerHTML = '<option value="">Error loading models</option>';
+                    if (modelSelect) {
+                        modelSelect.innerHTML = '<option value="">Error loading models</option>';
+                    }
+                    if (batchModelSelect) {
+                        batchModelSelect.innerHTML = '<option value="">Error loading models</option>';
+                    }
                     CoreModule.showAlert('Failed to load trained models', 'danger');
                 });
+        },
+
+        // Create a model option element
+        createModelOption(model) {
+            const option = document.createElement('option');
+            option.value = model.session_id;
+            option.dataset.baseModel = model.base_model;
+            option.dataset.checkpointPath = model.checkpoint_path;
+
+            // Get display name with fallbacks
+            let displayName = model.display_name || model.model_name;
+            if (!displayName || displayName === 'Unknown') {
+                displayName = model.base_model || model.session_id;
+            }
+
+            // Get epochs with fallback
+            const epochs = model.epochs || model.num_epochs || 0;
+            option.dataset.epochs = epochs;
+
+            option.textContent = `${displayName} (${epochs} epochs)`;
+            return option;
         },
 
         // Compare two models side-by-side
@@ -1073,6 +1118,12 @@
                             <strong>Speed:</strong> ${baseResult.tokens_per_second?.toFixed(1) || 'N/A'} tok/s
                         `;
                     }
+
+                    // Check for expected answer and show match status
+                    const expectedAnswer = document.getElementById('test-expected-answer')?.value?.trim();
+                    if (expectedAnswer) {
+                        this.displayMatchStatus(trainedResult, baseResult, expectedAnswer);
+                    }
                     break;
 
                 case 'error':
@@ -1088,6 +1139,51 @@
                     }
                     CoreModule.showAlert(`Error: ${data.error}`, 'danger');
                     break;
+            }
+        },
+
+        // Display match status for expected answer
+        displayMatchStatus(trainedResult, baseResult, expectedAnswer) {
+            const trainedMatchContainer = document.getElementById('trained-match-status');
+            const baseMatchContainer = document.getElementById('base-match-status');
+            const trainedMatchAlert = document.getElementById('trained-match-alert');
+            const baseMatchAlert = document.getElementById('base-match-alert');
+            const trainedMatchText = document.getElementById('trained-match-text');
+            const baseMatchText = document.getElementById('base-match-text');
+
+            // Case-insensitive exact match comparison
+            const normalizedExpected = expectedAnswer.toLowerCase().trim();
+
+            if (trainedResult.success && trainedResult.response) {
+                const normalizedTrained = trainedResult.response.toLowerCase().trim();
+                const trainedMatches = normalizedTrained === normalizedExpected;
+
+                if (trainedMatchContainer && trainedMatchAlert && trainedMatchText) {
+                    trainedMatchContainer.style.display = 'block';
+                    if (trainedMatches) {
+                        trainedMatchAlert.className = 'alert alert-sm alert-success mb-0';
+                        trainedMatchText.innerHTML = '<i class="fas fa-check-circle me-1"></i> Matches expected answer';
+                    } else {
+                        trainedMatchAlert.className = 'alert alert-sm alert-warning mb-0';
+                        trainedMatchText.innerHTML = '<i class="fas fa-times-circle me-1"></i> Does not match expected answer';
+                    }
+                }
+            }
+
+            if (baseResult.success && baseResult.response) {
+                const normalizedBase = baseResult.response.toLowerCase().trim();
+                const baseMatches = normalizedBase === normalizedExpected;
+
+                if (baseMatchContainer && baseMatchAlert && baseMatchText) {
+                    baseMatchContainer.style.display = 'block';
+                    if (baseMatches) {
+                        baseMatchAlert.className = 'alert alert-sm alert-success mb-0';
+                        baseMatchText.innerHTML = '<i class="fas fa-check-circle me-1"></i> Matches expected answer';
+                    } else {
+                        baseMatchAlert.className = 'alert alert-sm alert-warning mb-0';
+                        baseMatchText.innerHTML = '<i class="fas fa-times-circle me-1"></i> Does not match expected answer';
+                    }
+                }
             }
         },
 
@@ -1137,6 +1233,196 @@
             `;
         },
 
+        // Handle batch test file upload
+        handleBatchTestFileUpload() {
+            const fileInput = document.getElementById('batch-test-file');
+            const file = fileInput?.files[0];
+
+            if (!file) {
+                return;
+            }
+
+            // Show uploading state
+            const fileInfoDiv = document.getElementById('batch-file-info');
+            const fileDetailsSpan = document.getElementById('batch-file-details');
+
+            if (fileInfoDiv && fileDetailsSpan) {
+                fileInfoDiv.style.display = 'block';
+                fileDetailsSpan.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Uploading and analyzing file...';
+            }
+
+            // Create form data
+            const formData = new FormData();
+            formData.append('file', file);
+
+            // Upload file
+            fetch('/api/test/upload-file', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update file info display
+                    if (fileDetailsSpan) {
+                        fileDetailsSpan.innerHTML = `
+                            <i class="fas fa-file-csv me-2"></i>
+                            <strong>${CoreModule.escapeHtml(data.filename)}</strong> -
+                            ${data.sample_count} rows, ${data.columns.length} columns
+                        `;
+                    }
+
+                    // Populate column dropdowns
+                    this.populateColumnSelects(data.columns, data.sample_count);
+
+                    // Show column configuration section
+                    const columnConfig = document.getElementById('batch-column-config');
+                    if (columnConfig) {
+                        columnConfig.style.display = 'block';
+                    }
+
+                    // Show test options section
+                    const testOptions = document.getElementById('batch-test-options');
+                    if (testOptions) {
+                        testOptions.style.display = 'block';
+                    }
+
+                    // Enable the run button
+                    const runButton = document.getElementById('batch-compare-btn');
+                    if (runButton) {
+                        runButton.disabled = false;
+                    }
+
+                    CoreModule.showAlert('File uploaded and analyzed successfully', 'success');
+                } else {
+                    throw new Error(data.error || 'Failed to upload file');
+                }
+            })
+            .catch(error => {
+                console.error('File upload error:', error);
+                CoreModule.showAlert(`Failed to upload file: ${error.message}`, 'danger');
+
+                // Reset file input
+                if (fileInput) {
+                    fileInput.value = '';
+                }
+
+                // Hide file info
+                if (fileInfoDiv) {
+                    fileInfoDiv.style.display = 'none';
+                }
+            });
+        },
+
+        // Populate column selection dropdowns
+        populateColumnSelects(columns, sampleCount) {
+            const instructionSelect = document.getElementById('batch-instruction-column');
+            const responseSelect = document.getElementById('batch-response-column');
+            const totalSamplesSpan = document.getElementById('batch-total-samples');
+
+            // Update total samples display
+            if (totalSamplesSpan) {
+                totalSamplesSpan.textContent = `of ${sampleCount}`;
+            }
+
+            // Populate instruction column dropdown
+            if (instructionSelect) {
+                instructionSelect.innerHTML = '<option value="">Select column...</option>';
+                columns.forEach(column => {
+                    const option = document.createElement('option');
+                    option.value = column;
+                    option.textContent = column;
+                    // Auto-select common instruction column names
+                    if (['instruction', 'prompt', 'input', 'question'].includes(column.toLowerCase())) {
+                        option.selected = true;
+                    }
+                    instructionSelect.appendChild(option);
+                });
+            }
+
+            // Populate response column dropdown
+            if (responseSelect) {
+                responseSelect.innerHTML = '<option value="">None - Just compare models</option>';
+                columns.forEach(column => {
+                    const option = document.createElement('option');
+                    option.value = column;
+                    option.textContent = column;
+                    // Auto-select common response column names
+                    if (['response', 'output', 'answer', 'expected'].includes(column.toLowerCase())) {
+                        option.selected = true;
+                    }
+                    responseSelect.appendChild(option);
+                });
+            }
+        },
+
+        // Update batch model selection
+        updateBatchModelSelection() {
+            const modelSelect = document.getElementById('batch-test-model-select');
+            const comparisonMode = document.querySelector('input[name="batch-compare-mode"]:checked')?.value;
+            const baseModelGroup = document.getElementById('batch-base-model-group');
+            const comparisonModelGroup = document.getElementById('batch-comparison-model-group');
+            const baseModelInput = document.getElementById('batch-base-model-input');
+
+            if (!modelSelect || !modelSelect.value) {
+                return;
+            }
+
+            const selectedOption = modelSelect.options[modelSelect.selectedIndex];
+            const baseModel = selectedOption.dataset.baseModel;
+
+            // Update base model display
+            if (baseModelInput && baseModel) {
+                baseModelInput.value = baseModel;
+            }
+
+            // Toggle comparison mode sections
+            if (comparisonMode === 'base') {
+                if (baseModelGroup) baseModelGroup.style.display = 'block';
+                if (comparisonModelGroup) comparisonModelGroup.style.display = 'none';
+            } else {
+                if (baseModelGroup) baseModelGroup.style.display = 'none';
+                if (comparisonModelGroup) comparisonModelGroup.style.display = 'block';
+
+                // Populate comparison model dropdown if not already done
+                this.populateBatchComparisonModels(modelSelect.value);
+            }
+        },
+
+        // Populate batch comparison model dropdown
+        populateBatchComparisonModels(excludeSessionId) {
+            const comparisonSelect = document.getElementById('batch-comparison-model-select');
+            if (!comparisonSelect) return;
+
+            // Only populate once
+            if (comparisonSelect.options.length > 1) return;
+
+            fetch('/api/test/models')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.models && data.models.length > 0) {
+                        comparisonSelect.innerHTML = '<option value="">Select another trained model...</option>';
+                        data.models.forEach(model => {
+                            // Exclude the primary model from comparison options
+                            if (model.session_id !== excludeSessionId) {
+                                const option = document.createElement('option');
+                                option.value = model.session_id;
+                                option.dataset.baseModel = model.base_model;
+
+                                let displayName = model.display_name || model.model_name || model.base_model;
+                                const epochs = model.epochs || model.num_epochs || 0;
+                                option.textContent = `${displayName} (${epochs} epochs)`;
+
+                                comparisonSelect.appendChild(option);
+                            }
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Failed to load comparison models:', error);
+                });
+        },
+
         // Clear uploaded batch test file
         clearBatchTestFile() {
             const fileInput = document.getElementById('batch-test-file');
@@ -1171,9 +1457,10 @@
         // Run batch comparison test
         runBatchComparison() {
             const modelSelect = document.getElementById('batch-test-model-select');
-            const instructionColumn = document.getElementById('instruction-column')?.value;
-            const responseColumn = document.getElementById('response-column')?.value;
+            const instructionColumn = document.getElementById('batch-instruction-column')?.value;
+            const responseColumn = document.getElementById('batch-response-column')?.value;
             const sampleSize = document.getElementById('batch-sample-size')?.value;
+            const comparisonMode = document.querySelector('input[name="batch-compare-mode"]:checked')?.value || 'base';
 
             if (!modelSelect?.value) {
                 CoreModule.showAlert('Please select a trained model', 'warning');
@@ -1189,38 +1476,80 @@
             const selectedOption = modelSelect.options[modelSelect.selectedIndex];
             const baseModel = selectedOption.dataset.baseModel;
 
-            if (!baseModel) {
-                CoreModule.showAlert('Base model information not available', 'danger');
-                return;
+            // Prepare batch comparison config
+            const config = {
+                session_id: sessionId,
+                instruction_column: instructionColumn,
+                response_column: responseColumn || null,
+                sample_size: sampleSize ? parseInt(sampleSize) : null,
+                use_chat_template: document.getElementById('batch-use-chat-template')?.checked !== false,
+                compare_mode: comparisonMode,
+                config: {
+                    temperature: parseFloat(document.getElementById('test-temperature')?.value) || 0.7,
+                    top_p: parseFloat(document.getElementById('test-top-p')?.value) || 0.95,
+                    max_new_tokens: parseInt(document.getElementById('test-max-tokens')?.value) || 512,
+                    repetition_penalty: parseFloat(document.getElementById('test-rep-penalty')?.value) || 1.0,
+                    do_sample: true
+                }
+            };
+
+            // Add appropriate comparison model info based on mode
+            if (comparisonMode === 'base') {
+                if (!baseModel) {
+                    CoreModule.showAlert('Base model information not available', 'danger');
+                    return;
+                }
+                config.base_model = baseModel;
+            } else {
+                // Model-to-model comparison
+                const comparisonModelSelect = document.getElementById('batch-comparison-model-select');
+                if (!comparisonModelSelect?.value) {
+                    CoreModule.showAlert('Please select a comparison model', 'warning');
+                    return;
+                }
+                config.comparison_session_id = comparisonModelSelect.value;
             }
 
             // Show loading state
-            const progressContainer = document.getElementById('batch-test-progress');
+            const progressContainer = document.getElementById('batch-progress');
+            const resultsContainer = document.getElementById('batch-results');
+
+            if (resultsContainer) {
+                resultsContainer.style.display = 'block';
+            }
+
             if (progressContainer) {
                 progressContainer.style.display = 'block';
                 progressContainer.innerHTML = `
-                    <div class="alert alert-info">
-                        <i class="fas fa-spinner fa-spin me-2"></i>
-                        Starting batch comparison...
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <span class="text-muted">Processing:</span>
+                        <span id="batch-step-counter" class="badge bg-info">0 / 0</span>
+                    </div>
+                    <div class="progress mb-2">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <div id="batch-current-item" class="text-center text-muted small mb-3">
+                        <i class="fas fa-spinner fa-spin"></i> <span>Starting batch comparison...</span>
                     </div>
                 `;
             }
 
-            // Prepare batch comparison config
-            const config = {
-                session_id: sessionId,
-                base_model: baseModel,
-                instruction_column: instructionColumn,
-                response_column: responseColumn || null,
-                sample_size: sampleSize ? parseInt(sampleSize) : null,
-                use_chat_template: document.getElementById('use-chat-template')?.checked !== false,
-                compare_mode: 'base',
-                config: {
-                    temperature: parseFloat(document.getElementById('test-temperature')?.value) || 0.7,
-                    top_p: parseFloat(document.getElementById('test-top-p')?.value) || 0.9,
-                    max_tokens: parseInt(document.getElementById('test-max-tokens')?.value) || 256
-                }
-            };
+            // Hide previous summary and results
+            const summaryContainer = document.getElementById('batch-summary');
+            if (summaryContainer) {
+                summaryContainer.style.display = 'none';
+            }
+
+            const resultsBody = document.getElementById('batch-results-body');
+            if (resultsBody) {
+                resultsBody.innerHTML = '';
+            }
+
+            // Show cancel button, hide run button
+            const runButton = document.getElementById('batch-compare-btn');
+            const cancelButton = document.getElementById('batch-cancel-btn');
+            if (runButton) runButton.style.display = 'none';
+            if (cancelButton) cancelButton.style.display = 'block';
 
             // Start batch comparison
             fetch('/api/test/batch-compare', {
@@ -1245,9 +1574,14 @@
             .catch(error => {
                 console.error('Batch comparison error:', error);
                 CoreModule.showAlert(`Failed to start batch comparison: ${error.message}`, 'danger');
+
                 if (progressContainer) {
                     progressContainer.style.display = 'none';
                 }
+
+                // Restore buttons
+                if (runButton) runButton.style.display = 'block';
+                if (cancelButton) cancelButton.style.display = 'none';
             });
         },
 
@@ -1312,45 +1646,23 @@
             fetch(`/api/test/batch-results/${batchId}`)
                 .then(response => response.json())
                 .then(data => {
-                    const resultsContainer = document.getElementById('batch-test-results');
-                    if (resultsContainer) {
-                        const metrics = data.metrics || {};
-                        resultsContainer.innerHTML = `
-                            <div class="alert alert-success">
-                                <h5 class="alert-heading">
-                                    <i class="fas fa-check-circle me-2"></i>Batch Comparison Complete!
-                                </h5>
-                                <hr>
-                                <div class="row">
-                                    <div class="col-md-3">
-                                        <strong>Total Tests:</strong> ${metrics.total || 0}
-                                    </div>
-                                    <div class="col-md-3">
-                                        <strong>Successful:</strong> ${metrics.successful || 0}
-                                    </div>
-                                    <div class="col-md-3">
-                                        <strong>Failed:</strong> ${metrics.failed || 0}
-                                    </div>
-                                    <div class="col-md-3">
-                                        <strong>Avg Time:</strong> ${metrics.avg_time?.toFixed(2) || 'N/A'}s
-                                    </div>
-                                </div>
-                                <div class="mt-3">
-                                    <button class="btn btn-primary" onclick="TestingModule.exportBatchResults('${batchId}')">
-                                        <i class="fas fa-download me-2"></i>Export Results
-                                    </button>
-                                    <button class="btn btn-secondary ms-2" onclick="TestingModule.viewBatchResults('${batchId}')">
-                                        <i class="fas fa-eye me-2"></i>View Details
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-                    }
-
-                    const progressContainer = document.getElementById('batch-test-progress');
+                    // Hide progress
+                    const progressContainer = document.getElementById('batch-progress');
                     if (progressContainer) {
                         progressContainer.style.display = 'none';
                     }
+
+                    // Restore buttons
+                    const runButton = document.getElementById('batch-compare-btn');
+                    const cancelButton = document.getElementById('batch-cancel-btn');
+                    if (runButton) runButton.style.display = 'block';
+                    if (cancelButton) cancelButton.style.display = 'none';
+
+                    // Display summary metrics
+                    this.displayBatchSummary(data);
+
+                    // Display results table
+                    this.displayBatchResultsTable(data);
 
                     CoreModule.showAlert('Batch comparison completed successfully', 'success');
                 })
@@ -1358,6 +1670,106 @@
                     console.error('Failed to load batch results:', error);
                     CoreModule.showAlert('Batch comparison completed but failed to load results', 'warning');
                 });
+        },
+
+        // Display batch test summary
+        displayBatchSummary(data) {
+            const summaryContainer = document.getElementById('batch-summary');
+            if (!summaryContainer) return;
+
+            const summary = data.summary || {};
+            const hasExpected = data.results && data.results.length > 0 && 'expected' in data.results[0];
+
+            summaryContainer.style.display = 'flex';
+
+            // Update summary metrics
+            if (hasExpected && summary.trained_accuracy !== undefined) {
+                document.getElementById('batch-accuracy').textContent = `${summary.trained_accuracy}%`;
+            } else {
+                document.getElementById('batch-accuracy').textContent = 'N/A';
+            }
+
+            document.getElementById('batch-avg-length').textContent =
+                summary.avg_trained_length ? `${Math.round(summary.avg_trained_length)} chars` : 'N/A';
+
+            document.getElementById('batch-avg-time').textContent =
+                summary.avg_trained_time ? `${summary.avg_trained_time}s` : 'N/A';
+
+            document.getElementById('batch-total-samples').textContent = summary.total_samples || 0;
+        },
+
+        // Display batch results table
+        displayBatchResultsTable(data) {
+            const resultsBody = document.getElementById('batch-results-body');
+            const expectedHeader = document.getElementById('expected-header');
+            const matchHeader = document.getElementById('match-header');
+
+            if (!resultsBody) return;
+
+            const results = data.results || [];
+            const hasExpected = results.length > 0 && 'expected' in results[0];
+
+            // Show/hide expected answer columns
+            if (expectedHeader) {
+                expectedHeader.style.display = hasExpected ? 'table-cell' : 'none';
+            }
+            if (matchHeader) {
+                matchHeader.style.display = hasExpected ? 'table-cell' : 'none';
+            }
+
+            // Clear previous results
+            resultsBody.innerHTML = '';
+
+            // Populate results table
+            results.forEach((result, idx) => {
+                const row = document.createElement('tr');
+
+                const trainedMatch = result.trained_match === true;
+                const comparisonMatch = result.comparison_match === true;
+
+                let matchCell = '';
+                if (hasExpected) {
+                    matchCell = `
+                        <td style="display: ${hasExpected ? 'table-cell' : 'none'};">
+                            ${CoreModule.escapeHtml(result.expected || 'N/A')}
+                        </td>
+                        <td style="display: ${hasExpected ? 'table-cell' : 'none'};">
+                            <div class="d-flex gap-2">
+                                <span class="badge bg-${trainedMatch ? 'success' : 'warning'}">
+                                    <i class="fas fa-${trainedMatch ? 'check' : 'times'}"></i> Trained
+                                </span>
+                                <span class="badge bg-${comparisonMatch ? 'success' : 'warning'}">
+                                    <i class="fas fa-${comparisonMatch ? 'check' : 'times'}"></i> Comparison
+                                </span>
+                            </div>
+                        </td>
+                    `;
+                } else {
+                    matchCell = `
+                        <td style="display: none;"></td>
+                        <td style="display: none;"></td>
+                    `;
+                }
+
+                row.innerHTML = `
+                    <td>${idx + 1}</td>
+                    <td class="text-truncate" style="max-width: 200px;" title="${CoreModule.escapeHtml(result.instruction || '')}">
+                        ${CoreModule.escapeHtml((result.instruction || '').substring(0, 100))}${result.instruction && result.instruction.length > 100 ? '...' : ''}
+                    </td>
+                    <td class="text-truncate" style="max-width: 250px;" title="${CoreModule.escapeHtml(result.trained_response || '')}">
+                        ${CoreModule.escapeHtml((result.trained_response || '').substring(0, 100))}${result.trained_response && result.trained_response.length > 100 ? '...' : ''}
+                    </td>
+                    <td class="text-truncate" style="max-width: 250px;" title="${CoreModule.escapeHtml(result.comparison_response || '')}">
+                        ${CoreModule.escapeHtml((result.comparison_response || '').substring(0, 100))}${result.comparison_response && result.comparison_response.length > 100 ? '...' : ''}
+                    </td>
+                    ${matchCell}
+                `;
+
+                resultsBody.appendChild(row);
+            });
+
+            // Store results for export
+            this.currentBatchResults = data;
         },
 
         // Handle batch comparison failure
@@ -1424,54 +1836,95 @@
 
         // Export batch test results to file
         exportBatchResults(batchId) {
-            if (!batchId) {
+            // Use stored results if available, otherwise fetch
+            if (this.currentBatchResults) {
+                this.doExportBatchResults(this.currentBatchResults, batchId);
+            } else if (batchId) {
+                // Show loading state
+                CoreModule.showAlert('Preparing export...', 'info');
+
+                fetch(`/api/test/batch-results/${batchId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        this.doExportBatchResults(data, batchId);
+                    })
+                    .catch(error => {
+                        console.error('Export failed:', error);
+                        CoreModule.showAlert(`Failed to export results: ${error.message}`, 'danger');
+                    });
+            } else {
                 CoreModule.showAlert('No batch results to export', 'warning');
+            }
+        },
+
+        // Actually perform the CSV export
+        doExportBatchResults(data, batchId) {
+            if (!data.results) {
+                CoreModule.showAlert('No results data available', 'warning');
                 return;
             }
 
-            // Show loading state
-            CoreModule.showAlert('Preparing export...', 'info');
+            const results = data.results;
+            const hasExpected = results.length > 0 && 'expected' in results[0];
 
-            fetch(`/api/test/batch-results/${batchId}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.results) {
-                        // Create CSV content
-                        const results = data.results;
-                        const headers = ['ID', 'Instruction', 'Trained Response', 'Base Response', 'Trained Time (s)', 'Base Time (s)', 'Status'];
-                        const csvRows = [headers.join(',')];
+            // Build headers based on what data we have
+            const headers = ['ID', 'Instruction', 'Trained Response', 'Comparison Response', 'Trained Time (s)', 'Comparison Time (s)'];
+            if (hasExpected) {
+                headers.push('Expected Answer', 'Trained Match', 'Comparison Match');
+            }
 
-                        results.forEach((result, idx) => {
-                            const row = [
-                                idx + 1,
-                                `"${(result.instruction || '').replace(/"/g, '""')}"`,
-                                `"${(result.trained_response || '').replace(/"/g, '""')}"`,
-                                `"${(result.base_response || '').replace(/"/g, '""')}"`,
-                                result.trained_time?.toFixed(2) || 'N/A',
-                                result.base_time?.toFixed(2) || 'N/A',
-                                result.success ? 'Success' : 'Failed'
-                            ];
-                            csvRows.push(row.join(','));
-                        });
+            const csvRows = [headers.join(',')];
 
-                        const csvContent = csvRows.join('\n');
-                        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                        const url = window.URL.createObjectURL(blob);
-                        const link = document.createElement('a');
-                        link.href = url;
-                        link.download = `batch_comparison_${batchId}_${Date.now()}.csv`;
-                        link.click();
-                        window.URL.revokeObjectURL(url);
+            // Build data rows
+            results.forEach((result, idx) => {
+                const row = [
+                    idx + 1,
+                    `"${(result.instruction || '').replace(/"/g, '""')}"`,
+                    `"${(result.trained_response || '').replace(/"/g, '""')}"`,
+                    `"${(result.comparison_response || '').replace(/"/g, '""')}"`,
+                    result.trained_time?.toFixed(2) || 'N/A',
+                    result.comparison_time?.toFixed(2) || 'N/A'
+                ];
 
-                        CoreModule.showAlert('Batch results exported successfully', 'success');
-                    } else {
-                        throw new Error('No results data available');
-                    }
-                })
-                .catch(error => {
-                    console.error('Export failed:', error);
-                    CoreModule.showAlert(`Failed to export results: ${error.message}`, 'danger');
-                });
+                if (hasExpected) {
+                    row.push(
+                        `"${(result.expected || '').replace(/"/g, '""')}"`,
+                        result.trained_match ? 'Yes' : 'No',
+                        result.comparison_match ? 'Yes' : 'No'
+                    );
+                }
+
+                csvRows.push(row.join(','));
+            });
+
+            // Add summary section
+            if (data.summary) {
+                const summary = data.summary;
+                csvRows.push('');
+                csvRows.push('Summary');
+                csvRows.push(`Total Samples,${summary.total_samples || 0}`);
+                csvRows.push(`Avg Trained Time (s),${summary.avg_trained_time || 'N/A'}`);
+                csvRows.push(`Avg Comparison Time (s),${summary.avg_comparison_time || 'N/A'}`);
+                csvRows.push(`Avg Trained Length,${summary.avg_trained_length || 'N/A'}`);
+                csvRows.push(`Avg Comparison Length,${summary.avg_comparison_length || 'N/A'}`);
+
+                if (hasExpected) {
+                    csvRows.push(`Trained Accuracy (%),${summary.trained_accuracy || 'N/A'}`);
+                    csvRows.push(`Comparison Accuracy (%),${summary.comparison_accuracy || 'N/A'}`);
+                }
+            }
+
+            // Create and download file
+            const csvContent = csvRows.join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `batch_comparison_${batchId || Date.now()}.csv`;
+            link.click();
+            window.URL.revokeObjectURL(url);
+
+            CoreModule.showAlert('Batch results exported successfully', 'success');
         },
 
         // Run evaluation on test dataset
@@ -1675,6 +2128,72 @@
                 console.error('Export failed:', error);
                 CoreModule.showAlert(`Failed to export results: ${error.message}`, 'danger');
             }
+        },
+
+        // Update test prompt preview with actual training chat template
+        updateTestPromptPreview() {
+            const modelSelect = document.getElementById('test-model-select');
+            const promptInput = document.getElementById('test-prompt');
+            const systemPromptPreview = document.getElementById('system-prompt-preview');
+            const formattedPromptPreview = document.getElementById('formatted-prompt-preview');
+            const useChatTemplate = document.getElementById('use-chat-template')?.checked ?? true;
+
+            if (!modelSelect?.value) {
+                if (systemPromptPreview) {
+                    systemPromptPreview.textContent = 'No model selected';
+                }
+                if (formattedPromptPreview) {
+                    formattedPromptPreview.textContent = 'Please select a model first';
+                }
+                return;
+            }
+
+            const sessionId = modelSelect.value;
+            const prompt = promptInput?.value || 'Your test prompt here...';
+
+            // Show loading state
+            if (systemPromptPreview) {
+                systemPromptPreview.textContent = 'Loading...';
+            }
+            if (formattedPromptPreview) {
+                formattedPromptPreview.textContent = 'Loading...';
+            }
+
+            // Fetch the prompt preview from backend
+            fetch('/api/test/prompt-preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session_id: sessionId,
+                    prompt: prompt,
+                    use_chat_template: useChatTemplate
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                // Update system prompt preview
+                if (systemPromptPreview) {
+                    systemPromptPreview.textContent = data.system_prompt || 'No system prompt configured';
+                }
+
+                // Update formatted prompt preview
+                if (formattedPromptPreview) {
+                    formattedPromptPreview.textContent = data.formatted_prompt || prompt;
+                }
+            })
+            .catch(error => {
+                console.error('Failed to load prompt preview:', error);
+                if (systemPromptPreview) {
+                    systemPromptPreview.textContent = `Error: ${error.message}`;
+                }
+                if (formattedPromptPreview) {
+                    formattedPromptPreview.textContent = `Error loading preview: ${error.message}`;
+                }
+            });
         }
     };
 

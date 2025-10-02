@@ -740,6 +740,13 @@ body {
     box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
 }
 
+[data-theme="dark"] .form-control:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+    background-color: rgba(181, 181, 184, 0.9);
+}
+
 /* Model Display Name specific styling */
 #model-display-name {
     background: var(--bg-primary);
@@ -1131,6 +1138,7 @@ body {
     flex: 1;
     background-color: transparent;
     padding: 0px;
+    color: var(--text-primary);
 }
 
 /* Config Summary */

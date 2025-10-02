@@ -531,6 +531,13 @@ def run_training(session_id: str, config: Dict[str, Any]):
         pre_training_config = config.get('pre_training', {})
         output_config = config.get('output', {})
 
+        # Debug: Log what we're receiving
+        logger.info(f"=== DEBUG CONFIG ===")
+        logger.info(f"training_config.max_new_tokens: {training_config.get('max_new_tokens')}")
+        logger.info(f"top-level config.max_new_tokens: {config.get('max_new_tokens')}")
+        logger.info(f"Full training_config keys: {list(training_config.keys())}")
+        logger.info(f"=== END DEBUG ===")
+
         # Extract model name from nested structure, fall back to top-level for backward compatibility
         model_name = model_config.get('modelName') or config.get('model_name', 'unsloth/Qwen3-0.6B')
 
@@ -567,11 +574,11 @@ def run_training(session_id: str, config: Dict[str, Any]):
 
             # Generation configuration
             max_sequence_length=config.get('max_sequence_length', 2048),
-            max_new_tokens=config.get('max_new_tokens', 512),
-            temperature=config.get('temperature', 0.7),
-            top_p=config.get('top_p', 0.95),
-            top_k=config.get('top_k', 50),
-            repetition_penalty=config.get('repetition_penalty', 1.0),
+            max_new_tokens=training_config.get('max_new_tokens') if training_config.get('max_new_tokens') is not None else config.get('max_new_tokens', 512),
+            temperature=grpo_config_data.get('temperature') or config.get('temperature', 0.7),
+            top_p=grpo_config_data.get('top_p') or config.get('top_p', 0.95),
+            top_k=grpo_config_data.get('top_k') or config.get('top_k', 50),
+            repetition_penalty=grpo_config_data.get('repetition_penalty') or config.get('repetition_penalty', 1.0),
             # GRPO requires at least 2 generations to calculate advantages
             # Priority: grpo.num_generations > top-level num_generations > max(2, batch_size)
             # This ensures we always meet the minimum requirement
@@ -1260,7 +1267,7 @@ def get_training_status(session_id):
         return jsonify({'error': 'Session not found'}), 404
 
     session_obj = training_sessions[session_id]
-    return jsonify(session_obj.to_dict())
+    return jsonify({'success': True, 'status': session_obj.to_dict()})
 
 
 @app.route('/api/training/<session_id>/stop', methods=['POST'])
@@ -3562,13 +3569,14 @@ def compare_models():
             if not success:
                 return jsonify({'error': f'Failed to load base model: {error}'}), 500
 
-        # Compare models
+        # Compare models with session info for proper chat template
         results = model_tester.compare_models(
             prompt=prompt,
             trained_session_id=session_id,
             base_model_name=base_model,
             config=config,
-            use_chat_template=use_chat_template
+            use_chat_template=use_chat_template,
+            session_info=session_info
         )
 
         return jsonify(results)
@@ -3746,13 +3754,15 @@ def compare_two_trained_models():
             if not success:
                 return jsonify({'error': f'Failed to load model 2: {error}'}), 500
 
-        # Compare the two models
+        # Compare the two models with their respective session info
         results = model_tester.compare_two_models(
             prompt=prompt,
             model1_session_id=model1_session_id,
             model2_session_id=model2_session_id,
             config=config,
-            use_chat_template=use_chat_template
+            use_chat_template=use_chat_template,
+            model1_session_info=session1_info,
+            model2_session_info=session2_info
         )
 
         # Add session info to results
@@ -3787,6 +3797,12 @@ def compare_models_stream():
 
         def generate():
             try:
+                # Get session info for proper chat template
+                session_info = session_registry.get_session(session_id)
+                if not session_info:
+                    yield f"data: {json.dumps({'type': 'error', 'error': 'Session not found'})}\n\n"
+                    return
+
                 # Load models first if needed
                 checkpoint_path = Path(f"outputs/{session_id}/checkpoints/final")
                 if not checkpoint_path.exists():
@@ -3842,7 +3858,8 @@ def compare_models_stream():
                         model_key=session_id,
                         config=config,
                         use_chat_template=use_chat_template,
-                        streaming_callback=trained_callback
+                        streaming_callback=trained_callback,
+                        session_info=session_info
                     )
 
                 def generate_base():
@@ -3853,7 +3870,8 @@ def compare_models_stream():
                         model_key=base_model,
                         config=config,
                         use_chat_template=use_chat_template,
-                        streaming_callback=base_callback
+                        streaming_callback=base_callback,
+                        session_info=session_info
                     )
 
                 trained_thread = threading.Thread(target=generate_trained)
@@ -3918,6 +3936,17 @@ def compare_two_models_stream():
 
         def generate():
             try:
+                # Get session info for both models for proper chat templates
+                session1_info = session_registry.get_session(model1_session_id)
+                if not session1_info:
+                    yield f"data: {json.dumps({'type': 'error', 'error': 'Model 1 session not found'})}\n\n"
+                    return
+
+                session2_info = session_registry.get_session(model2_session_id)
+                if not session2_info:
+                    yield f"data: {json.dumps({'type': 'error', 'error': 'Model 2 session not found'})}\n\n"
+                    return
+
                 # Load both models first if needed
                 checkpoint1_path = Path(f"outputs/{model1_session_id}/checkpoints/final")
                 if not checkpoint1_path.exists():
@@ -3976,7 +4005,8 @@ def compare_two_models_stream():
                         model_key=model1_session_id,
                         config=config,
                         use_chat_template=use_chat_template,
-                        streaming_callback=model1_callback
+                        streaming_callback=model1_callback,
+                        session_info=session1_info
                     )
 
                 def generate_model2():
@@ -3987,7 +4017,8 @@ def compare_two_models_stream():
                         model_key=model2_session_id,
                         config=config,
                         use_chat_template=use_chat_template,
-                        streaming_callback=model2_callback
+                        streaming_callback=model2_callback,
+                        session_info=session2_info
                     )
 
                 model1_thread = threading.Thread(target=generate_model1)

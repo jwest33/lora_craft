@@ -540,12 +540,18 @@
                     warmup_ratio: parseFloat(document.getElementById('warmup-ratio')?.value) || 0.1,
                     weight_decay: parseFloat(document.getElementById('weight-decay')?.value) || 0.01,
                     max_grad_norm: parseFloat(document.getElementById('max-grad-norm')?.value) || 1.0,
+                    max_sequence_length: parseInt(document.getElementById('max-sequence-length')?.value) || 2048,
+                    max_new_tokens: parseInt(document.getElementById('max-new-tokens')?.value) || 512,
                     seed: parseInt(document.getElementById('seed')?.value) || 42
                 },
 
                 // GRPO specific
                 grpo: {
                     num_generations: parseInt(document.getElementById('num-generations')?.value) || 2,
+                    temperature: parseFloat(document.getElementById('temperature')?.value) || 0.7,
+                    top_p: parseFloat(document.getElementById('top-p')?.value) || 0.95,
+                    top_k: parseInt(document.getElementById('top-k')?.value) || 50,
+                    repetition_penalty: parseFloat(document.getElementById('repetition-penalty')?.value) || 1.0,
                     kl_weight: parseFloat(document.getElementById('kl-weight')?.value) || 0.1,
                     clip_range: parseFloat(document.getElementById('clip-range')?.value) || 0.2
                 },

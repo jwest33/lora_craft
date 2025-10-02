@@ -288,10 +288,23 @@
     };
 
     window.updatePromptPreview = function() {
-        if (window.TrainingModule && TrainingModule.updatePromptPreview) {
-            TrainingModule.updatePromptPreview();
+        // Check which step is active
+        const currentStep = window.currentStep || 1;
+
+        // If in testing step (step 6), use TestingModule
+        if (currentStep === 6) {
+            if (window.TestingModule && TestingModule.updateTestPromptPreview) {
+                TestingModule.updateTestPromptPreview();
+            } else {
+                console.error('TestingModule.updateTestPromptPreview not available');
+            }
         } else {
-            console.error('TrainingModule.updatePromptPreview not available');
+            // Otherwise use TrainingModule (for training steps)
+            if (window.TrainingModule && TrainingModule.updatePromptPreview) {
+                TrainingModule.updatePromptPreview();
+            } else {
+                console.error('TrainingModule.updatePromptPreview not available');
+            }
         }
     };
 
@@ -383,9 +396,9 @@
         }
     };
 
-    window.exportBatchResults = function() {
+    window.exportBatchResults = function(batchId) {
         if (window.TestingModule && TestingModule.exportBatchResults) {
-            TestingModule.exportBatchResults();
+            TestingModule.exportBatchResults(batchId);
         } else {
             console.error('TestingModule.exportBatchResults not available');
         }
@@ -404,6 +417,22 @@
             TestingModule.exportEvalResults();
         } else {
             console.error('TestingModule.exportEvalResults not available');
+        }
+    };
+
+    window.handleBatchTestFileUpload = function() {
+        if (window.TestingModule && TestingModule.handleBatchTestFileUpload) {
+            TestingModule.handleBatchTestFileUpload();
+        } else {
+            console.error('TestingModule.handleBatchTestFileUpload not available');
+        }
+    };
+
+    window.updateBatchModelSelection = function() {
+        if (window.TestingModule && TestingModule.updateBatchModelSelection) {
+            TestingModule.updateBatchModelSelection();
+        } else {
+            console.error('TestingModule.updateBatchModelSelection not available');
         }
     };
 
