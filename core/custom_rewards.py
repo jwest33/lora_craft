@@ -1283,7 +1283,15 @@ class CustomRewardBuilder:
                             instruction: str,
                             generated: str,
                             reference: Optional[str] = None) -> Tuple[float, Dict[str, float]]:
-        """Compute total reward from all components.
+        """Compute total reward from all components with brevity bonus.
+
+        Uses a two-pass approach:
+        1. First pass: compute all component rewards independently
+        2. Apply brevity bonus to length component if base quality is high
+        3. Compute final weighted sum
+
+        This encourages concise responses when quality is high, preventing the model
+        from gaming rewards by being short-but-wrong.
 
         Args:
             instruction: Input instruction
@@ -1296,14 +1304,49 @@ class CustomRewardBuilder:
         if not self.rewards:
             return 0.0, {}
 
+        # First pass: compute all component rewards
         component_rewards = {}
-        weighted_sum = 0.0
-        total_weight = sum(self.weights)
-
-        for reward_func, weight in zip(self.rewards, self.weights):
+        for reward_func in self.rewards:
             reward_value = reward_func.compute(instruction, generated, reference)
             component_rewards[reward_func.config.name] = reward_value
-            weighted_sum += reward_value * weight
+
+        # Calculate base quality from non-length components
+        # This prevents short-but-wrong responses from getting brevity bonus
+        quality_components = {k: v for k, v in component_rewards.items()
+                            if 'length' not in k.lower()}
+
+        if quality_components:
+            base_quality = sum(quality_components.values()) / len(quality_components)
+        else:
+            base_quality = 0.0
+
+        # Apply brevity bonus to length component if quality is high
+        quality_threshold = 0.7
+        length_component_name = None
+
+        # Find the length component (typically 'response_length' or similar)
+        for name in component_rewards:
+            if 'length' in name.lower():
+                length_component_name = name
+                break
+
+        if length_component_name and base_quality > quality_threshold:
+            word_count = len(generated.split())
+
+            # Brevity bonus: shorter is better within 30-150 word range
+            # Up to +15% bonus for responses closer to 30 words
+            min_brevity_words = 30
+            max_brevity_words = 150
+
+            if min_brevity_words <= word_count <= max_brevity_words:
+                # Linear interpolation: 150 words = 1.0x, 30 words = 1.15x
+                brevity_multiplier = 1.0 + (max_brevity_words - word_count) / (max_brevity_words - min_brevity_words) * 0.15
+                component_rewards[length_component_name] *= brevity_multiplier
+
+        # Compute final weighted sum
+        total_weight = sum(self.weights)
+        weighted_sum = sum(component_rewards[reward_func.config.name] * weight
+                          for reward_func, weight in zip(self.rewards, self.weights))
 
         total_reward = weighted_sum / total_weight if total_weight > 0 else 0.0
 
