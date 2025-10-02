@@ -255,15 +255,10 @@ class DatasetHandler:
 
             self.dataset = self._preprocess_dataset(self.dataset)
 
-            if self.progress_callback:
-                self.progress_callback({
-                    'message': 'Calculating statistics...',
-                    'progress': 0.98,
-                    'status': 'finalizing',
-                    'timestamp': time.time()
-                })
-
-            self.statistics = self._calculate_statistics(self.dataset)
+            # Skip statistics calculation - not needed for training and slows down large datasets
+            # Statistics are cosmetic (only used for UI display)
+            self.statistics = None
+            logger.info("Skipped statistics calculation to speed up dataset loading")
 
             if self.progress_callback:
                 self.progress_callback({
@@ -511,8 +506,43 @@ class DatasetHandler:
         return Dataset.from_list(data)
 
     def _load_csv(self, path: Path) -> Dataset:
-        """Load CSV file."""
-        df = pd.read_csv(path)
+        """Load CSV file with efficient pandas preprocessing."""
+        logger.info(f"Reading CSV file: {path}")
+
+        # Read CSV with Python engine for better handling of messy/malformed files
+        # The C engine is faster but stricter about format
+        df = pd.read_csv(
+            path,
+            engine='python',  # Python engine handles messy CSVs better
+            dtype=str,  # Don't infer types - much faster
+            skipinitialspace=True,  # Ignore spaces after delimiter
+            on_bad_lines='skip',  # Skip malformed lines instead of crashing
+            encoding='utf-8',  # Explicit encoding
+        )
+
+        logger.info(f"CSV loaded: {len(df):,} rows, {len(df.columns)} columns")
+
+        # Sanity check - if we only got 1 row from what should be a large file, something is wrong
+        if len(df) < 10:
+            logger.warning(f"Only {len(df)} rows loaded from CSV. File may be malformed.")
+            logger.warning("Checking file structure...")
+
+            # Try to debug by reading first few lines raw
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    first_lines = [f.readline() for _ in range(5)]
+                    logger.warning(f"First 5 lines of file:")
+                    for i, line in enumerate(first_lines):
+                        logger.warning(f"  Line {i}: {repr(line[:100])}")  # Show first 100 chars with escape codes
+            except Exception as e:
+                logger.error(f"Could not read file for debugging: {e}")
+
+        # Apply preprocessing in pandas (vectorized - much faster than row-by-row)
+        df = self._preprocess_dataframe(df)
+
+        # Mark as preprocessed to skip slow HuggingFace Dataset operations
+        self._csv_preprocessed = True
+
         return Dataset.from_pandas(df)
 
     def _load_parquet(self, path: Path) -> Dataset:
@@ -581,9 +611,103 @@ class DatasetHandler:
             # Treat as single text sample
             return Dataset.from_list([{'text': self.config.source_path}])
 
+    def _preprocess_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Apply preprocessing to pandas DataFrame (vectorized - much faster)."""
+        if df.empty:
+            return df
+
+        original_size = len(df)
+        logger.info(f"Preprocessing DataFrame with {original_size:,} rows and {len(df.columns)} columns")
+
+        # 1. Rename columns if needed (instant operation)
+        instruction_field = self.config.instruction_field
+        response_field = self.config.response_field
+
+        if instruction_field not in df.columns or response_field not in df.columns:
+            logger.info(f"Field mapping needed. Looking for {instruction_field} and {response_field} in {df.columns.tolist()}")
+
+            # Try to auto-map fields
+            columns_lower = {col.lower(): col for col in df.columns}
+
+            if instruction_field.lower() in columns_lower:
+                actual_instruction = columns_lower[instruction_field.lower()]
+                if actual_instruction != instruction_field:
+                    df = df.rename(columns={actual_instruction: instruction_field})
+                    logger.info(f"Mapped '{actual_instruction}' to '{instruction_field}'")
+
+            if response_field.lower() in columns_lower:
+                actual_response = columns_lower[response_field.lower()]
+                if actual_response != response_field:
+                    df = df.rename(columns={actual_response: response_field})
+                    logger.info(f"Mapped '{actual_response}' to '{response_field}'")
+
+        # 2. Remove empty samples (vectorized boolean indexing)
+        if self.config.remove_empty:
+            if instruction_field in df.columns and response_field in df.columns:
+                before_filter = len(df)
+                df = df[
+                    (df[instruction_field].astype(str).str.strip() != '') &
+                    (df[response_field].astype(str).str.strip() != '')
+                ]
+                removed = before_filter - len(df)
+                if removed > 0:
+                    logger.info(f"Removed {removed:,} empty samples ({before_filter:,} → {len(df):,})")
+
+        # 3. Filter by length (vectorized)
+        if self.config.max_length or self.config.min_length:
+            if instruction_field in df.columns and response_field in df.columns:
+                before_filter = len(df)
+                mask = pd.Series([True] * len(df))
+
+                instruction_lengths = df[instruction_field].astype(str).str.len()
+                response_lengths = df[response_field].astype(str).str.len()
+
+                if self.config.min_length:
+                    mask &= (instruction_lengths >= self.config.min_length) & (response_lengths >= self.config.min_length)
+
+                if self.config.max_length:
+                    mask &= (instruction_lengths <= self.config.max_length) & (response_lengths <= self.config.max_length)
+
+                df = df[mask]
+                removed = before_filter - len(df)
+                if removed > 0:
+                    logger.info(f"Filtered {removed:,} samples by length ({before_filter:,} → {len(df):,})")
+
+        # 4. Text transformations (vectorized)
+        if self.config.lowercase or self.config.strip_whitespace:
+            if instruction_field in df.columns:
+                if self.config.strip_whitespace:
+                    df[instruction_field] = df[instruction_field].astype(str).str.strip()
+                if self.config.lowercase:
+                    df[instruction_field] = df[instruction_field].astype(str).str.lower()
+
+            if response_field in df.columns:
+                if self.config.strip_whitespace:
+                    df[response_field] = df[response_field].astype(str).str.strip()
+                if self.config.lowercase:
+                    df[response_field] = df[response_field].astype(str).str.lower()
+
+            logger.info("Applied text transformations")
+
+        # 5. Limit samples (if needed)
+        if self.config.max_samples and len(df) > self.config.max_samples:
+            df = df.head(self.config.max_samples)
+            logger.info(f"Limited dataset from {original_size:,} to {self.config.max_samples:,} samples")
+
+        final_size = len(df)
+        if final_size != original_size:
+            logger.info(f"Preprocessing complete: {original_size:,} → {final_size:,} samples ({final_size/original_size*100:.1f}% retained)")
+
+        return df
+
     def _preprocess_dataset(self, dataset: Dataset) -> Dataset:
-        """Apply preprocessing to dataset."""
+        """Apply preprocessing to dataset (for non-CSV sources)."""
         if not dataset or len(dataset) == 0:
+            return dataset
+
+        # Check if this is from CSV (already preprocessed in pandas)
+        if hasattr(self, '_csv_preprocessed') and self._csv_preprocessed:
+            logger.info("Skipping dataset preprocessing (already done in pandas)")
             return dataset
 
         # Map fields if needed
@@ -802,7 +926,7 @@ class DatasetHandler:
         return dataset.map(transform)
 
     def _calculate_statistics(self, dataset: Dataset) -> DatasetStatistics:
-        """Calculate dataset statistics."""
+        """Calculate dataset statistics using efficient vectorized operations."""
         if not dataset or len(dataset) == 0:
             return DatasetStatistics(
                 total_samples=0,
@@ -818,39 +942,67 @@ class DatasetHandler:
                 field_coverage={}
             )
 
-        # Extract fields
-        instructions = []
-        responses = []
-        for example in dataset:
-            instructions.append(str(example.get(self.config.instruction_field, '')))
-            responses.append(str(example.get(self.config.response_field, '')))
+        # Convert to pandas for efficient vectorized operations
+        df = dataset.to_pandas()
 
-        # Calculate lengths
-        instruction_lengths = [len(i) for i in instructions]
-        response_lengths = [len(r) for r in responses]
+        # Get column names, handling missing fields gracefully
+        instruction_field = self.config.instruction_field
+        response_field = self.config.response_field
 
-        # Count empties
-        empty_instructions = sum(1 for i in instructions if not i.strip())
-        empty_responses = sum(1 for r in responses if not r.strip())
+        # Check if fields exist in dataframe
+        if instruction_field not in df.columns:
+            logger.warning(f"Instruction field '{instruction_field}' not found in dataset. Available: {df.columns.tolist()}")
+            instruction_field = df.columns[0] if len(df.columns) > 0 else None
 
-        # Calculate field coverage
+        if response_field not in df.columns:
+            logger.warning(f"Response field '{response_field}' not found in dataset. Available: {df.columns.tolist()}")
+            response_field = df.columns[1] if len(df.columns) > 1 else df.columns[0]
+
+        if instruction_field is None or response_field is None:
+            logger.error("Could not determine instruction/response fields")
+            return DatasetStatistics(
+                total_samples=len(df),
+                avg_instruction_length=0,
+                avg_response_length=0,
+                min_instruction_length=0,
+                max_instruction_length=0,
+                min_response_length=0,
+                max_response_length=0,
+                empty_instructions=0,
+                empty_responses=0,
+                unique_instructions=0,
+                field_coverage={}
+            )
+
+        # Vectorized operations - much faster than iteration
+        instruction_col = df[instruction_field].astype(str)
+        response_col = df[response_field].astype(str)
+
+        # Calculate lengths (vectorized)
+        instruction_lengths = instruction_col.str.len()
+        response_lengths = response_col.str.len()
+
+        # Count empties (vectorized)
+        empty_instructions = (instruction_col.str.strip() == '').sum()
+        empty_responses = (response_col.str.strip() == '').sum()
+
+        # Field coverage (vectorized)
         field_coverage = {}
-        if hasattr(dataset, 'column_names'):
-            for field in dataset.column_names:
-                non_empty = sum(1 for ex in dataset if ex.get(field, '') and str(ex[field]).strip())
-                field_coverage[field] = (non_empty / len(dataset)) * 100
+        for col in df.columns:
+            non_empty = (df[col].astype(str).str.strip() != '').sum()
+            field_coverage[col] = (non_empty / len(df)) * 100
 
         return DatasetStatistics(
-            total_samples=len(dataset),
-            avg_instruction_length=np.mean(instruction_lengths) if instruction_lengths else 0,
-            avg_response_length=np.mean(response_lengths) if response_lengths else 0,
-            min_instruction_length=min(instruction_lengths) if instruction_lengths else 0,
-            max_instruction_length=max(instruction_lengths) if instruction_lengths else 0,
-            min_response_length=min(response_lengths) if response_lengths else 0,
-            max_response_length=max(response_lengths) if response_lengths else 0,
-            empty_instructions=empty_instructions,
-            empty_responses=empty_responses,
-            unique_instructions=len(set(instructions)),
+            total_samples=len(df),
+            avg_instruction_length=float(instruction_lengths.mean()) if len(instruction_lengths) > 0 else 0,
+            avg_response_length=float(response_lengths.mean()) if len(response_lengths) > 0 else 0,
+            min_instruction_length=int(instruction_lengths.min()) if len(instruction_lengths) > 0 else 0,
+            max_instruction_length=int(instruction_lengths.max()) if len(instruction_lengths) > 0 else 0,
+            min_response_length=int(response_lengths.min()) if len(response_lengths) > 0 else 0,
+            max_response_length=int(response_lengths.max()) if len(response_lengths) > 0 else 0,
+            empty_instructions=int(empty_instructions),
+            empty_responses=int(empty_responses),
+            unique_instructions=int(instruction_col.nunique()),
             field_coverage=field_coverage
         )
 

@@ -225,6 +225,10 @@ function filterPresetsByCategory(category) {
                                         onclick="event.stopPropagation(); showPresetExample('${name}')">
                                     <i class="fas fa-eye"></i> Example
                                 </button>
+                                <button class="btn btn-sm btn-outline-success"
+                                        onclick="event.stopPropagation(); selectPresetByName('${name}', true); setTimeout(() => showFieldMappingForCurrentReward(), 300);">
+                                    <i class="fas fa-link"></i> Map Fields
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -556,7 +560,7 @@ function showPresetExample(presetName) {
                 <div class="modal-content">
                     <div class="modal-header">
                         <h5 class="modal-title">
-                            <i class="fas fa-trophy text-warning"></i>
+                            <i class="fas fa-trophy"></i>
                             ${preset.name}
                         </h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -1431,7 +1435,416 @@ window.confirmPresetSelection = confirmPresetSelection;
 window.loadSavedSelection = loadSavedSelection;
 window.filterPresetsByCategory = filterPresetsByCategory;
 
+// ============================================================================
+// Field Mapping Functions
+// ============================================================================
+
+// Store current dataset columns globally
+window.currentDatasetColumns = null;
+window.currentFieldMapping = {};
+
+// Show field mapping modal
+async function showFieldMappingModal(presetName, datasetColumns) {
+    if (!presetName || !datasetColumns || datasetColumns.length === 0) {
+        showNotification('Missing preset or dataset information', 'warning');
+        return;
+    }
+
+    try {
+        // Call validation API to get suggestions
+        const response = await fetch('/api/rewards/validate-fields', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                reward_preset: presetName,
+                dataset_columns: datasetColumns,
+                current_mapping: window.currentFieldMapping
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.error) {
+            showNotification(`Error: ${result.error}`, 'error');
+            return;
+        }
+
+        // Build modal HTML
+        const modalHtml = createFieldMappingModalHTML(presetName, datasetColumns, result);
+
+        // Remove existing modal if present
+        const existingModal = document.getElementById('fieldMappingModal');
+        if (existingModal) existingModal.remove();
+
+        // Add modal to page
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+        // Initialize dropdowns with suggestions
+        initializeFieldMappingDropdowns(result.suggestions, datasetColumns);
+
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('fieldMappingModal'));
+        modal.show();
+
+        // Clean up on hide
+        document.getElementById('fieldMappingModal').addEventListener('hidden.bs.modal', function() {
+            this.remove();
+        });
+
+    } catch (error) {
+        console.error('Error showing field mapping modal:', error);
+        showNotification('Failed to load field mapping', 'error');
+    }
+}
+
+// Create field mapping modal HTML
+function createFieldMappingModalHTML(presetName, datasetColumns, validationResult) {
+    const preset = rewardPresets[presetName];
+    const presetDisplayName = preset ? preset.name : presetName;
+
+    // Generate compatibility score HTML
+    const compatScore = validationResult.compatibility_score || 0;
+    const compatBarWidth = Math.min(compatScore, 100);
+    const compatClass = compatScore >= 80 ? 'success' : compatScore >= 50 ? 'warning' : 'danger';
+
+    // Generate field mapping rows
+    const fieldRows = Object.entries(validationResult.expected_fields).map(([fieldName, fieldDesc]) => {
+        const isOptional = validationResult.optional_fields.includes(fieldName);
+        const suggestion = validationResult.suggestions[fieldName] || '';
+        const example = validationResult.field_examples[fieldName] || '';
+        const confidence = validationResult.confidence_scores[fieldName] || 0;
+
+        return `
+            <div class="field-mapping-row">
+                <div class="field-box dataset-field">
+                    <div class="field-box-label">Dataset Column</div>
+                    <select class="field-select" data-field="${fieldName}" id="map-${fieldName}">
+                        <option value="">-- Select Column --</option>
+                        ${datasetColumns.map(col =>
+                            `<option value="${col}" ${col === suggestion ? 'selected' : ''}>${col}</option>`
+                        ).join('')}
+                    </select>
+                    ${confidence > 0 ? `<small class="text-muted mt-1 d-block">Confidence: ${Math.round(confidence * 100)}%</small>` : ''}
+                </div>
+
+                <div class="field-arrow">
+                    <i class="fas fa-arrow-right"></i>
+                </div>
+
+                <div class="field-box reward-field">
+                    <div class="field-box-label">
+                        Reward Field ${isOptional ? '<span class="badge field-status-badge optional ms-1">Optional</span>' : '<span class="badge field-status-badge mapped ms-1">Required</span>'}
+                    </div>
+                    <div class="field-box-content">${fieldName}</div>
+                    <small class="text-muted d-block mt-1">${fieldDesc}</small>
+                    ${example ? `<div class="field-box-example">Example: <code>${example}</code></div>` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // Generate warnings HTML
+    const warningsHtml = validationResult.warnings.length > 0 ? `
+        <div class="warnings-section mb-3">
+            ${validationResult.warnings.map(warning => {
+                const iconClass = warning.type === 'missing_required' ? 'fa-exclamation-circle' : 'fa-info-circle';
+                const alertClass = warning.type === 'missing_required' ? 'field-warning' : 'field-info';
+                return `
+                    <div class="${alertClass}">
+                        <i class="fas ${iconClass}"></i>
+                        ${warning.message}
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    ` : '';
+
+    return `
+        <div class="modal fade" id="fieldMappingModal" tabindex="-1">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content field-mapping-modal">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fas fa-link"></i> Field Mapping: ${presetDisplayName}
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- Compatibility Score -->
+                        <div class="compatibility-score-container">
+                            <div class="compatibility-label">
+                                <i class="fas fa-chart-line"></i> Dataset Compatibility
+                            </div>
+                            <div class="compatibility-bar">
+                                <div class="compatibility-fill bg-${compatClass}" style="width: ${compatBarWidth}%">
+                                    <span class="compatibility-text">${compatScore}%</span>
+                                </div>
+                            </div>
+                            <div class="compatibility-details mt-2">
+                                ${validationResult.valid ?
+                                    '<span class="field-status-badge mapped"><i class="fas fa-check"></i> All required fields mapped</span>' :
+                                    '<span class="field-status-badge missing"><i class="fas fa-times"></i> Missing required fields</span>'
+                                }
+                            </div>
+                        </div>
+
+                        ${warningsHtml}
+
+                        <h6 class="mb-3"><i class="fas fa-exchange-alt"></i> Map Your Dataset Fields</h6>
+
+                        ${fieldRows}
+
+                        <!-- Preview Section -->
+                        <div class="mapping-preview-section mt-4">
+                            <h6><i class="fas fa-eye"></i> Preview</h6>
+                            <div id="mapping-preview-content">
+                                <p class="text-muted">Select fields to see a preview of how your data will be mapped</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="fas fa-times"></i> Cancel
+                        </button>
+                        <button type="button" class="btn btn-auto-map" onclick="autoMapFields('${presetName}')">
+                            <i class="fas fa-magic"></i> Auto-Map
+                        </button>
+                        <button type="button" class="btn btn-primary" onclick="confirmFieldMapping('${presetName}')">
+                            <i class="fas fa-check"></i> Confirm Mapping
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Initialize field mapping dropdowns
+function initializeFieldMappingDropdowns(suggestions, datasetColumns) {
+    // Set up change listeners on all dropdowns
+    document.querySelectorAll('.field-select').forEach(select => {
+        select.addEventListener('change', function() {
+            updateMappingPreview();
+            validateCurrentMapping();
+        });
+    });
+
+    // Initial preview update
+    updateMappingPreview();
+}
+
+// Update mapping preview
+function updateMappingPreview() {
+    const previewContent = document.getElementById('mapping-preview-content');
+    if (!previewContent) return;
+
+    // Gather current mapping
+    const mapping = {};
+    document.querySelectorAll('.field-select').forEach(select => {
+        const field = select.dataset.field;
+        const value = select.value;
+        if (value) {
+            mapping[field] = value;
+        }
+    });
+
+    // Show preview if we have a dataset loaded
+    if (window.currentDatasetPreview && window.currentDatasetPreview.length > 0) {
+        const sampleData = window.currentDatasetPreview[0]; // First row
+
+        let previewHtml = '<div class="mapping-preview-card">';
+        previewHtml += '<div class="mapping-preview-header"><i class="fas fa-table"></i> Sample Data Mapping</div>';
+
+        Object.entries(mapping).forEach(([rewardField, datasetCol]) => {
+            const value = sampleData[datasetCol] || 'N/A';
+            const truncated = value.length > 100 ? value.substring(0, 100) + '...' : value;
+            previewHtml += `
+                <div class="mapping-example mb-2">
+                    <strong>${rewardField}</strong> ← <em>${datasetCol}</em><br>
+                    <code>${truncated}</code>
+                </div>
+            `;
+        });
+
+        previewHtml += '</div>';
+        previewContent.innerHTML = previewHtml;
+    } else {
+        previewContent.innerHTML = `
+            <div class="mapping-preview-card">
+                <div class="mapping-preview-header"><i class="fas fa-info-circle"></i> Mapping Summary</div>
+                ${Object.entries(mapping).map(([rewardField, datasetCol]) => `
+                    <div class="mapping-example">
+                        <strong>${rewardField}</strong> → <em>${datasetCol}</em>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+}
+
+// Validate current mapping
+function validateCurrentMapping() {
+    // Get required fields from modal data
+    const requiredFields = [];
+    document.querySelectorAll('.field-status-badge.mapped').forEach(badge => {
+        const fieldBox = badge.closest('.field-box');
+        const fieldName = fieldBox.querySelector('.field-box-content').textContent.trim();
+        requiredFields.push(fieldName);
+    });
+
+    // Check if all required fields are mapped
+    const mapping = {};
+    document.querySelectorAll('.field-select').forEach(select => {
+        const field = select.dataset.field;
+        const value = select.value;
+        if (value) {
+            mapping[field] = value;
+        }
+    });
+
+    const allMapped = requiredFields.every(field => mapping[field]);
+
+    // Enable/disable confirm button
+    const confirmBtn = document.querySelector('#fieldMappingModal .btn-primary');
+    if (confirmBtn) {
+        confirmBtn.disabled = !allMapped;
+        if (!allMapped) {
+            confirmBtn.title = 'Please map all required fields';
+        } else {
+            confirmBtn.title = '';
+        }
+    }
+}
+
+// Auto-map fields
+async function autoMapFields(presetName) {
+    const datasetColumns = window.currentDatasetColumns;
+    if (!datasetColumns) return;
+
+    try {
+        const response = await fetch('/api/rewards/validate-fields', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                reward_preset: presetName,
+                dataset_columns: datasetColumns
+            })
+        });
+
+        const result = await response.json();
+
+        // Apply suggestions to dropdowns
+        Object.entries(result.suggestions).forEach(([field, column]) => {
+            const select = document.getElementById(`map-${field}`);
+            if (select) {
+                select.value = column;
+            }
+        });
+
+        updateMappingPreview();
+        validateCurrentMapping();
+        showNotification('✓ Fields auto-mapped successfully', 'success');
+
+    } catch (error) {
+        console.error('Error auto-mapping fields:', error);
+        showNotification('Failed to auto-map fields', 'error');
+    }
+}
+
+// Confirm field mapping
+function confirmFieldMapping(presetName) {
+    // Gather final mapping
+    const mapping = {};
+    document.querySelectorAll('.field-select').forEach(select => {
+        const field = select.dataset.field;
+        const value = select.value;
+        if (value) {
+            mapping[field] = value;
+        }
+    });
+
+    // Store mapping globally
+    window.currentFieldMapping = mapping;
+
+    // Update the configuration
+    if (window.selectedRewardConfig) {
+        window.selectedRewardConfig.field_mapping = mapping;
+    }
+
+    // Store in localStorage
+    localStorage.setItem('fieldMapping', JSON.stringify(mapping));
+
+    // Close modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('fieldMappingModal'));
+    if (modal) modal.hide();
+
+    // Show success message
+    showNotification(`✓ Field mapping confirmed for ${rewardPresets[presetName]?.name || presetName}`, 'success');
+
+    // Update reward display to show mapping status
+    updateRewardMappingStatus(presetName, mapping);
+}
+
+// Update reward display with mapping status
+function updateRewardMappingStatus(presetName, mapping) {
+    const componentDisplay = document.getElementById('preset-component-display');
+    if (!componentDisplay) return;
+
+    // Add mapping status indicator
+    const mappingStatusHtml = `
+        <div class="card mt-3">
+            <div class="card-header bg-success text-white">
+                <i class="fas fa-check-circle"></i> Field Mapping Configured
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    ${Object.entries(mapping).map(([field, column]) => `
+                        <div class="col-md-6 mb-2">
+                            <span class="field-status-badge mapped">
+                                <i class="fas fa-link"></i> ${field} → ${column}
+                            </span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Check if mapping status already exists
+    const existingStatus = componentDisplay.querySelector('.field-mapping-status');
+    if (existingStatus) {
+        existingStatus.remove();
+    }
+
+    componentDisplay.insertAdjacentHTML('beforeend', `<div class="field-mapping-status">${mappingStatusHtml}</div>`);
+}
+
+// Show field mapping for current reward and dataset
+function showFieldMappingForCurrentReward() {
+    if (!selectedRewardName || !window.currentDatasetColumns) {
+        showNotification('Please select both a dataset and a reward function first', 'warning');
+        return;
+    }
+
+    const presetName = Object.keys(rewardPresets).find(key =>
+        rewardPresets[key].name === selectedRewardName
+    );
+
+    if (presetName) {
+        showFieldMappingModal(presetName, window.currentDatasetColumns);
+    }
+}
+
+// Export field mapping functions
+window.showFieldMappingModal = showFieldMappingModal;
+window.showFieldMappingForCurrentReward = showFieldMappingForCurrentReward;
+window.confirmFieldMapping = confirmFieldMapping;
+window.autoMapFields = autoMapFields;
+
+// ============================================================================
 // Initialize reward system when DOM is ready
+// ============================================================================
+
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         initializeRewardSystem();

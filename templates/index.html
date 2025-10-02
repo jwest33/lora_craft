@@ -430,19 +430,51 @@
                                 </div>
 
                                 <!-- Upload Dataset -->
-                                <div id="dataset-upload-zone" class="upload-zone" style="display: none; cursor: pointer; padding: 3rem; border: 2px dashed var(--border-color); border-radius: 8px; text-align: center; transition: all 0.3s;">
+                                <div id="dataset-upload-zone" class="upload-zone" style="display: none; cursor: pointer; padding: 1.5rem; border: 2px dashed var(--border-color); border-radius: 8px; text-align: center; transition: all 0.3s;">
                                     <div class="upload-area">
-                                        <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
-                                        <h5>Drop your dataset file here</h5>
-                                        <p class="text-muted">or click to browse</p>
+                                        <i class="fas fa-cloud-upload-alt fa-2x mb-2"></i>
+                                        <h6>Drop your dataset file here</h6>
+                                        <p class="text-muted mb-2">or click to browse</p>
                                         <input type="file" id="dataset-file-input" accept=".json,.jsonl,.csv,.parquet,.txt" style="display: none;">
-                                        <button class="btn btn-outline-primary" onclick="document.getElementById('dataset-file-input').click()">
+                                        <button class="btn btn-outline-primary btn-sm" onclick="document.getElementById('dataset-file-input').click()">
                                             Browse Files
                                         </button>
                                     </div>
                                 </div>
                                 <!-- Upload Status -->
                                 <div id="dataset-upload-status" class="mt-3"></div>
+
+                                <!-- Column Mapping Section (shown after upload) -->
+                                <div id="column-mapping-section" class="mt-3" style="display: none;">
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <h6 class="card-title mb-3">
+                                                <i class="fas fa-columns"></i> Select Dataset Columns
+                                            </h6>
+                                            <div class="row g-3">
+                                                <div class="col-md-6">
+                                                    <label class="form-label">Query/Instruction Column</label>
+                                                    <select class="form-select" id="upload-instruction-field">
+                                                        <option value="">-- Select Column --</option>
+                                                    </select>
+                                                    <small class="text-muted">Column containing questions or prompts</small>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label">Response/Output Column</label>
+                                                    <select class="form-select" id="upload-response-field">
+                                                        <option value="">-- Select Column --</option>
+                                                    </select>
+                                                    <small class="text-muted">Column containing answers or completions</small>
+                                                </div>
+                                            </div>
+                                            <div class="mt-3">
+                                                <button class="btn btn-primary" onclick="DatasetsModule.confirmColumnMapping()">
+                                                    <i class="fas fa-check"></i> Confirm Selection
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
 
                                 <!-- Previously Uploaded Files -->
                                 <div id="uploaded-datasets-container" style="display: none;">
@@ -475,15 +507,24 @@
 
                                     <!-- Field Mapping (auto-configured) -->
                                     <div class="field-mapping mt-3" id="field-mapping" style="display: none;">
-                                        <label class="form-label">Field Mapping</label>
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <label class="form-label mb-0">Field Mapping</label>
+                                            <button class="btn btn-sm btn-outline-success" onclick="showFieldMappingForCurrentReward()">
+                                                <i class="fas fa-cog"></i> Configure Mapping
+                                            </button>
+                                        </div>
+                                        <div class="alert alert-info py-2 px-3 mb-2">
+                                            <i class="fas fa-info-circle"></i>
+                                            <small>Map your dataset columns to reward function fields for accurate training. Click "Configure Mapping" to customize.</small>
+                                        </div>
                                         <div class="row">
                                             <div class="col-md-6">
                                                 <small class="text-muted">Instruction Field</small>
-                                                <input type="text" class="form-control form-control-sm" id="instruction-field-visible" value="instruction">
+                                                <input type="text" class="form-control form-control-sm" id="instruction-field-visible" value="instruction" readonly>
                                             </div>
                                             <div class="col-md-6">
                                                 <small class="text-muted">Response Field</small>
-                                                <input type="text" class="form-control form-control-sm" id="response-field-visible" value="output">
+                                                <input type="text" class="form-control form-control-sm" id="response-field-visible" value="output" readonly>
                                             </div>
                                         </div>
                                     </div>
@@ -762,11 +803,6 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                         <span>GSPO</span>
                                         <small>Sequence-level optimization</small>
                                     </div>
-                                    <div class="selection-card" onclick="selectAlgorithm('dr_grpo')" id="algo-dr_grpo">
-                                        <i class="fas fa-shield-alt"></i>
-                                        <span>DR-GRPO</span>
-                                        <small>Doubly robust variant</small>
-                                    </div>
                                 </div>
                                 <div class="alert alert-info mt-2" id="algorithm-info">
                                     <i class="fas fa-info-circle"></i>
@@ -799,7 +835,7 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                             <div class="reward-configuration mb-4">
                                 <div class="d-flex justify-content-between align-items-center mb-3">
                                     <label class="form-label fw-bold mb-0">
-                                        <i class="fas fa-trophy text-warning"></i> Reward Function
+                                        <i class="fas fa-trophy"></i> Reward Function
                                     </label>
                                     <button class="btn btn-sm btn-outline-info" onclick="showRewardHelp()">
                                         <i class="fas fa-question-circle"></i> Help
@@ -971,6 +1007,9 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                             </button>
                                             <button class="btn btn-sm btn-outline-secondary" onclick="testSelectedReward()">
                                                 <i class="fas fa-flask"></i> Test
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-success" onclick="showFieldMappingForCurrentReward()">
+                                                <i class="fas fa-link"></i> Configure Fields
                                             </button>
                                         </div>
                                     </div>

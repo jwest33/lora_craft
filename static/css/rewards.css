@@ -572,3 +572,525 @@
     color: white;
     box-shadow: 0 0 15px rgba(6, 182, 212, 0.4);
 }
+
+/* ============================================================================ */
+/* Field Mapping Modal - Light & Dark (Synthwave) Mode */
+/* ============================================================================ */
+
+.field-mapping-modal {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    color: var(--text-primary);
+    max-width: 900px;
+    margin: 2rem auto;
+}
+
+.field-mapping-modal .modal-header {
+    background: var(--gradient-primary);
+    color: white;
+    border-radius: 12px 12px 0 0;
+    padding: 1.25rem;
+}
+
+.field-mapping-modal .modal-body {
+    padding: 1.5rem;
+}
+
+.field-mapping-modal .modal-footer {
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+    border-radius: 0 0 12px 12px;
+    padding: 1rem 1.5rem;
+}
+
+[data-theme="dark"] .field-mapping-modal {
+    background: var(--bg-secondary);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4),
+                0 0 30px rgba(168, 85, 247, 0.2);
+}
+
+[data-theme="dark"] .field-mapping-modal .modal-footer {
+    background: var(--bg-tertiary);
+    border-top-color: rgba(168, 85, 247, 0.2);
+}
+
+/* Field Mapping Row */
+.field-mapping-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.field-mapping-row:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateX(4px);
+}
+
+[data-theme="dark"] .field-mapping-row {
+    background: rgba(51, 65, 85, 0.5);
+    border: 1px solid rgba(168, 85, 247, 0.2);
+}
+
+[data-theme="dark"] .field-mapping-row:hover {
+    border-color: var(--primary);
+    box-shadow: 0 0 15px rgba(168, 85, 247, 0.3);
+}
+
+/* Field Boxes */
+.field-box {
+    flex: 1;
+    background: var(--bg-primary);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.75rem;
+    transition: all 0.3s ease;
+}
+
+.field-box.dataset-field {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(99, 102, 241, 0.05));
+}
+
+.field-box.reward-field {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.05), rgba(5, 150, 105, 0.05));
+}
+
+.field-box-label {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.25rem;
+}
+
+.field-box-content {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.field-box-example {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-family: 'Fira Code', monospace;
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    border-left: 3px solid var(--primary);
+}
+
+[data-theme="dark"] .field-box {
+    background: rgba(30, 41, 59, 0.8);
+    border: 2px solid rgba(168, 85, 247, 0.2);
+}
+
+[data-theme="dark"] .field-box:hover {
+    border-color: var(--primary);
+    box-shadow: 0 0 15px rgba(168, 85, 247, 0.3);
+}
+
+[data-theme="dark"] .field-box.dataset-field {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(99, 102, 241, 0.15));
+}
+
+[data-theme="dark"] .field-box.reward-field {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(5, 150, 105, 0.15));
+}
+
+[data-theme="dark"] .field-box-example {
+    background: rgba(30, 41, 59, 0.8);
+    border-left-color: var(--accent-color);
+    box-shadow: inset 0 0 20px rgba(6, 182, 212, 0.1);
+}
+
+[data-theme="dark"] .field-box-example code {
+    color: var(--accent-color);
+    text-shadow: 0 0 5px rgba(6, 182, 212, 0.5);
+}
+
+/* Field Arrow */
+.field-arrow {
+    color: var(--primary);
+    font-size: 1.5rem;
+    transition: all 0.3s ease;
+}
+
+[data-theme="dark"] .field-arrow {
+    color: var(--accent-color);
+    text-shadow: 0 0 10px rgba(6, 182, 212, 0.6);
+    animation: arrowPulse 2s ease-in-out infinite;
+}
+
+@keyframes arrowPulse {
+    0%, 100% {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    50% {
+        opacity: 0.6;
+        transform: translateX(4px);
+    }
+}
+
+/* Field Select Dropdown */
+.field-select {
+    background: white;
+    border: 2px solid var(--border-color);
+    color: var(--text-primary);
+    border-radius: 8px;
+    padding: 0.5rem;
+    width: 100%;
+    transition: all 0.3s ease;
+}
+
+.field-select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(147, 51, 234, 0.1);
+    outline: none;
+}
+
+[data-theme="dark"] .field-select {
+    background: var(--bg-secondary);
+    border: 2px solid rgba(168, 85, 247, 0.3);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .field-select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.2),
+                0 0 15px rgba(168, 85, 247, 0.3);
+    background: rgba(51, 65, 85, 0.7);
+}
+
+[data-theme="dark"] .field-select option {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+/* ============================================================================ */
+/* Compatibility Score Bar */
+/* ============================================================================ */
+
+.compatibility-score-container {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+.compatibility-label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.compatibility-bar {
+    background: #e5e7eb;
+    border-radius: 8px;
+    overflow: hidden;
+    height: 24px;
+    position: relative;
+}
+
+.compatibility-fill {
+    background: linear-gradient(90deg, #14b8a6, #06b6d4);
+    height: 100%;
+    transition: width 0.5s ease;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 0.5rem;
+}
+
+.compatibility-text {
+    color: white;
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.compatibility-details {
+    margin-top: 0.75rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+[data-theme="dark"] .compatibility-score-container {
+    background: rgba(51, 65, 85, 0.5);
+    border-color: rgba(168, 85, 247, 0.2);
+}
+
+[data-theme="dark"] .compatibility-bar {
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .compatibility-fill {
+    background: linear-gradient(90deg, #06b6d4, #a855f7);
+    box-shadow: 0 0 15px rgba(6, 182, 212, 0.5);
+}
+
+[data-theme="dark"] .compatibility-text {
+    color: white;
+    text-shadow: 0 0 8px rgba(168, 85, 247, 0.4);
+}
+
+/* ============================================================================ */
+/* Field Status Badges */
+/* ============================================================================ */
+
+.field-status-badge {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.3s ease;
+}
+
+.field-status-badge i {
+    font-size: 0.7rem;
+}
+
+.field-status-badge.mapped {
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #34d399;
+}
+
+.field-status-badge.missing {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #f87171;
+}
+
+.field-status-badge.optional {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fbbf24;
+}
+
+.field-status-badge.low-confidence {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fbbf24;
+}
+
+[data-theme="dark"] .field-status-badge.mapped {
+    background: rgba(20, 184, 166, 0.2);
+    color: #5eead4;
+    border: 1px solid rgba(20, 184, 166, 0.5);
+    box-shadow: 0 0 10px rgba(20, 184, 166, 0.3);
+}
+
+[data-theme="dark"] .field-status-badge.missing {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
+}
+
+[data-theme="dark"] .field-status-badge.optional {
+    background: rgba(251, 191, 36, 0.2);
+    color: #fcd34d;
+    border: 1px solid rgba(251, 191, 36, 0.5);
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.3);
+}
+
+[data-theme="dark"] .field-status-badge.low-confidence {
+    background: rgba(251, 191, 36, 0.2);
+    color: #fcd34d;
+    border: 1px solid rgba(251, 191, 36, 0.5);
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.3);
+}
+
+/* ============================================================================ */
+/* Mapping Preview Cards */
+/* ============================================================================ */
+
+.mapping-preview-card {
+    background: var(--bg-card);
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1rem;
+    transition: all 0.3s ease;
+    margin-bottom: 1rem;
+}
+
+.mapping-preview-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary-light);
+}
+
+.mapping-preview-header {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.mapping-preview-header i {
+    color: var(--primary);
+}
+
+.mapping-example {
+    background: #f9fafb;
+    border-left: 3px solid var(--primary);
+    padding: 0.5rem;
+    font-family: 'Fira Code', monospace;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    border-radius: 4px;
+}
+
+[data-theme="dark"] .mapping-preview-card {
+    background: var(--bg-secondary);
+    border: 2px solid rgba(168, 85, 247, 0.2);
+}
+
+[data-theme="dark"] .mapping-preview-card:hover {
+    border-color: var(--primary);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4),
+                0 0 20px rgba(168, 85, 247, 0.2);
+    transform: translateY(-2px) scale(1.01);
+}
+
+[data-theme="dark"] .mapping-preview-header i {
+    color: var(--accent-color);
+    text-shadow: 0 0 8px rgba(6, 182, 212, 0.5);
+}
+
+[data-theme="dark"] .mapping-example {
+    background: rgba(30, 41, 59, 0.8);
+    border-left: 3px solid var(--accent-color);
+    box-shadow: inset 0 0 20px rgba(6, 182, 212, 0.1);
+}
+
+[data-theme="dark"] .mapping-example code {
+    color: var(--accent-color);
+    text-shadow: 0 0 5px rgba(6, 182, 212, 0.5);
+}
+
+/* ============================================================================ */
+/* Warning/Info Alerts for Field Mapping */
+/* ============================================================================ */
+
+.field-warning {
+    background: #fef3c7;
+    border-left: 4px solid #f59e0b;
+    color: #78350f;
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+}
+
+.field-warning i {
+    color: #f59e0b;
+    margin-right: 0.5rem;
+}
+
+.field-info {
+    background: #dbeafe;
+    border-left: 4px solid #3b82f6;
+    color: #1e40af;
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+}
+
+.field-info i {
+    color: #3b82f6;
+    margin-right: 0.5rem;
+}
+
+[data-theme="dark"] .field-warning {
+    background: rgba(251, 191, 36, 0.15);
+    border-left: 4px solid #fbbf24;
+    color: #fcd34d;
+    box-shadow: 0 0 20px rgba(251, 191, 36, 0.1);
+}
+
+[data-theme="dark"] .field-warning i {
+    color: #fbbf24;
+    text-shadow: 0 0 10px rgba(251, 191, 36, 0.5);
+}
+
+[data-theme="dark"] .field-info {
+    background: rgba(6, 182, 212, 0.15);
+    border-left: 4px solid var(--accent-color);
+    color: #67e8f9;
+    box-shadow: 0 0 20px rgba(6, 182, 212, 0.1);
+}
+
+[data-theme="dark"] .field-info i {
+    color: var(--accent-color);
+    text-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+}
+
+/* ============================================================================ */
+/* Field Mapping Button Animations */
+/* ============================================================================ */
+
+.btn-auto-map {
+    background: var(--gradient-primary);
+    border: none;
+    color: white;
+    transition: all 0.3s ease;
+}
+
+.btn-auto-map:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+[data-theme="dark"] .btn-auto-map {
+    background: var(--gradient-primary);
+    box-shadow: 0 0 15px rgba(168, 85, 247, 0.3);
+}
+
+[data-theme="dark"] .btn-auto-map:hover {
+    box-shadow: 0 0 25px rgba(168, 85, 247, 0.5),
+                var(--shadow-lg);
+    transform: translateY(-2px) scale(1.02);
+}
+
+/* ============================================================================ */
+/* Responsive Design for Field Mapping */
+/* ============================================================================ */
+
+@media (max-width: 768px) {
+    .field-mapping-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .field-arrow {
+        transform: rotate(90deg);
+        margin: 0.5rem 0;
+    }
+
+    .mapping-preview-card {
+        padding: 0.75rem;
+    }
+
+    .compatibility-score-container {
+        padding: 0.75rem;
+    }
+}

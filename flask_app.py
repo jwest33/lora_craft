@@ -687,13 +687,19 @@ def run_training(session_id: str, config: Dict[str, Any]):
         if dataset_sample_size == 0:
             dataset_sample_size = None
 
+        # Get field mappings from nested dataset config or top-level
+        instruction_field = (dataset_config.get('instruction_field') or
+                           config.get('instruction_field', 'instruction'))
+        response_field = (dataset_config.get('response_field') or
+                        config.get('response_field', 'output'))
+
         dataset_config_obj = DatasetConfig(
             source_type=source_type,
             source_path=dataset_path,
             subset=config.get('dataset_config', None),  # Config for multi-config datasets
             split=config.get('dataset_split', 'train'),  # Use 'train' as default, let max_samples handle limiting
-            instruction_field=config.get('instruction_field', 'instruction'),
-            response_field=config.get('response_field', 'output'),
+            instruction_field=instruction_field,
+            response_field=response_field,
             max_samples=dataset_sample_size  # Don't default to 100, use None if not provided
         )
 
@@ -2973,33 +2979,72 @@ def upload_dataset():
         # Get file info
         file_size = os.path.getsize(filepath)
 
-        # Try to detect dataset structure
+        # Try to detect dataset structure (lightweight - no full loading)
         dataset_info = {}
         try:
-            # Create temporary dataset handler to analyze the file
-            temp_config = DatasetConfig(
-                source_type='local',
-                source_path=filepath,
-                max_samples=5  # Only load a few samples for preview
-            )
-            temp_handler = DatasetHandler(temp_config)
-            temp_dataset = temp_handler.load()
+            file_ext = extension.lower()
 
-            # Get field information
-            if hasattr(temp_dataset, 'column_names'):
-                dataset_info['columns'] = temp_dataset.column_names
-                dataset_info['num_samples'] = len(temp_dataset)
+            # Quick peek at file structure without loading full dataset
+            if file_ext == 'csv':
+                # For CSV, just read first few rows to get columns
+                import csv
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        reader = csv.DictReader(f)
+                        columns = reader.fieldnames
+                        if columns:
+                            dataset_info['columns'] = list(columns)
+                            logger.info(f"CSV columns detected: {list(columns)}")
+                        else:
+                            logger.warning("No columns found in CSV")
+                            dataset_info['columns'] = []
 
-                # Get sample data
-                samples = []
-                for i, item in enumerate(temp_dataset):
-                    if i >= 3:  # Only get 3 samples
-                        break
-                    samples.append(dict(item))
-                dataset_info['samples'] = samples
+                        # Skip row counting for uploaded files - will be determined during training
+                        dataset_info['num_samples'] = 'To be determined'
+                        logger.info("Skipped row counting for uploaded CSV (will count during training)")
+                except UnicodeDecodeError:
+                    # Try different encoding
+                    logger.warning("UTF-8 failed, trying latin-1 encoding")
+                    with open(filepath, 'r', encoding='latin-1') as f:
+                        reader = csv.DictReader(f)
+                        columns = reader.fieldnames
+                        dataset_info['columns'] = list(columns) if columns else []
+                except Exception as csv_error:
+                    logger.error(f"CSV parsing error: {csv_error}")
+                    dataset_info['error'] = f"CSV parsing failed: {str(csv_error)}"
 
-                # Try to auto-detect instruction/response fields
-                columns_lower = [col.lower() for col in temp_dataset.column_names]
+            elif file_ext in ['json', 'jsonl']:
+                if file_ext == 'json':
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                        if isinstance(data, list) and len(data) > 0:
+                            dataset_info['columns'] = list(data[0].keys())
+                            dataset_info['num_samples'] = len(data)  # JSON loads entire file, so we have count
+                        elif isinstance(data, dict):
+                            # Dictionary of lists format
+                            dataset_info['columns'] = list(data.keys())
+                            dataset_info['num_samples'] = len(data[list(data.keys())[0]]) if data else 0
+                else:  # jsonl
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        first_line = f.readline()
+                        if first_line.strip():
+                            first_obj = json.loads(first_line)
+                            dataset_info['columns'] = list(first_obj.keys())
+
+                        # Skip line counting for large JSONL files
+                        dataset_info['num_samples'] = 'To be determined'
+                        logger.info("Skipped line counting for JSONL (will count during training)")
+
+            elif file_ext == 'parquet':
+                # For parquet, use pandas to peek at schema
+                import pandas as pd
+                df = pd.read_parquet(filepath)
+                dataset_info['columns'] = list(df.columns)
+                dataset_info['num_samples'] = len(df)
+
+            # Auto-detect instruction/response fields
+            if 'columns' in dataset_info and dataset_info['columns']:
+                columns_lower = [col.lower() for col in dataset_info['columns']]
                 instruction_candidates = ['instruction', 'prompt', 'question', 'input', 'text', 'problem']
                 response_candidates = ['response', 'answer', 'output', 'completion', 'label', 'solution']
 
@@ -3009,13 +3054,13 @@ def upload_dataset():
                 for candidate in instruction_candidates:
                     if candidate in columns_lower:
                         idx = columns_lower.index(candidate)
-                        detected_instruction = temp_dataset.column_names[idx]
+                        detected_instruction = dataset_info['columns'][idx]
                         break
 
                 for candidate in response_candidates:
                     if candidate in columns_lower:
                         idx = columns_lower.index(candidate)
-                        detected_response = temp_dataset.column_names[idx]
+                        detected_response = dataset_info['columns'][idx]
                         break
 
                 if detected_instruction:
@@ -3044,6 +3089,84 @@ def upload_dataset():
 
     except Exception as e:
         logger.error(f"Failed to upload dataset: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/upload_dataset_info', methods=['POST'])
+def get_upload_dataset_info():
+    """Get information about an uploaded dataset (for column mapping)."""
+    try:
+        data = request.json
+        dataset_path = data.get('path')
+
+        if not dataset_path:
+            return jsonify({'error': 'Path required'}), 400
+
+        # Convert relative path to absolute if needed
+        if not os.path.isabs(dataset_path):
+            dataset_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), dataset_path)
+
+        if not os.path.exists(dataset_path):
+            return jsonify({'error': 'File not found'}), 404
+
+        # Use lightweight parsing (same as upload endpoint)
+        dataset_info = {}
+        file_ext = Path(dataset_path).suffix.lower().lstrip('.')
+
+        try:
+            if file_ext == 'csv':
+                import csv
+                with open(dataset_path, 'r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    columns = reader.fieldnames
+                    dataset_info['columns'] = list(columns) if columns else []
+
+            elif file_ext in ['json', 'jsonl']:
+                if file_ext == 'json':
+                    with open(dataset_path, 'r', encoding='utf-8') as f:
+                        data_content = json.load(f)
+                        if isinstance(data_content, list) and len(data_content) > 0:
+                            dataset_info['columns'] = list(data_content[0].keys())
+                        elif isinstance(data_content, dict):
+                            dataset_info['columns'] = list(data_content.keys())
+                else:  # jsonl
+                    with open(dataset_path, 'r', encoding='utf-8') as f:
+                        first_line = f.readline()
+                        if first_line.strip():
+                            first_obj = json.loads(first_line)
+                            dataset_info['columns'] = list(first_obj.keys())
+
+            elif file_ext == 'parquet':
+                import pandas as pd
+                df = pd.read_parquet(dataset_path)
+                dataset_info['columns'] = list(df.columns)
+
+            # Auto-detect instruction/response fields
+            if 'columns' in dataset_info and dataset_info['columns']:
+                columns_lower = [col.lower() for col in dataset_info['columns']]
+                instruction_candidates = ['instruction', 'prompt', 'question', 'input', 'text', 'problem']
+                response_candidates = ['response', 'answer', 'output', 'completion', 'label', 'solution']
+
+                for candidate in instruction_candidates:
+                    if candidate in columns_lower:
+                        idx = columns_lower.index(candidate)
+                        dataset_info['detected_instruction_field'] = dataset_info['columns'][idx]
+                        break
+
+                for candidate in response_candidates:
+                    if candidate in columns_lower:
+                        idx = columns_lower.index(candidate)
+                        dataset_info['detected_response_field'] = dataset_info['columns'][idx]
+                        break
+
+        except Exception as e:
+            logger.error(f"Error parsing dataset: {e}")
+            dataset_info['error'] = str(e)
+
+        return jsonify(dataset_info)
+
+    except Exception as e:
+        logger.error(f"Error getting dataset info: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -3878,7 +4001,7 @@ def compare_models_stream():
                         config=config,
                         use_chat_template=use_chat_template,
                         streaming_callback=base_callback,
-                        session_info=session_info
+                        session_info=None  # Don't use trained model's chat template for base model
                     )
 
                 trained_thread = threading.Thread(target=generate_trained)
@@ -4935,6 +5058,136 @@ def recommend_reward():
 
     except Exception as e:
         logger.error(f"Failed to recommend reward: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/rewards/validate-fields', methods=['POST'])
+def validate_reward_fields():
+    """Validate and suggest field mappings between dataset and reward function."""
+    try:
+        from difflib import SequenceMatcher
+
+        data = request.get_json()
+        preset_name = data.get('reward_preset')
+        dataset_columns = data.get('dataset_columns', [])
+        current_mapping = data.get('current_mapping', {})
+
+        if not preset_name or not dataset_columns:
+            return jsonify({'error': 'Missing reward_preset or dataset_columns'}), 400
+
+        # Get reward preset metadata
+        library = RewardPresetLibrary()
+        preset = library.get_preset(preset_name)
+
+        if not preset:
+            return jsonify({'error': f'Preset not found: {preset_name}'}), 404
+
+        # Helper function for fuzzy string matching
+        def similarity(a, b):
+            return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+
+        # Generate field mapping suggestions
+        suggestions = {}
+        confidence_scores = {}
+        warnings = []
+
+        # Expected fields from the reward preset
+        expected_fields = preset.expected_fields
+        optional_fields = preset.optional_fields or []
+
+        for field_name, field_description in expected_fields.items():
+            best_match = None
+            best_score = 0.0
+
+            # Try exact match first
+            if field_name in dataset_columns:
+                best_match = field_name
+                best_score = 1.0
+            else:
+                # Try fuzzy matching with common patterns
+                field_patterns = {
+                    'instruction': ['instruction', 'prompt', 'question', 'input', 'problem', 'query', 'user'],
+                    'response': ['response', 'answer', 'output', 'completion', 'solution', 'reply', 'assistant'],
+                    'reference': ['reference', 'expected', 'target', 'ground_truth', 'label']
+                }
+
+                patterns = field_patterns.get(field_name, [field_name])
+
+                for col in dataset_columns:
+                    col_lower = col.lower()
+
+                    # Check pattern matches
+                    for pattern in patterns:
+                        if pattern in col_lower or col_lower in pattern:
+                            score = similarity(pattern, col_lower)
+                            if score > best_score:
+                                best_score = score
+                                best_match = col
+
+                    # Also check direct similarity
+                    score = similarity(field_name, col)
+                    if score > best_score:
+                        best_score = score
+                        best_match = col
+
+            if best_match:
+                suggestions[field_name] = best_match
+                confidence_scores[field_name] = best_score
+
+                # Add warning for low confidence matches
+                if best_score < 0.7 and field_name not in optional_fields:
+                    warnings.append({
+                        'type': 'low_confidence',
+                        'field': field_name,
+                        'message': f"Low confidence match for '{field_name}' → '{best_match}' ({int(best_score * 100)}%)"
+                    })
+            elif field_name not in optional_fields:
+                # Required field not found
+                warnings.append({
+                    'type': 'missing_required',
+                    'field': field_name,
+                    'message': f"Required field '{field_name}' not found in dataset. Expected: {field_description}"
+                })
+
+        # Check for unmapped dataset columns
+        mapped_columns = set(suggestions.values())
+        unmapped = [col for col in dataset_columns if col not in mapped_columns]
+
+        if unmapped:
+            warnings.append({
+                'type': 'unmapped_columns',
+                'columns': unmapped,
+                'message': f"{len(unmapped)} dataset column(s) will not be used: {', '.join(unmapped[:3])}"
+            })
+
+        # Calculate overall validity
+        required_fields = [f for f in expected_fields.keys() if f not in optional_fields]
+        valid = all(f in suggestions for f in required_fields)
+
+        # Calculate compatibility score (0-100)
+        compatibility = 0
+        if required_fields:
+            matched_required = sum(1 for f in required_fields if f in suggestions)
+            compatibility = (matched_required / len(required_fields)) * 100
+
+            # Boost score for high confidence matches
+            if suggestions:
+                avg_confidence = sum(confidence_scores.values()) / len(confidence_scores)
+                compatibility = (compatibility + avg_confidence * 100) / 2
+
+        return jsonify({
+            'valid': valid,
+            'suggestions': suggestions,
+            'confidence_scores': confidence_scores,
+            'warnings': warnings,
+            'compatibility_score': round(compatibility, 1),
+            'expected_fields': expected_fields,
+            'optional_fields': optional_fields,
+            'field_examples': preset.field_examples
+        })
+
+    except Exception as e:
+        logger.error(f"Error validating reward fields: {e}")
         return jsonify({'error': str(e)}), 500
 
 

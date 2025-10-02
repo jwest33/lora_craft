@@ -66,9 +66,7 @@ class GGUFConverter:
 
         if not llama_cpp_dir:
             error_msg = (
-                "llama.cpp not found! Please install it:\n"
-                "1. Run: python setup_llama_cpp.py\n"
-                "2. Or manually install llama.cpp in tools/ directory"
+                "llama.cpp not found! Please install it."
             )
             logger.error(error_msg)
             return False, error_msg

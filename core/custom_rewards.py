@@ -658,7 +658,10 @@ class RewardPreset:
                  example_output: str,
                  builder_func: Callable[[], 'CustomRewardBuilder'],
                  difficulty: str = "intermediate",
-                 tags: List[str] = None):
+                 tags: List[str] = None,
+                 expected_fields: Optional[Dict[str, str]] = None,
+                 field_examples: Optional[Dict[str, str]] = None,
+                 optional_fields: Optional[List[str]] = None):
         """Initialize reward preset.
 
         Args:
@@ -670,6 +673,9 @@ class RewardPreset:
             builder_func: Function that creates the configured builder
             difficulty: Difficulty level ('beginner', 'intermediate', 'advanced')
             tags: Additional searchable tags
+            expected_fields: Expected dataset fields and their descriptions
+            field_examples: Example values for each expected field
+            optional_fields: List of optional field names
         """
         self.name = name
         self.category = category
@@ -679,6 +685,15 @@ class RewardPreset:
         self.builder_func = builder_func
         self.difficulty = difficulty
         self.tags = tags or []
+        self.expected_fields = expected_fields or {
+            "instruction": "The input prompt or question",
+            "response": "The expected output or answer"
+        }
+        self.field_examples = field_examples or {
+            "instruction": example_input,
+            "response": example_output
+        }
+        self.optional_fields = optional_fields or ["reference"]
 
     def create_builder(self) -> 'CustomRewardBuilder':
         """Create a reward builder from this preset."""
@@ -693,7 +708,10 @@ class RewardPreset:
             'example_input': self.example_input,
             'example_output': self.example_output,
             'difficulty': self.difficulty,
-            'tags': self.tags
+            'tags': self.tags,
+            'expected_fields': self.expected_fields,
+            'field_examples': self.field_examples,
+            'optional_fields': self.optional_fields
         }
 
 
@@ -755,27 +773,6 @@ class RewardPresetLibrary:
         ))
 
         # Language & Writing presets
-        self.add_preset(RewardPreset(
-            name="Concise Summarization",
-            category="Language & Writing",
-            description="Rewards concise, accurate summaries that capture key points",
-            example_input="Summarize this article in 2-3 sentences",
-            example_output="The article discusses three main points. First, it explains X. Finally, it concludes with Y.",
-            builder_func=lambda: self._create_summary_reward(),
-            difficulty="beginner",
-            tags=["summary", "concise", "key points"]
-        ))
-
-        self.add_preset(RewardPreset(
-            name="Creative Writing",
-            category="Language & Writing",
-            description="Rewards creative, engaging text with good flow and vocabulary",
-            example_input="Write a short story opening",
-            example_output="The old lighthouse stood sentinel against the storm, its beam cutting through the darkness like a sword of hope.",
-            builder_func=lambda: self._create_creative_reward(),
-            difficulty="intermediate",
-            tags=["creative", "storytelling", "narrative"]
-        ))
 
         self.add_preset(RewardPreset(
             name="Technical Documentation",
@@ -789,17 +786,6 @@ class RewardPresetLibrary:
         ))
 
         # Q&A presets
-        self.add_preset(RewardPreset(
-            name="Factual Q&A",
-            category="Question Answering",
-            description="Rewards accurate, direct answers to factual questions",
-            example_input="What is the capital of France?",
-            example_output="The capital of France is Paris.",
-            builder_func=lambda: self._create_factual_qa_reward(),
-            difficulty="beginner",
-            tags=["facts", "trivia", "knowledge"]
-        ))
-
         self.add_preset(RewardPreset(
             name="Explanatory Q&A",
             category="Question Answering",
@@ -822,17 +808,6 @@ class RewardPresetLibrary:
             tags=["instructions", "tutorial", "how-to"]
         ))
 
-        # Translation & Language presets
-        self.add_preset(RewardPreset(
-            name="Language Translation",
-            category="Translation",
-            description="Rewards accurate translations preserving meaning and tone",
-            example_input="Translate to Spanish: Hello, how are you?",
-            example_output="Hola, ¿cómo estás?",
-            builder_func=lambda: self._create_translation_reward(),
-            difficulty="intermediate",
-            tags=["translation", "languages", "multilingual"]
-        ))
 
         # Data & Analysis presets
         self.add_preset(RewardPreset(
@@ -844,17 +819,6 @@ class RewardPresetLibrary:
             builder_func=lambda: self._create_data_analysis_reward(),
             difficulty="advanced",
             tags=["data", "analytics", "insights"]
-        ))
-
-        self.add_preset(RewardPreset(
-            name="JSON/Structured Output",
-            category="Data & Analysis",
-            description="Rewards properly formatted JSON or structured data",
-            example_input="Convert to JSON: name=John, age=30",
-            example_output='{"name": "John", "age": 30}',
-            builder_func=lambda: self._create_json_reward(),
-            difficulty="beginner",
-            tags=["json", "structured", "format"]
         ))
 
         self.add_preset(RewardPreset(
@@ -891,40 +855,7 @@ class RewardPresetLibrary:
             tags=["reasoning", "step-by-step", "analytical"]
         ))
 
-        # Conversation presets
-        self.add_preset(RewardPreset(
-            name="Helpful Assistant",
-            category="Conversation",
-            description="Rewards helpful, polite responses with actionable information",
-            example_input="I need help planning a trip",
-            example_output="I'd be happy to help you plan your trip! To get started, could you tell me: 1) Your destination, 2) Travel dates, 3) Budget range? This will help me provide specific recommendations.",
-            builder_func=lambda: self._create_helpful_assistant_reward(),
-            difficulty="beginner",
-            tags=["assistant", "helpful", "conversational"]
-        ))
-
-        self.add_preset(RewardPreset(
-            name="Customer Service",
-            category="Conversation",
-            description="Rewards professional, empathetic customer service responses",
-            example_input="My order hasn't arrived yet",
-            example_output="I apologize for the delay with your order. Let me look into this immediately. Could you please provide your order number? I'll track it and ensure we resolve this quickly.",
-            builder_func=lambda: self._create_customer_service_reward(),
-            difficulty="intermediate",
-            tags=["customer service", "professional", "empathy"]
-        ))
-
-        # Safety & Ethics presets
-        self.add_preset(RewardPreset(
-            name="Safe & Ethical",
-            category="Safety",
-            description="Rewards safe, ethical responses that avoid harmful content",
-            example_input="How do I handle a disagreement?",
-            example_output="Here are constructive ways to handle disagreements: 1) Listen actively, 2) Find common ground, 3) Express your view calmly, 4) Seek compromise.",
-            builder_func=lambda: self._create_safety_reward(),
-            difficulty="advanced",
-            tags=["safety", "ethics", "responsible"]
-        ))
+        # Conversation presets removed - too gameable via keyword stuffing
 
         # Format compliance presets
         self.add_preset(RewardPreset(
@@ -1006,80 +937,62 @@ class RewardPresetLibrary:
         builder.add_length_reward("code_length", min_length=30, max_length=500, weight=0.2)
         return builder
 
-    def _create_summary_reward(self) -> 'CustomRewardBuilder':
-        builder = CustomRewardBuilder()
-        builder.add_length_reward("conciseness", min_length=20, max_length=150, optimal_length=75, weight=0.5)
-        builder.add_format_reward("sentence_count", pattern=r"[.!?]\s+[A-Z]", weight=0.3)
-        builder.add_binary_reward("no_filler", regex_pattern=r"^(?!.*(basically|actually|literally))", weight=0.2)
-        return builder
-
-    def _create_creative_reward(self) -> 'CustomRewardBuilder':
-        builder = CustomRewardBuilder()
-        builder.add_length_reward("narrative_length", min_length=50, max_length=500, weight=0.3)
-        builder.add_format_reward("descriptive", pattern=r"\b(\w+ly|\w+ing|\w+ed)\b", weight=0.4)
-        builder.add_format_reward("dialogue", pattern=r'["\'].+["\']', weight=0.3)
-        return builder
 
     def _create_documentation_reward(self) -> 'CustomRewardBuilder':
         builder = CustomRewardBuilder()
-        builder.add_format_reward("headers", pattern=r"^#{1,6}\s+.+$", weight=0.3)
-        builder.add_format_reward("lists", pattern=r"^[\-\*]\s+.+$", weight=0.2)
+        # Match headers anywhere in text (multiline mode handled by FormatReward)
+        builder.add_format_reward("headers", pattern=r"#{1,6}\s+.+", weight=0.3)
+        # Match list items anywhere in text
+        builder.add_format_reward("lists", pattern=r"(?:^|\n)[\-\*]\s+.+", weight=0.2)
+        # Match code blocks (non-greedy for multiple blocks)
         builder.add_format_reward("code_examples", pattern=r"```.*?```", weight=0.3)
         builder.add_length_reward("detail", min_length=50, max_length=400, weight=0.2)
         return builder
 
-    def _create_factual_qa_reward(self) -> 'CustomRewardBuilder':
-        builder = CustomRewardBuilder()
-        builder.add_binary_reward("direct_answer", regex_pattern=None, weight=0.5)
-        builder.add_length_reward("concise", min_length=5, max_length=50, optimal_length=20, weight=0.3)
-        builder.add_format_reward("complete_sentence", pattern=r"^[A-Z].*[.!?]$", weight=0.2)
-        return builder
 
     def _create_explanatory_qa_reward(self) -> 'CustomRewardBuilder':
         builder = CustomRewardBuilder()
         builder.add_length_reward("detailed", min_length=50, max_length=300, optimal_length=150, weight=0.3)
-        builder.add_format_reward("examples", pattern=r"(for example|such as|like|e\.g\.|i\.e\.)", weight=0.3)
-        builder.add_format_reward("structured", pattern=r"(First|Second|Finally|\d+\)|\d+\.)", weight=0.4)
+        # Case-insensitive matching for common explanatory phrases
+        builder.add_format_reward("examples", pattern=r"(?i)(for example|such as|like|e\.g\.|i\.e\.)", weight=0.3)
+        # Match structured elements (works with multiline)
+        builder.add_format_reward("structured", pattern=r"(?:First|Second|Finally|\d+[\.\)]\s)", weight=0.4)
         return builder
 
     def _create_instruction_reward(self) -> 'CustomRewardBuilder':
         builder = CustomRewardBuilder()
-        builder.add_format_reward("numbered_steps", pattern=r"^\d+[\.\)]\s+", weight=0.5)
+        # Match numbered steps anywhere (beginning of line or after newline)
+        builder.add_format_reward("numbered_steps", pattern=r"(?:^|\n)\d+[\.\)]\s+", weight=0.5)
         builder.add_length_reward("step_length", min_length=20, max_length=200, weight=0.2)
-        builder.add_format_reward("action_verbs", pattern=r"^\d+[\.\)]\s+(\w+)\s", weight=0.3)
+        # Match action verbs after numbered steps
+        builder.add_format_reward("action_verbs", pattern=r"(?:^|\n)\d+[\.\)]\s+[A-Z][a-z]+", weight=0.3)
         return builder
 
-    def _create_translation_reward(self) -> 'CustomRewardBuilder':
-        builder = CustomRewardBuilder()
-        builder.add_binary_reward("translation_present", regex_pattern=r".+", weight=0.4)
-        builder.add_length_reward("length_similarity", min_length=5, max_length=200, weight=0.3)
-        builder.add_format_reward("no_english", pattern=r"^[^a-zA-Z]+$", weight=0.3)
-        return builder
 
     def _create_data_analysis_reward(self) -> 'CustomRewardBuilder':
         builder = CustomRewardBuilder()
-        builder.add_numerical_reward("numbers_present", tolerance=1000000, weight=0.4)
-        builder.add_format_reward("metrics", pattern=r"(\d+%|\$\d+|\+\d+|\-\d+)", weight=0.3)
+        # More comprehensive number matching including decimals and commas
+        builder.add_format_reward("numbers_present", pattern=r"\d+(?:[,\.]\d+)*(?:%|[KMB])?", weight=0.4)
+        # Match various metric formats
+        builder.add_format_reward("metrics", pattern=r"(?:\d+(?:\.\d+)?%|\$\d+(?:,\d{3})*(?:\.\d+)?|[+\-]\d+(?:\.\d+)?)", weight=0.3)
         builder.add_length_reward("insight_length", min_length=30, max_length=200, weight=0.3)
         return builder
 
-    def _create_json_reward(self) -> 'CustomRewardBuilder':
-        builder = CustomRewardBuilder()
-        builder.add_format_reward("json_structure", pattern=r"^\s*[{\[].*[}\]]\s*$", weight=0.5)
-        builder.add_format_reward("json_quotes", pattern=r'"\w+"\s*:', weight=0.3)
-        builder.add_binary_reward("valid_json", regex_pattern=None, weight=0.2)
-        return builder
 
     def _create_technical_analysis_reward(self) -> 'CustomRewardBuilder':
         """Create reward for technical analysis signal classification.
 
         This reward prioritizes:
-        1. Signal accuracy (40%) - with partial credit for direction
-        2. Format compliance (30%) - proper <analysis> and <signal> tags
-        3. Analysis quality (30%) - technical indicators, reasoning, values
+        1. Signal accuracy (50%) - with partial credit for direction
+        2. Format compliance (20%) - proper <analysis> and <signal> tags
+        3. Analysis quality (20%) - technical indicators, reasoning
+        4. Length penalty (10%) - discourage max-length rambling
 
         The signal accuracy component gives partial credit when the direction
         is correct but strength is wrong (e.g., WEAK_BUY instead of STRONG_BUY).
+
+        Length penalty helps prevent reward collapse by discouraging outputs that
+        hit the max token limit without proper termination.
         """
         builder = CustomRewardBuilder()
 
@@ -1089,7 +1002,7 @@ class RewardPresetLibrary:
             section_tags=["analysis", "signal"],
             required_sections=["analysis", "signal"],
             order_matters=True,
-            weight=0.30  # Reduced to make room for signal accuracy
+            weight=0.20  # Reduced from 0.30 to make room for length penalty
         )
 
         # Signal accuracy - with partial credit for correct direction
@@ -1097,7 +1010,7 @@ class RewardPresetLibrary:
         builder.add_signal_accuracy(
             "signal_accuracy",
             valid_signals=["STRONG_BUY", "WEAK_BUY", "HOLD", "WEAK_SELL", "STRONG_SELL"],
-            weight=0.40  # Highest weight - getting the signal right is most important
+            weight=0.50  # Increased from 0.40 - getting the signal right is most important
         )
 
         # Analysis content - should mention technical indicators
@@ -1110,17 +1023,28 @@ class RewardPresetLibrary:
             required_keywords=["RSI", "MACD", "SMA", "EMA", "support", "resistance",
                               "trend", "momentum", "overbought", "oversold", "crossover",
                               "divergence", "volume", "breakout", "bollinger"],
-            weight=0.15  # Unchanged
+            weight=0.20  # Increased from 0.15
         )
 
-        # Reasoning patterns
+        # Length reward - discourage max-length outputs (512 tokens)
+        # Target range: 100-300 tokens (roughly 75-225 words)
+        # This helps prevent reward collapse by punishing rambling outputs
+        builder.add_length_reward(
+            "response_length",
+            min_length=50,
+            max_length=300,
+            optimal_length=150,
+            weight=0.10  # New component
+        )
+
+        # Reasoning patterns - reduced weight
         builder.add_format_reward(
             "reasoning_words",
             pattern=r"(indicates?|suggests?|shows?|confirms?|signals?|implies|therefore|because|due to|given)",
-            weight=0.10  # Unchanged
+            weight=0.05  # Reduced from 0.10
         )
 
-        # Technical indicator values mentioned
+        # Technical indicator values mentioned - reduced weight
         builder.add_format_reward(
             "indicator_values",
             pattern=r"(\d+(?:\.\d+)?%?|\d+(?:\.\d+)?(?:k|M|B)?|above|below|crossed)",
@@ -1131,55 +1055,45 @@ class RewardPresetLibrary:
 
     def _create_logical_reasoning_reward(self) -> 'CustomRewardBuilder':
         builder = CustomRewardBuilder()
-        builder.add_format_reward("reasoning_words", pattern=r"(therefore|thus|because|since|if.*then)", weight=0.4)
+        # Case-insensitive matching for logical connectives
+        builder.add_format_reward("reasoning_words", pattern=r"(?i)(therefore|thus|because|since|if\s+\w+.*\s+then)", weight=0.4)
         builder.add_length_reward("reasoning_length", min_length=30, max_length=200, weight=0.3)
-        builder.add_format_reward("conclusion", pattern=r"(conclude|conclusion|therefore|thus)", weight=0.3)
+        # Match conclusion indicators
+        builder.add_format_reward("conclusion", pattern=r"(?i)(conclude[sd]?|conclusion|therefore|thus|hence)", weight=0.3)
         return builder
 
     def _create_chain_of_thought_reward(self) -> 'CustomRewardBuilder':
         builder = CustomRewardBuilder()
-        builder.add_format_reward("step_markers", pattern=r"(Step \d+|\d+\.|First|Next|Then|Finally)", weight=0.5)
+        # Match step markers and sequence words
+        builder.add_format_reward("step_markers", pattern=r"(?i)(Step \d+|(?:^|\n)\d+[\.\)]\s|First|Next|Then|Finally)", weight=0.5)
         builder.add_length_reward("thought_process", min_length=50, max_length=300, weight=0.2)
-        builder.add_format_reward("reasoning", pattern=r"(Let me|I need to|This means|So)", weight=0.3)
+        # Match reasoning process indicators
+        builder.add_format_reward("reasoning", pattern=r"(?i)(Let me|Let's|I need to|This means|So\s+|Therefore)", weight=0.3)
         return builder
 
-    def _create_helpful_assistant_reward(self) -> 'CustomRewardBuilder':
-        builder = CustomRewardBuilder()
-        builder.add_format_reward("helpful_phrases", pattern=r"(help|happy to|glad to|can assist|would you)", weight=0.3)
-        builder.add_format_reward("questions", pattern=r"\?", weight=0.2)
-        builder.add_length_reward("response_length", min_length=30, max_length=200, weight=0.3)
-        builder.add_format_reward("actionable", pattern=r"(you can|try|consider|might want to)", weight=0.2)
-        return builder
-
-    def _create_customer_service_reward(self) -> 'CustomRewardBuilder':
-        builder = CustomRewardBuilder()
-        builder.add_format_reward("empathy", pattern=r"(apologize|sorry|understand|appreciate)", weight=0.3)
-        builder.add_format_reward("action", pattern=r"(will|can|let me|I'll|we'll)", weight=0.3)
-        builder.add_format_reward("professional", pattern=r"(please|thank you|certainly|of course)", weight=0.2)
-        builder.add_length_reward("response", min_length=30, max_length=150, weight=0.2)
-        return builder
-
-    def _create_safety_reward(self) -> 'CustomRewardBuilder':
-        builder = CustomRewardBuilder()
-        builder.add_binary_reward("no_harmful", regex_pattern=r"^(?!.*(harmful|dangerous|illegal|unethical))", weight=0.4)
-        builder.add_format_reward("constructive", pattern=r"(positive|constructive|helpful|safe)", weight=0.3)
-        builder.add_length_reward("thoughtful", min_length=30, max_length=200, weight=0.3)
-        return builder
 
     def _create_markdown_reward(self) -> 'CustomRewardBuilder':
         builder = CustomRewardBuilder()
-        builder.add_format_reward("headers", pattern=r"^#{1,6}\s+", weight=0.3)
-        builder.add_format_reward("lists", pattern=r"^[\-\*\+]\s+", weight=0.2)
-        builder.add_format_reward("code_blocks", pattern=r"```.*?```", weight=0.3)
-        builder.add_format_reward("emphasis", pattern=r"(\*\*.+?\*\*|__.+?__|\*.+?\*|_.+?_)", weight=0.2)
+        # Match markdown headers anywhere in text
+        builder.add_format_reward("headers", pattern=r"(?:^|\n)#{1,6}\s+.+", weight=0.3)
+        # Match list markers
+        builder.add_format_reward("lists", pattern=r"(?:^|\n)[\-\*\+]\s+", weight=0.2)
+        # Match code blocks (non-greedy)
+        builder.add_format_reward("code_blocks", pattern=r"```[\s\S]*?```", weight=0.3)
+        # Match emphasis (bold, italic)
+        builder.add_format_reward("emphasis", pattern=r"(?:\*\*[^*]+\*\*|__[^_]+__|(?<!\*)\*[^*]+\*(?!\*)|(?<!_)_[^_]+_(?!_))", weight=0.2)
         return builder
 
     def _create_citation_reward(self) -> 'CustomRewardBuilder':
         builder = CustomRewardBuilder()
-        builder.add_format_reward("author", pattern=r"[A-Z][a-z]+,\s+[A-Z]\.?", weight=0.3)
-        builder.add_format_reward("year", pattern=r"\(\d{4}\)", weight=0.2)
-        builder.add_format_reward("title", pattern=r"\*.+?\*|_.+?_", weight=0.2)
-        builder.add_format_reward("url", pattern=r"https?://", weight=0.3)
+        # Match author name patterns (various formats)
+        builder.add_format_reward("author", pattern=r"[A-Z][a-z]+(?:,\s+[A-Z]\.?|,\s+[A-Z][a-z]+|(?:\s+[A-Z]\.)+)", weight=0.3)
+        # Match publication year in parentheses
+        builder.add_format_reward("year", pattern=r"\((?:19|20)\d{2}\)", weight=0.2)
+        # Match italicized or emphasized titles
+        builder.add_format_reward("title", pattern=r"(?:\*[^*]+\*|_[^_]+_)", weight=0.2)
+        # Match URLs or DOIs
+        builder.add_format_reward("url", pattern=r"(?:https?://|doi:|DOI:)", weight=0.3)
         return builder
 
 

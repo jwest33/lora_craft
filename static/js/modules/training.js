@@ -514,7 +514,9 @@
                 dataset: {
                     path: document.getElementById('dataset-path')?.value,
                     sample_size: parseInt(document.getElementById('max-samples')?.value) || null,
-                    train_split: parseInt(document.getElementById('train-split')?.value) || 80
+                    train_split: parseInt(document.getElementById('train-split')?.value) || 80,
+                    instruction_field: document.getElementById('instruction-field')?.value || 'instruction',
+                    response_field: document.getElementById('response-field')?.value || 'output'
                 },
                 // Map frontend datasetType to backend source_type
                 dataset_source: (() => {

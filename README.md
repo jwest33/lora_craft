@@ -1,21 +1,21 @@
 # LoRA Craft
 
-A web-based application for fine-tuning large language models using Low-Rank Adaptation (LoRA) and Group Relative Policy Optimization (GRPO). Built for researchers and developers who need powerful, accessible LLM training on consumer hardware.
+A web-based application for fine-tuning large language models using Low-Rank Adaptation (LoRA) and Group Relative Policy Optimization (GRPO). Built for researchers and developers who need accessible LLM training on consumer hardware.
 
 ![App](docs//example_model_select.jpg)
 
 ## Features
 
 ### Core Capabilities
-- **GRPO/GSPO Training**: Advanced reinforcement learning algorithms for LLM fine-tuning
+- **GRPO/GSPO Training**: Reinforcement learning algorithms for LLM fine-tuning
 - **Multi-Model Support**: Compatible with Qwen3, LLaMA 3.2, and Phi-4 model families
 - **Real-Time Monitoring**: Live training metrics with WebSocket streaming
 - **Session Management**: Train multiple models simultaneously with unique display names
-- **Smart Memory Management**: Automatic batch size optimization based on available VRAM
+- **Automatic Memory Management**: Batch size optimization based on available VRAM
 - **Export Flexibility**: Export to SafeTensors, GGUF, and HuggingFace formats
 
 ### User Interface
-- **Modern Web Interface**: Clean, responsive design with dark/light theme support
+- **Web Interface**: Clean, responsive design with dark/light theme support
 - **Visual Training Pipeline**: Step-by-step workflow from model selection to export
 - **Real-Time System Monitoring**: Live GPU, VRAM, and RAM usage indicators
 - **Configuration Manager**: Save, load, and manage training configurations
@@ -76,11 +76,6 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 pip install -r requirements.txt
 ```
 
-### 5. Setup GGUF Support (Optional)
-```bash
-python setup_llama_cpp.py
-```
-
 ## Quick Start
 
 ### Launch the Application
@@ -94,9 +89,11 @@ Navigate to `http://localhost:5000` in your web browser.
 
 1. **Model Selection**: Choose from Qwen3, LLaMA, or Phi-4 models
 2. **Dataset Configuration**: Select a pre-configured dataset or upload your own
-3. **Training Parameters**: Adjust epochs, batch size, and learning rate
-4. **Start Training**: Monitor real-time progress and metrics
-5. **Export Model**: Download your fine-tuned model in your preferred format
+3. **Field Mapping**: Map dataset columns to reward function fields (auto-suggested)
+4. **Reward Selection**: Choose appropriate reward preset with field validation
+5. **Training Parameters**: Adjust epochs, batch size, and learning rate
+6. **Start Training**: Monitor real-time progress and metrics
+7. **Export Model**: Download your fine-tuned model in your preferred format
 
 ## Usage Guide
 
@@ -110,14 +107,14 @@ Navigate to `http://localhost:5000` in your web browser.
 #### Dataset Setup
 - **Pre-configured Datasets**: Alpaca, Dolly, OpenOrca, and more
 - **Custom Datasets**: Upload JSON, CSV, or Parquet files
-- **Field Mapping**: Map instruction and response fields
+- **Field Mapping**: Automatic field mapping with visual validation and preview
 - **Template System**: Apply chat templates with special tokens
 
 #### Training Configuration
 - **Algorithm Selection**: GRPO (token-level) or GSPO (sequence-level)
 - **Hyperparameters**: Learning rate, batch size, epochs
 - **Optimization**: Flash attention, gradient checkpointing
-- **Reward Functions**: Configure custom reward criteria
+- **Reward Functions**: Field mapping with 13 curated presets and compatibility scoring
 
 #### Monitoring & Management
 - **Real-Time Metrics**: Loss, rewards, gradients, learning rate
@@ -144,7 +141,7 @@ python flask_app.py --port 8080
 python flask_app.py --create-example-config
 ```
 
-## Advanced Features
+## Additional Features
 
 ### GRPO vs GSPO Algorithms
 
@@ -160,10 +157,112 @@ python flask_app.py --create-example-config
 
 ### Custom Reward Functions
 
-Configure reward functions in the training interface:
-- **Binary Rewards**: Simple correct/incorrect classification
-- **Regex Matching**: Pattern-based scoring
-- **Numerical Scoring**: Custom scoring functions
+LoRA Craft includes a reward system with **13 curated presets** designed for different training tasks. Each reward function combines multiple scoring components to evaluate model outputs.
+
+**Available Reward Categories:**
+- **Mathematics & Science**: Equation solving, scientific calculations
+- **Programming**: Code generation, algorithm implementation
+- **Language & Writing**: Documentation, Q&A, instructions
+- **Data & Analysis**: Insights, technical signals, reasoning
+- **Formatting**: Markdown, citations, structured output
+
+**Key Features:**
+- Field mapping with auto-detection
+- Visual compatibility scoring (0-100%)
+- Live preview of data transformation
+- Preset library with examples and difficulty levels
+
+### Reward Function Field Mapping
+
+LoRA Craft features a field mapping system that automatically connects your dataset columns to reward function requirements.
+
+#### How Field Mapping Works
+
+1. **Automatic Detection**: When you select a dataset, the system analyzes column names
+2. **Suggested Mappings**: Fuzzy matching algorithm suggests field mappings
+3. **Visual Confirmation**: Preview how your data will be processed before training
+4. **Compatibility Scoring**: See how well your dataset matches the reward function (0-100%)
+
+#### Using Field Mapping
+
+**Step 1: Select Your Dataset**
+- Load any dataset with instruction/response format
+- System detects available columns automatically
+
+**Step 2: Choose a Reward Preset**
+- Browse categorized presets (Math, Code, Language, etc.)
+- View example inputs/outputs for each preset
+- See required vs. optional fields
+
+**Step 3: Map Fields**
+- Click "Map Fields" button when selecting a reward
+- **Auto-Map**: One-click automatic field mapping
+- **Manual**: Adjust mappings via dropdown menus
+- **Preview**: See actual data transformation in real-time
+
+**Step 4: Validate & Confirm**
+- Compatibility bar shows mapping quality (green = good, red = issues)
+- Warning alerts for missing required fields
+- Confidence scores for each mapping
+
+#### Field Mapping Interface
+
+The field mapping modal shows:
+- **Dataset Columns** (left): Your actual column names
+- **Arrow Indicator**: Visual connection between fields
+- **Reward Fields** (right): Expected field names with descriptions
+- **Status Badges**:
+  - ✓ **Mapped** (green) - Successfully connected
+  - ✗ **Missing** (red) - Required field not found
+  - ⚠ **Optional** (yellow) - Optional field available
+- **Live Preview**: Sample data showing actual transformations
+
+#### Common Field Mappings
+
+| Your Dataset Column | Maps To | Reward Field |
+|---------------------|---------|--------------|
+| `prompt`, `question`, `input` | → | `instruction` |
+| `output`, `answer`, `completion` | → | `response` |
+| `expected`, `target`, `ground_truth` | → | `reference` (optional) |
+
+#### Tips for Best Results
+
+- **Clear Column Names**: Use descriptive names in your dataset
+- **Check Examples**: Review reward preset examples before mapping
+- **Validate Mapping**: Always check the preview before training
+- **Save Configs**: Field mappings are saved with training configurations
+- **High Compatibility**: Aim for 80%+ compatibility score
+
+#### Supported Reward Presets
+
+**Mathematics & Science**
+- **Mathematical Problem Solving** - Equations, calculations with boxed answers
+- **Scientific Calculation** - Physics, chemistry formulas with numerical precision
+
+**Programming**
+- **Code Generation** - Python, JavaScript with syntax validation
+- **Algorithm Implementation** - Data structures, algorithmic logic
+
+**Language & Writing**
+- **Technical Documentation** - API docs, guides with proper structure
+- **Explanatory Q&A** - Detailed explanations with examples
+- **Step-by-Step Instructions** - Tutorials, how-tos with numbered steps
+
+**Data & Analysis**
+- **Data Analysis** - Metrics, insights with numerical evidence
+- **Technical Analysis Signal** - Trading signals (BUY/SELL/HOLD)
+- **Logical Reasoning** - Deductive logic with conclusion markers
+- **Chain of Thought** - Multi-step reasoning process
+
+**Formatting**
+- **Markdown Formatting** - Headers, lists, code blocks, emphasis
+- **Citation Format** - Academic references with authors and years
+
+Each preset includes:
+- **Field requirements** (instruction, response, reference)
+- **Example inputs and outputs**
+- **Recommended training settings**
+- **Difficulty level** (beginner/intermediate/advanced)
 
 ### Template System
 

@@ -703,7 +703,7 @@ You are a helpful AI assistant.
         )
         results["trained"] = trained_result
 
-        # Generate from base model using the same chat template from training config
+        # Generate from base model using generic chat template (not training config)
         base_result = self.generate_response(
             prompt=prompt,
             model_type="base",
@@ -711,7 +711,7 @@ You are a helpful AI assistant.
             config=config,
             use_chat_template=use_chat_template,
             use_simple_prompt=use_simple_prompt,
-            session_info=session_info
+            session_info=None  # Don't use trained model's chat template for base model
         )
         results["base"] = base_result
 

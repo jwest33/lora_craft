@@ -242,12 +242,19 @@
             const formData = new FormData();
             formData.append('file', file);  // Backend expects 'file' field name
 
-            // Upload file
+            // Upload file with timeout
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+
             fetch('/api/upload_dataset', {
                 method: 'POST',
-                body: formData
+                body: formData,
+                signal: controller.signal
             })
-            .then(response => response.json())
+            .then(response => {
+                clearTimeout(timeoutId);
+                return response.json();
+            })
             .then(data => {
                 if (data.success) {
                     this.onDatasetUploaded(data);
@@ -256,13 +263,20 @@
                 }
             })
             .catch(error => {
+                clearTimeout(timeoutId);
                 console.error('Dataset upload error:', error);
-                CoreModule.showAlert(`Failed to upload dataset: ${error.message}`, 'danger');
+
+                let errorMessage = error.message;
+                if (error.name === 'AbortError') {
+                    errorMessage = 'Upload timed out. The file may be too large or the server is busy. Please try again.';
+                }
+
+                CoreModule.showAlert(`Failed to upload dataset: ${errorMessage}`, 'danger');
                 if (uploadStatus) {
                     uploadStatus.innerHTML = `
                         <div class="alert alert-danger">
                             <i class="fas fa-exclamation-circle me-2"></i>
-                            Upload failed: ${CoreModule.escapeHtml(error.message)}
+                            Upload failed: ${CoreModule.escapeHtml(errorMessage)}
                         </div>
                     `;
                 }
@@ -271,32 +285,177 @@
 
         // Handle successful dataset upload
         onDatasetUploaded(data) {
+            console.log('[Dataset Upload] Upload completed, data received:', data);
+            console.log('[Dataset Upload] Columns:', data.columns);
+            console.log('[Dataset Upload] Dataset info:', data.dataset_info);
+
+            // Store upload data for column mapping
+            this.currentUploadData = data;
+
             const uploadStatus = document.getElementById('dataset-upload-status');
             if (uploadStatus) {
+                // Format sample count display
+                let sampleDisplay = 'Unknown';
+                if (data.sample_count) {
+                    if (typeof data.sample_count === 'number') {
+                        sampleDisplay = data.sample_count.toLocaleString();
+                    } else {
+                        // String like "To be determined" or "Large dataset"
+                        sampleDisplay = data.sample_count;
+                    }
+                }
+
                 uploadStatus.innerHTML = `
                     <div class="alert alert-success">
                         <i class="fas fa-check-circle me-2"></i>
                         Dataset uploaded successfully!
                         <div class="mt-2">
                             <strong>File:</strong> ${CoreModule.escapeHtml(data.filename)}<br>
-                            <strong>Samples:</strong> ${data.sample_count || 'Unknown'}<br>
+                            <strong>Samples:</strong> ${sampleDisplay}<br>
                             <strong>Size:</strong> ${this.formatFileSize(data.file_size)}
                         </div>
                     </div>
                 `;
             }
 
+            // Show column mapping section if columns are available
+            if (data.columns && data.columns.length > 0) {
+                console.log('[Dataset Upload] Showing column mapping with', data.columns.length, 'columns');
+                this.showColumnMapping(data);
+            } else {
+                console.warn('[Dataset Upload] No columns detected, proceeding with defaults');
+                console.log('[Dataset Upload] Data has error:', data.dataset_info?.error);
+                // No columns detected, proceed with defaults
+                this.finalizeDatasetSelection(data);
+            }
+
+            // Reload uploaded files list
+            this.loadUploadedDatasets();
+        },
+
+        // Show column mapping UI
+        showColumnMapping(data) {
+            console.log('[Column Mapping] Starting showColumnMapping()');
+            console.log('[Column Mapping] Data:', data);
+
+            const mappingSection = document.getElementById('column-mapping-section');
+            const instructionSelect = document.getElementById('upload-instruction-field');
+            const responseSelect = document.getElementById('upload-response-field');
+
+            console.log('[Column Mapping] Elements found:', {
+                mappingSection: !!mappingSection,
+                instructionSelect: !!instructionSelect,
+                responseSelect: !!responseSelect
+            });
+
+            if (!mappingSection || !instructionSelect || !responseSelect) {
+                console.error('[Column Mapping] Required elements not found in DOM');
+                this.finalizeDatasetSelection(data);
+                return;
+            }
+
+            console.log('[Column Mapping] Populating dropdowns with columns:', data.columns);
+
+            // Populate column dropdowns
+            instructionSelect.innerHTML = '<option value="">-- Select Column --</option>';
+            responseSelect.innerHTML = '<option value="">-- Select Column --</option>';
+
+            data.columns.forEach((column, index) => {
+                console.log(`[Column Mapping] Adding column ${index}: ${column}`);
+                const instructionOption = document.createElement('option');
+                instructionOption.value = column;
+                instructionOption.textContent = column;
+                instructionSelect.appendChild(instructionOption);
+
+                const responseOption = document.createElement('option');
+                responseOption.value = column;
+                responseOption.textContent = column;
+                responseSelect.appendChild(responseOption);
+            });
+
+            // Pre-select detected fields if available
+            if (data.dataset_info?.detected_instruction_field) {
+                console.log('[Column Mapping] Pre-selecting instruction field:', data.dataset_info.detected_instruction_field);
+                instructionSelect.value = data.dataset_info.detected_instruction_field;
+            }
+            if (data.dataset_info?.detected_response_field) {
+                console.log('[Column Mapping] Pre-selecting response field:', data.dataset_info.detected_response_field);
+                responseSelect.value = data.dataset_info.detected_response_field;
+            }
+
+            // Show the mapping section
+            console.log('[Column Mapping] Displaying mapping section');
+            mappingSection.style.display = 'block';
+            console.log('[Column Mapping] Mapping section display style:', mappingSection.style.display);
+        },
+
+        // Confirm column mapping selection
+        confirmColumnMapping() {
+            const instructionField = document.getElementById('upload-instruction-field')?.value;
+            const responseField = document.getElementById('upload-response-field')?.value;
+
+            if (!instructionField || !responseField) {
+                CoreModule.showAlert('Please select both query and response columns', 'warning');
+                return;
+            }
+
+            if (!this.currentUploadData) {
+                CoreModule.showAlert('Upload data not found. Please upload the file again.', 'error');
+                return;
+            }
+
+            // Store the field mappings
+            this.currentUploadData.instruction_field = instructionField;
+            this.currentUploadData.response_field = responseField;
+
+            // Save column mapping state for persistence
+            const mappingState = {
+                columns: this.currentUploadData.columns,
+                instructionField: instructionField,
+                responseField: responseField,
+                datasetPath: this.currentUploadData.path
+            };
+            AppState.setConfigValue('currentColumnMapping', mappingState);
+
+            // Finalize selection
+            this.finalizeDatasetSelection(this.currentUploadData);
+        },
+
+        // Finalize dataset selection after column mapping
+        finalizeDatasetSelection(data) {
             // Update dataset path
             const datasetPath = document.getElementById('dataset-path');
             if (datasetPath) {
                 datasetPath.value = data.path;
             }
 
+            // Store field mappings in hidden fields
+            const instructionFieldInput = document.getElementById('instruction-field');
+            const responseFieldInput = document.getElementById('response-field');
+
+            if (instructionFieldInput && data.instruction_field) {
+                instructionFieldInput.value = data.instruction_field;
+            }
+            if (responseFieldInput && data.response_field) {
+                responseFieldInput.value = data.response_field;
+            }
+
             // Update stats
             AppState.setConfigValue('datasetPath', data.path);
             AppState.setConfigValue('datasetSamples', data.sample_count);
             AppState.setConfigValue('datasetType', 'upload');  // Explicitly set type to upload
+            AppState.setConfigValue('instructionField', data.instruction_field || 'instruction');
+            AppState.setConfigValue('responseField', data.response_field || 'output');
             this.updateDatasetStats();
+
+            // Make columns available to reward system
+            if (data.columns && data.columns.length > 0) {
+                window.currentDatasetColumns = data.columns;
+                console.log('[Dataset] Set currentDatasetColumns:', window.currentDatasetColumns);
+            } else if (this.currentUploadData?.columns) {
+                window.currentDatasetColumns = this.currentUploadData.columns;
+                console.log('[Dataset] Set currentDatasetColumns from upload data:', window.currentDatasetColumns);
+            }
 
             // Update configuration summary
             if (typeof window.updateConfigSummary === 'function') {
@@ -306,8 +465,8 @@
             // Validate step
             NavigationModule.validateStep(2);
 
-            // Reload uploaded files list
-            this.loadUploadedDatasets();
+            // Show confirmation
+            CoreModule.showAlert('Dataset configured successfully', 'success');
         },
 
         // Load previously uploaded datasets
@@ -376,6 +535,37 @@
             AppState.setConfigValue('datasetName', filename);
             AppState.setConfigValue('datasetType', 'upload');  // Explicitly set type to upload
 
+            // Fetch dataset info to get columns for mapping
+            fetch('/api/upload_dataset_info', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: path })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.columns && data.columns.length > 0) {
+                    // Store data for column mapping confirmation
+                    this.currentUploadData = {
+                        ...data,
+                        path: path,
+                        filename: filename
+                    };
+
+                    // Show column mapping for previously uploaded file
+                    this.showColumnMapping(this.currentUploadData);
+                } else {
+                    // No columns detected, use defaults
+                    this.finalizeSelectionWithDefaults(path, filename);
+                }
+            })
+            .catch(error => {
+                console.warn('Could not fetch dataset info, using defaults:', error);
+                this.finalizeSelectionWithDefaults(path, filename);
+            });
+        },
+
+        // Finalize selection with default field mappings
+        finalizeSelectionWithDefaults(path, filename) {
             // Update configuration summary
             if (typeof window.updateConfigSummary === 'function') {
                 window.updateConfigSummary();
@@ -896,11 +1086,63 @@ ${solutionStart}4${solutionEnd}`;
                 case 'upload':
                     if (uploadSection) uploadSection.style.display = 'block';
                     this.loadUploadedDatasets();  // Load cached uploads
+                    this.restoreColumnMapping();  // Restore column mapping if available
                     break;
             }
 
             // Store selection in AppState
             AppState.setConfigValue('datasetType', type);
+        },
+
+        // Restore column mapping UI from saved state
+        restoreColumnMapping() {
+            const mappingState = AppState.getConfigValue('currentColumnMapping');
+
+            if (!mappingState || !mappingState.columns) {
+                // No saved mapping, hide the section
+                const mappingSection = document.getElementById('column-mapping-section');
+                if (mappingSection) {
+                    mappingSection.style.display = 'none';
+                }
+                return;
+            }
+
+            const mappingSection = document.getElementById('column-mapping-section');
+            const instructionSelect = document.getElementById('upload-instruction-field');
+            const responseSelect = document.getElementById('upload-response-field');
+
+            if (!mappingSection || !instructionSelect || !responseSelect) {
+                return;
+            }
+
+            // Populate dropdowns with saved columns
+            instructionSelect.innerHTML = '<option value="">-- Select Column --</option>';
+            responseSelect.innerHTML = '<option value="">-- Select Column --</option>';
+
+            mappingState.columns.forEach(column => {
+                const instructionOption = document.createElement('option');
+                instructionOption.value = column;
+                instructionOption.textContent = column;
+                instructionSelect.appendChild(instructionOption);
+
+                const responseOption = document.createElement('option');
+                responseOption.value = column;
+                responseOption.textContent = column;
+                responseSelect.appendChild(responseOption);
+            });
+
+            // Restore selected values
+            instructionSelect.value = mappingState.instructionField;
+            responseSelect.value = mappingState.responseField;
+
+            // Make columns available to reward system
+            if (mappingState.columns) {
+                window.currentDatasetColumns = mappingState.columns;
+                console.log('[Dataset] Restored currentDatasetColumns:', window.currentDatasetColumns);
+            }
+
+            // Show the mapping section
+            mappingSection.style.display = 'block';
         },
 
         // Filter datasets list

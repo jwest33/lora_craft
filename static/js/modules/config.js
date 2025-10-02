@@ -291,7 +291,9 @@
                     split: document.getElementById('dataset-split')?.value,
                     sample_size: parseInt(document.getElementById('sample-size')?.value) || 0,
                     train_split: parseInt(document.getElementById('train-split')?.value) || 80,
-                    max_samples: parseInt(document.getElementById('max-samples')?.value) || 0
+                    max_samples: parseInt(document.getElementById('max-samples')?.value) || 0,
+                    instruction_field: document.getElementById('instruction-field')?.value || 'instruction',
+                    response_field: document.getElementById('response-field')?.value || 'output'
                 },
                 template: TemplatesModule.exportTemplateConfig(),
                 training: {
@@ -787,11 +789,6 @@
                     title: 'GSPO',
                     description: 'Group Sequence Policy Optimization applies importance weights at the sequence level, with epsilon bounds for stability.',
                     showGspoParams: true
-                },
-                dr_grpo: {
-                    title: 'DR-GRPO',
-                    description: 'Doubly Robust GRPO combines token-level optimization with variance reduction techniques for more stable training.',
-                    showGspoParams: false
                 }
             };
 
@@ -907,7 +904,7 @@
                             <div class="modal-content">
                                 <div class="modal-header">
                                     <h5 class="modal-title">
-                                        <i class="fas fa-trophy text-warning"></i> Reward Function Help
+                                        <i class="fas fa-trophy"></i> Reward Function Help
                                     </h5>
                                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                 </div>
@@ -1304,8 +1301,8 @@
                     if (document.getElementById('lora-rank-slider')) document.getElementById('lora-rank-slider').value = '16';
                     if (document.getElementById('lora-alpha')) document.getElementById('lora-alpha').value = '32';
                     if (document.getElementById('lora-alpha-slider')) document.getElementById('lora-alpha-slider').value = '32';
-                    if (document.getElementById('lora-dropout')) document.getElementById('lora-dropout').value = '0.05';
-                    if (document.getElementById('lora-dropout-slider')) document.getElementById('lora-dropout-slider').value = '0.05';
+                    if (document.getElementById('lora-dropout')) document.getElementById('lora-dropout').value = '0.00';
+                    if (document.getElementById('lora-dropout-slider')) document.getElementById('lora-dropout-slider').value = '0.00';
 
                     // Reset dataset configuration
                     if (document.getElementById('dataset-path')) document.getElementById('dataset-path').value = 'yahma/alpaca-cleaned';
