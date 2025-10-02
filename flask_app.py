@@ -1527,7 +1527,9 @@ def get_system_status():
             'gpu': 'Unknown',
             'vram': 'N/A',
             'ram': 'N/A',
-            'cpu': 'N/A'
+            'cpu': 'N/A',
+            'vram_percent': 0,
+            'ram_percent': 0
         }
 
         # Get GPU info if available
@@ -1546,6 +1548,7 @@ def get_system_status():
                 used = mem_info.used / 1024**3  # Convert to GB
                 total = mem_info.total / 1024**3
                 status['vram'] = f"{used:.1f}GB / {total:.1f}GB"
+                status['vram_percent'] = (used / total * 100) if total > 0 else 0
                 vram_acquired = True
 
                 pynvml.nvmlShutdown()
@@ -1560,12 +1563,14 @@ def get_system_status():
                 total = torch.cuda.get_device_properties(0).total_memory / 1024**3
                 # Use reserved as a proxy for "used" since it's closer to actual usage
                 status['vram'] = f"{reserved:.1f}GB / {total:.1f}GB"
+                status['vram_percent'] = (reserved / total * 100) if total > 0 else 0
         else:
             status['gpu'] = 'CPU Only'
 
         # Get RAM info
         ram = psutil.virtual_memory()
         status['ram'] = f"{ram.used / 1024**3:.1f}GB / {ram.total / 1024**3:.1f}GB"
+        status['ram_percent'] = ram.percent
 
         # Get CPU usage
         status['cpu'] = f"{psutil.cpu_percent()}%"
@@ -1577,7 +1582,9 @@ def get_system_status():
             'gpu': 'Error',
             'vram': 'Error',
             'ram': 'Error',
-            'cpu': 'Error'
+            'cpu': 'Error',
+            'vram_percent': 0,
+            'ram_percent': 0
         })
 
 

@@ -324,21 +324,40 @@
                         gpuStatus.textContent = data.gpu || 'No GPU';
                     }
 
-                    // Update VRAM status
+                    // Update VRAM status with dynamic coloring
                     const vramStatus = document.getElementById('vram-status');
                     if (vramStatus) {
                         vramStatus.textContent = data.vram || 'N/A';
+                        this.applyUsageClass(vramStatus, data.vram_percent || 0);
                     }
 
-                    // Update RAM status
+                    // Update RAM status with dynamic coloring
                     const ramStatus = document.getElementById('ram-status');
                     if (ramStatus) {
                         ramStatus.textContent = data.ram || 'N/A';
+                        this.applyUsageClass(ramStatus, data.ram_percent || 0);
                     }
                 })
                 .catch(error => {
                     console.error('Failed to fetch system status:', error);
                 });
+        },
+
+        // Apply usage-based CSS class to element
+        applyUsageClass(element, percent) {
+            // Remove all existing usage classes
+            element.classList.remove('usage-low', 'usage-medium', 'usage-high', 'usage-critical');
+
+            // Apply appropriate class based on usage percentage
+            if (percent >= 90) {
+                element.classList.add('usage-critical');
+            } else if (percent >= 75) {
+                element.classList.add('usage-high');
+            } else if (percent >= 50) {
+                element.classList.add('usage-medium');
+            } else {
+                element.classList.add('usage-low');
+            }
         },
 
         // Save application state to localStorage

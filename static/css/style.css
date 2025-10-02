@@ -2908,6 +2908,75 @@ body {
 .header-status .indicator-value {
     font-size: 0.75rem;
     font-weight: 500;
+    transition: color 0.5s ease, text-shadow 0.5s ease;
+}
+
+/* ============================================================================ */
+/* Usage-based color classes for VRAM and RAM status - Light Theme */
+/* ============================================================================ */
+
+.header-status .indicator-value.usage-low {
+    color: rgba(20, 184, 166, 1);  /* Teal/Cyan - healthy */
+}
+
+.header-status .indicator-value.usage-medium {
+    color: rgba(245, 158, 11, 1);  /* Amber/Yellow - moderate */
+}
+
+.header-status .indicator-value.usage-high {
+    color: rgba(249, 115, 22, 1);  /* Orange - high */
+}
+
+.header-status .indicator-value.usage-critical {
+    color: rgba(239, 68, 68, 1);  /* Red - critical */
+    animation: criticalPulse 2s ease-in-out infinite;
+}
+
+/* ============================================================================ */
+/* Usage-based color classes for VRAM and RAM status - Dark Theme (Synthwave) */
+/* ============================================================================ */
+
+[data-theme="dark"] .header-status .indicator-value.usage-low {
+    color: rgba(6, 182, 212, 1);  /* Neon cyan - healthy */
+    text-shadow: 0 0 8px rgba(6, 182, 212, 0.6);
+}
+
+[data-theme="dark"] .header-status .indicator-value.usage-medium {
+    color: rgba(251, 191, 36, 1);  /* Neon yellow - moderate */
+    text-shadow: 0 0 10px rgba(251, 191, 36, 0.7);
+}
+
+[data-theme="dark"] .header-status .indicator-value.usage-high {
+    color: rgba(251, 146, 60, 1);  /* Neon orange - high */
+    text-shadow: 0 0 12px rgba(251, 146, 60, 0.8);
+}
+
+[data-theme="dark"] .header-status .indicator-value.usage-critical {
+    color: rgba(236, 72, 153, 1);  /* Hot pink/magenta - critical */
+    text-shadow: 0 0 15px rgba(236, 72, 153, 0.9);
+    animation: criticalPulseSynthwave 2s ease-in-out infinite;
+}
+
+/* Pulse animation for critical state - Light Theme */
+@keyframes criticalPulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+/* Pulse animation for critical state - Dark Theme (Synthwave) */
+@keyframes criticalPulseSynthwave {
+    0%, 100% {
+        text-shadow: 0 0 15px rgba(236, 72, 153, 0.9), 0 0 25px rgba(236, 72, 153, 0.5);
+        opacity: 1;
+    }
+    50% {
+        text-shadow: 0 0 20px rgba(236, 72, 153, 1), 0 0 35px rgba(236, 72, 153, 0.8);
+        opacity: 0.85;
+    }
 }
 
 .header-status .indicator-dot {
