@@ -591,7 +591,7 @@ class GRPOModelTrainer:
             warmup_steps=self.config.warmup_steps,
             logging_steps=self.config.logging_steps,
             save_steps=self.config.save_steps,
-            learning_rate=self.config.learning_rate * 0.5,  # Lower LR for pre-training
+            learning_rate=5e-5,  # Higher LR for supervised pre-training (not RL like main GRPO training)
             weight_decay=self.config.weight_decay,
             fp16=use_fp16,
             bf16=use_bf16,
@@ -1079,18 +1079,21 @@ class GRPOModelTrainer:
                     actual_loss = float(logs.get('loss', logs.get('train_loss', logs.get('train/loss', 0.0))))
 
                     # Try multiple possible key names for reward (TRL uses different keys)
+                    # Use 'or' operator to properly check multiple keys in sequence
                     actual_reward = float(
-                        logs.get('rewards/reward_wrapper/mean',  # TRL's primary key
-                        logs.get('reward',                        # TRL's secondary key
-                        logs.get('rewards/mean',                  # Alternative
-                        logs.get('mean_reward', 0.0))))           # Our own key
+                        logs.get('rewards/reward_wrapper/mean') or  # TRL's primary key
+                        logs.get('reward') or                        # TRL's secondary key
+                        logs.get('rewards/mean') or                  # Alternative
+                        logs.get('mean_reward') or                   # Our own key
+                        0.0
                     )
 
                     # Extract reward std with fallbacks
                     actual_reward_std = float(
-                        logs.get('rewards/reward_wrapper/std',   # TRL's primary key
-                        logs.get('reward_std',                    # TRL's secondary key
-                        logs.get('rewards/std', 0.0)))            # Alternative
+                        logs.get('rewards/reward_wrapper/std') or   # TRL's primary key
+                        logs.get('reward_std') or                    # TRL's secondary key
+                        logs.get('rewards/std') or                   # Alternative
+                        0.0
                     )
 
                     grad_norm = float(logs.get('grad_norm', 0.0))

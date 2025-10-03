@@ -1,5 +1,5 @@
 {
-  "name": "technical_analysis.2025.10.3.2",
+  "name": "technical_analysis.2025.10.3.3",
   "description": "",
   "config": {
     "setupMode": "setup-recommended",
@@ -28,7 +28,7 @@
       "split": "train",
       "sample_size": 0,
       "train_split": 80,
-      "max_samples": 50000,
+      "max_samples": 10000,
       "instruction_field": "input",
       "response_field": "signal"
     },
@@ -94,12 +94,8 @@
     },
     "reward": {
       "type": "preset",
-      "preset_name": "Data Analysis",
-      "field_mapping": {
-        "instruction": "input",
-        "response": "signal"
-      }
+      "preset_name": "Technical Analysis Signal"
     }
   },
-  "timestamp": 1759496271297
+  "timestamp": 1759513675533
 }

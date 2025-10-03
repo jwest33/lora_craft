@@ -983,72 +983,43 @@ class RewardPresetLibrary:
         """Create reward for technical analysis signal classification.
 
         This reward prioritizes:
-        1. Signal accuracy (50%) - with partial credit for direction
-        2. Format compliance (20%) - proper <analysis> and <signal> tags
-        3. Analysis quality (20%) - technical indicators, reasoning
-        4. Length penalty (10%) - discourage max-length rambling
+        1. Signal accuracy (85%) - with partial credit for direction (THE ONLY THING THAT MATTERS)
+        2. Format compliance (10%) - proper <signal> tags present
+        3. Length penalty (5%) - discourage max-length rambling
 
         The signal accuracy component gives partial credit when the direction
         is correct but strength is wrong (e.g., WEAK_BUY instead of STRONG_BUY).
 
-        Length penalty helps prevent reward collapse by discouraging outputs that
-        hit the max token limit without proper termination.
+        Analysis content is NOT rewarded - only the signal output matters.
         """
         builder = CustomRewardBuilder()
 
-        # Template validation - ensure proper structure
-        builder.add_template_validation(
-            "template_structure",
-            section_tags=["analysis", "signal"],
-            required_sections=["analysis", "signal"],
-            order_matters=True,
-            weight=0.20  # Reduced from 0.30 to make room for length penalty
-        )
-
         # Signal accuracy - with partial credit for correct direction
-        # This replaces the old multi_choice_validation with a smarter scoring system
+        # This is the ONLY metric that matters for trading signals
         builder.add_signal_accuracy(
             "signal_accuracy",
             valid_signals=["STRONG_BUY", "WEAK_BUY", "HOLD", "WEAK_SELL", "STRONG_SELL"],
-            weight=0.50  # Increased from 0.40 - getting the signal right is most important
+            weight=0.85  # Massively increased - this is what we care about
         )
 
-        # Analysis content - should mention technical indicators
-        # Note: Using ANY keyword match instead of ALL to prevent keyword stuffing
-        builder.add_section_content(
-            "analysis_quality",
-            section_tag="analysis",
-            min_words=20,
-            max_words=200,
-            required_keywords=["RSI", "MACD", "SMA", "EMA", "support", "resistance",
-                              "trend", "momentum", "overbought", "oversold", "crossover",
-                              "divergence", "volume", "breakout", "bollinger"],
-            weight=0.20  # Increased from 0.15
+        # Template validation - just ensure <signal> tags are present
+        # We don't care about <analysis> tags anymore
+        builder.add_template_validation(
+            "template_structure",
+            section_tags=["signal"],
+            required_sections=["signal"],
+            order_matters=False,
+            weight=0.10  # Reduced - just basic format checking
         )
 
-        # Length reward - discourage max-length outputs (512 tokens)
-        # Target range: 100-300 tokens (roughly 75-225 words)
-        # This helps prevent reward collapse by punishing rambling outputs
+        # Length reward - discourage max-length outputs that hit token limit
+        # Keep responses concise
         builder.add_length_reward(
             "response_length",
-            min_length=50,
+            min_length=10,
             max_length=300,
-            optimal_length=150,
-            weight=0.10  # New component
-        )
-
-        # Reasoning patterns - reduced weight
-        builder.add_format_reward(
-            "reasoning_words",
-            pattern=r"(indicates?|suggests?|shows?|confirms?|signals?|implies|therefore|because|due to|given)",
-            weight=0.05  # Reduced from 0.10
-        )
-
-        # Technical indicator values mentioned - reduced weight
-        builder.add_format_reward(
-            "indicator_values",
-            pattern=r"(\d+(?:\.\d+)?%?|\d+(?:\.\d+)?(?:k|M|B)?|above|below|crossed)",
-            weight=0.05  # Unchanged, total = 1.0
+            optimal_length=50,
+            weight=0.05  # Minimal weight - just prevent extreme rambling
         )
 
         return builder
@@ -1481,6 +1452,11 @@ class CustomRewardBuilder:
                 details['parameters'] = {
                     'patterns': config.patterns[:3] if config.patterns else [],  # Show first 3
                     'strict_order': config.strict_order
+                }
+            elif isinstance(reward_func, SignalAccuracyReward):
+                details['parameters'] = {
+                    'valid_signals': config.valid_choices,
+                    'partial_credit': 'Yes (0.7 for correct direction, 0.5/0.4 for HOLD mismatches)'
                 }
 
             components.append(details)
