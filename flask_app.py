@@ -712,6 +712,15 @@ def run_training(session_id: str, config: Dict[str, Any]):
             q.put(('log', f"Loaded dataset with {actual_samples} samples (no limit configured)"))
 
         # Setup prompt template with chat template (from nested template config or top-level)
+        # CRITICAL: Use proper fallback chain to ensure custom system_prompt is used
+        custom_system_prompt = template_config.get('system_prompt')
+        if not custom_system_prompt:
+            custom_system_prompt = config.get('system_prompt',
+                'You are given a problem.\n'
+                'Think about the problem and provide your working out.\n'
+                'Place it between <start_working_out> and <end_working_out>.\n'
+                'Then, provide your solution between <SOLUTION></SOLUTION>')
+
         template_config_obj = TemplateConfig(
             name="training",
             description="Training template",
@@ -721,7 +730,7 @@ def run_training(session_id: str, config: Dict[str, Any]):
             reasoning_end_marker=template_config.get('reasoning_end') or config.get('reasoning_end', '<end_working_out>'),
             solution_start_marker=template_config.get('solution_start') or config.get('solution_start', '<SOLUTION>'),
             solution_end_marker=template_config.get('solution_end') or config.get('solution_end', '</SOLUTION>'),
-            system_prompt=template_config.get('system_prompt') or config.get('system_prompt', 'You are given a problem.\nThink about the problem and provide your working out.\nPlace it between <start_working_out> and <end_working_out>.\nThen, provide your solution between <SOLUTION></SOLUTION>'),
+            system_prompt=custom_system_prompt,
             chat_template=template_config.get('chat_template') or config.get('chat_template'),  # Add chat template from config
             prepend_reasoning_start=True,  # For GRPO templates
             model_type=template_config.get('chat_template_type') or config.get('chat_template_type', 'grpo')
@@ -822,20 +831,31 @@ def run_training(session_id: str, config: Dict[str, Any]):
                 q.put(('log', "=" * 60))
 
                 # Get a sample from the dataset to test with
+                # CRITICAL: Use the configured instruction field name from dataset config
                 test_sample = None
+                test_instruction = "What is 2 + 2?"  # Fallback
                 if len(dataset) > 0:
                     test_sample = dataset[0]
-                    test_instruction = test_sample.get('instruction', 'What is 2 + 2?')
-                else:
-                    test_instruction = "What is 2 + 2?"
+                    # Use the configured instruction field (e.g., 'input' for technical analysis)
+                    # dataset_config is a dict at this point, not a DatasetConfig object
+                    instruction_field = dataset_config.get('instruction_field', 'instruction')
+                    test_instruction = test_sample.get(instruction_field,
+                                                      test_sample.get('instruction', 'What is 2 + 2?'))
 
                 q.put(('log', f"Test instruction: {test_instruction[:100]}..."))
 
                 # Generate a sample response to check format
                 try:
-                    # Tokenize and generate
+                    # CRITICAL: Use the chat template to format the prompt correctly
+                    # This ensures the model sees the same format it was trained on
+                    messages = [{'role': 'user', 'content': test_instruction}]
+                    formatted_prompt = template.apply(messages, mode='inference')
+
+                    q.put(('log', f"Formatted prompt (first 300 chars): {formatted_prompt[:300]}..."))
+
+                    # Tokenize the properly formatted prompt
                     inputs = trainer.tokenizer(
-                        test_instruction,
+                        formatted_prompt,
                         return_tensors="pt",
                         truncation=True,
                         max_length=512
@@ -854,11 +874,18 @@ def run_training(session_id: str, config: Dict[str, Any]):
                     # Decode response
                     generated_text = trainer.tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-                    # Extract just the response part (after the instruction)
-                    if test_instruction in generated_text:
-                        response = generated_text[generated_text.index(test_instruction) + len(test_instruction):].strip()
+                    # Extract the response part (everything after the prompt)
+                    # Since we used the formatted prompt, we can safely extract what comes after it
+                    if formatted_prompt in generated_text:
+                        response = generated_text[len(formatted_prompt):].strip()
                     else:
-                        response = generated_text
+                        # Fallback: try to find where the assistant's response starts
+                        # Look for the reasoning start marker as the beginning of the response
+                        reasoning_marker = template_config_obj.reasoning_start_marker
+                        if reasoning_marker in generated_text:
+                            response = generated_text[generated_text.index(reasoning_marker):].strip()
+                        else:
+                            response = generated_text
 
                     q.put(('log', f"\nGenerated response:\n{response[:500]}...\n"))
 

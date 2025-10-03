@@ -1,56 +1,209 @@
-# Core ML Dependencies
-# torch --index-url https://download.pytorch.org/whl/cu128
-transformers>=4.51.3
-datasets>=3.6.0
-accelerate>=1.10.1
-bitsandbytes>=0.41.0
-xformers>=0.0.33 # pip install -v --no-build-isolation -U git+https://github.com/facebookresearch/xformers.git@main#egg=xformers --no-deps
+# ============================================================================
+# CORE TRAINING DEPENDENCIES (Required)
+# ============================================================================
+# These packages are essential for LoRA training with GRPO/GSPO
 
-# GRPO and Fine-tuning
-unsloth>=2025.9.7
+# PyTorch ecosystem - CUDA-specific builds
+# Install instructions: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+torch==2.8.0+cu128
+torchvision==0.23.0
+triton-windows==3.4.0.post20
+
+# Unsloth optimization (2x faster training, 50% less memory)
+unsloth==2025.9.7
+unsloth_zoo==2025.9.9
+
+# Training frameworks
+accelerate==1.10.1
+transformers==4.55.4
+peft==0.17.0
 trl==0.21.0
-# vllm>=0.2.0  # Optional: Linux/Mac only for faster generation
-peft>=0.5.0
 
-# Data Processing
-pandas>=2.0.0
-numpy>=2.2.6
-pyarrow>=12.0.0
+# Quantization and optimization
+bitsandbytes==0.47.0
+# xformers: Local build detected. For portable install use: xformers>=0.0.33
+xformers>=0.0.33
 
-# GUI and Visualization
-matplotlib>=3.10.6
-pillow>=10.0.0
+# Efficient attention and optimization
+cut-cross-entropy==25.1.1
+torchao==0.13.0
 
-# System and Utilities
-psutil>=5.9.0
-nvidia-ml-py>=13.580.82  # For NVIDIA GPU detection
-gpustat>=1.1.0  # Optional: Additional GPU stats
-py-cpuinfo>=9.0.0  # Optional: Detailed CPU information
-llama-cpp-python>=0.3.16
-mistral-common>=1.8.3
-gguf>=0.1.0
-huggingface_hub[hf_xet]
+# Dataset handling
+datasets==3.6.0
+huggingface-hub==0.35.1
 
-# Configuration and Logging
-pyyaml>=6.0
-jsonschema>=4.0.0
-python-dotenv>=1.0.0
-jinja2>=3.1.0
+# Model serialization and safety
+safetensors==0.6.2
 
-# Core Flask dependencies
-flask>=3.0.0
-flask-cors>=4.0.0
-flask-socketio>=5.3.0
-python-socketio>=5.10.0
+# Tokenization
+tokenizers==0.21.4
+sentencepiece==0.2.1
+tiktoken==0.11.0
+mistral_common==1.8.5
 
-# Additional web dependencies
-eventlet>=0.33.0  # For async support with SocketIO
-gunicorn>=21.2.0  # Production WSGI server
+# Configuration and CLI
+tyro==0.9.32
+python-dotenv==1.1.1
+PyYAML==6.0.2
 
-# Optional: Export formats
-safetensors>=0.6.2
+# ============================================================================
+# WEB APPLICATION DEPENDENCIES (Required for Flask App)
+# ============================================================================
 
-# Optional: Development
-pytest>=7.0.0
-black>=23.0.0
-flake8>=6.0.0
+# Flask web framework
+Flask==3.1.2
+flask-cors==6.0.1
+Flask-SocketIO==5.5.1
+Werkzeug==3.1.4
+
+# WebSocket support
+python-socketio==5.13.0
+python-engineio==4.12.2
+eventlet==0.40.3
+greenlet==3.2.4
+simple-websocket==1.1.0
+wsproto==1.2.0
+
+# Production server
+gunicorn==23.0.0
+
+# HTTP utilities
+requests==2.32.5
+urllib3==2.5.0
+certifi==2025.8.3
+h11==0.16.0
+
+# Async HTTP
+aiohttp==3.12.15
+aiohappyeyeballs==2.6.1
+aiosignal==1.4.0
+frozenlist==1.7.0
+multidict==6.6.4
+propcache==0.3.2
+yarl==1.20.1
+
+# ============================================================================
+# SYSTEM MONITORING & UTILITIES
+# ============================================================================
+
+# System monitoring
+gpustat==1.1.1
+psutil==7.1.0
+nvidia-ml-py==13.580.82
+py-cpuinfo==9.0.0
+
+# Terminal utilities (Windows-specific)
+ansicon==1.89.0
+blessed==1.22.0
+colorama==0.4.6
+jinxed==1.3.0
+wcwidth==0.2.14
+
+# Progress bars and UI
+rich==14.1.0
+tqdm==4.67.1
+
+# ============================================================================
+# DATA PROCESSING & ANALYSIS
+# ============================================================================
+
+# Data manipulation
+numpy==2.3.3
+pandas==2.3.2
+pyarrow==21.0.0
+
+# Data validation and serialization
+pydantic==2.11.9
+pydantic_core==2.33.2
+pydantic-extra-types==2.10.5
+msgspec==0.19.0
+
+# Data utilities
+dill==0.3.8
+multiprocess==0.70.16
+xxhash==3.5.0
+
+# Schema validation
+jsonschema==4.25.1
+jsonschema-specifications==2025.9.1
+referencing==0.36.2
+rpds-py==0.27.1
+
+# ============================================================================
+# OPTIONAL FEATURES
+# ============================================================================
+
+# --- Model Export: GGUF format (for llama.cpp, Ollama, LM Studio) ---
+gguf==0.17.1
+llama_cpp_python==0.3.16
+
+# --- Model Export: Diffusers support ---
+diffusers==0.35.1
+Pillow==11.3.0
+
+# --- Visualization ---
+matplotlib==3.10.6
+contourpy==1.3.3
+cycler==0.12.1
+fonttools==4.60.0
+kiwisolver==1.4.9
+pyparsing==3.2.5
+
+# --- Development Tools ---
+black==25.9.0
+flake8==7.3.0
+mccabe==0.7.0
+mypy_extensions==1.1.0
+pycodestyle==2.14.0
+pyflakes==3.4.0
+pytest==8.4.2
+iniconfig==2.1.0
+pluggy==1.6.0
+
+# ============================================================================
+# SUPPORTING LIBRARIES
+# ============================================================================
+
+# General utilities
+annotated-types==0.7.0
+attrs==25.3.0
+bidict==0.23.1
+blinker==1.9.0
+charset-normalizer==3.4.3
+click==8.3.0
+diskcache==5.6.3
+dnspython==2.8.0
+docstring_parser==0.17.0
+filelock==3.13.1
+fsspec==2024.6.1
+hf_transfer==0.1.9
+hf-xet==1.1.10
+idna==3.10
+importlib_metadata==8.7.0
+itsdangerous==2.2.0
+Jinja2==3.1.4
+markdown-it-py==4.0.0
+MarkupSafe==2.1.5
+mdurl==0.1.2
+mpmath==1.3.0
+networkx==3.3
+ninja==1.13.0
+packaging==25.0
+pathspec==0.12.1
+platformdirs==4.4.0
+protobuf==6.32.1
+pycountry==24.6.1
+Pygments==2.19.2
+pytokens==0.1.10
+python-dateutil==2.9.0.post0
+pytz==2025.2
+regex==2025.9.18
+setuptools==65.5.0
+shtab==1.7.2
+six==1.17.0
+sympy==1.13.3
+typeguard==4.4.4
+typing_extensions==4.15.0
+typing-inspection==0.4.1
+tzdata==2025.2
+zipp==3.23.0

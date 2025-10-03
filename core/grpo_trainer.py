@@ -450,6 +450,7 @@ class GRPOModelTrainer:
                                           template.config.solution_end_marker in response)
 
                     # If no markers at all, add the configured template markers
+                    # CRITICAL: Preserve the actual response content instead of using placeholder text
                     if not has_reasoning_markers and not has_solution_markers:
                         # Use the template's configured markers (not hardcoded defaults)
                         reasoning_start = template.config.reasoning_start_marker
@@ -457,13 +458,32 @@ class GRPOModelTrainer:
                         solution_start = template.config.solution_start_marker
                         solution_end = template.config.solution_end_marker
 
-                        # Wrap response with configured markers
-                        response = (f"{reasoning_start}\n"
-                                  f"Let me work through this step by step.\n"
-                                  f"{reasoning_end}\n"
-                                  f"{solution_start}\n"
-                                  f"{response}\n"
-                                  f"{solution_end}")
+                        # For structured responses (like technical analysis with separate reasoning and signal):
+                        # - If response is short (likely just a label/signal), use it as the solution
+                        # - Add minimal reasoning placeholder to teach structure
+                        # For longer responses, split or duplicate appropriately
+                        response_stripped = response.strip()
+
+                        # If response looks like a single-word/short label (e.g., "STRONG_BUY")
+                        # treat it as the solution and generate minimal reasoning
+                        if len(response_stripped.split()) <= 3 and len(response_stripped) < 50:
+                            # Short response: likely a label/classification
+                            # Put it in the solution section, add placeholder reasoning
+                            response = (f"{reasoning_start}\n"
+                                      f"Based on the provided technical indicators and analysis.\n"
+                                      f"{reasoning_end}\n"
+                                      f"{solution_start}\n"
+                                      f"{response_stripped}\n"
+                                      f"{solution_end}")
+                        else:
+                            # Longer response: use the full response content in both sections
+                            # This teaches the model to generate properly formatted outputs
+                            response = (f"{reasoning_start}\n"
+                                      f"{response_stripped}\n"
+                                      f"{reasoning_end}\n"
+                                      f"{solution_start}\n"
+                                      f"{response_stripped}\n"
+                                      f"{solution_end}")
 
                 # Combine prompt and response for training
                 formatted = prompt + response
