@@ -28,7 +28,7 @@
       "split": "train",
       "sample_size": 0,
       "train_split": 80,
-      "max_samples": 0,
+      "max_samples": 50000,
       "instruction_field": "input",
       "response_field": "signal"
     },
@@ -48,8 +48,8 @@
     },
     "training": {
       "num_epochs": 3,
-      "batch_size": 4,
-      "gradient_accumulation": 1,
+      "batch_size": 8,
+      "gradient_accumulation": 4,
       "learning_rate": 1e-06,
       "lr_schedule": "cosine",
       "lr_scheduler_type": "constant",
@@ -58,7 +58,7 @@
       "weight_decay": 0.001,
       "max_grad_norm": 0.3,
       "max_sequence_length": 5120,
-      "max_new_tokens": 4096,
+      "max_new_tokens": 2048,
       "seed": 42,
       "optimizer": "paged_adamw_32bit"
     },
@@ -74,10 +74,10 @@
       "value_coefficient": 1
     },
     "optimizations": {
-      "use_flash_attention": true,
-      "gradient_checkpointing": false,
+      "use_flash_attention": false,
+      "gradient_checkpointing": true,
       "mixed_precision": true,
-      "use_bf16": false
+      "use_bf16": true
     },
     "output": {
       "name": "",
