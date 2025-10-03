@@ -320,14 +320,6 @@
         }
     };
 
-    window.showBatchExport = function() {
-        if (window.ExportModule && ExportModule.showBatchExport) {
-            ExportModule.showBatchExport();
-        } else {
-            console.error('ExportModule.showBatchExport not available');
-        }
-    };
-
     window.hideModelDetails = function() {
         if (window.ExportModule && ExportModule.hideModelDetails) {
             ExportModule.hideModelDetails();

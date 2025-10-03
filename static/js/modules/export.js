@@ -150,7 +150,6 @@
                                         <div class="model-meta text-muted small mb-3">
                                             <div><i class="fas fa-calendar"></i> Completed: ${completedDate.toLocaleString()}</div>
                                             <div><i class="fas fa-layer-group"></i> Epochs: ${epochs}</div>
-                                            <div><i class="fas fa-award"></i> Best Reward: ${bestReward}</div>
                                             ${model.has_final_checkpoint ? '<div><i class="fas fa-check-circle text-success"></i> Final checkpoint saved</div>' : ''}
                                         </div>
 
@@ -379,11 +378,6 @@
                             ${model.epochs !== undefined && model.epochs !== null ? `
                                 <dt class="col-sm-4">Epochs:</dt>
                                 <dd class="col-sm-8">${model.epochs}</dd>
-                            ` : ''}
-
-                            ${model.best_reward !== undefined && model.best_reward !== null ? `
-                                <dt class="col-sm-4">Best Reward:</dt>
-                                <dd class="col-sm-8">${model.best_reward.toFixed(4)}</dd>
                             ` : ''}
 
                             ${model.metrics?.final_loss !== undefined ? `
@@ -711,188 +705,6 @@
                 });
         },
 
-        // Show batch export modal
-        showBatchExport() {
-            const modalId = 'batchExportModal';
-            let modalElement = document.getElementById(modalId);
-
-            // Create modal if it doesn't exist
-            if (!modalElement) {
-                const modalHtml = `
-                    <div class="modal fade" id="${modalId}" tabindex="-1">
-                        <div class="modal-dialog modal-lg">
-                            <div class="modal-content">
-                                <div class="modal-header">
-                                    <h5 class="modal-title">
-                                        <i class="fas fa-boxes"></i> Batch Export Models
-                                    </h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                </div>
-                                <div class="modal-body">
-                                    <div class="mb-3">
-                                        <label class="form-label">Select Models to Export</label>
-                                        <div id="batch-export-model-list" class="list-group" style="max-height: 300px; overflow-y: auto;">
-                                            <!-- Model list will be populated here -->
-                                        </div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label">Export Format</label>
-                                        <select class="form-select" id="batch-export-format">
-                                            <option value="safetensors">SafeTensors</option>
-                                            <option value="gguf">GGUF</option>
-                                            <option value="pytorch">PyTorch</option>
-                                            <option value="onnx">ONNX</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-check mb-3">
-                                        <input class="form-check-input" type="checkbox" id="batch-export-quantize">
-                                        <label class="form-check-label" for="batch-export-quantize">
-                                            Enable quantization
-                                        </label>
-                                    </div>
-                                    <div id="batch-export-progress" style="display: none;">
-                                        <div class="progress mb-2">
-                                            <div class="progress-bar" role="progressbar" id="batch-export-progress-bar" style="width: 0%"></div>
-                                        </div>
-                                        <p class="text-muted small mb-0" id="batch-export-status">Preparing export...</p>
-                                    </div>
-                                </div>
-                                <div class="modal-footer">
-                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                    <button type="button" class="btn btn-primary" id="batch-export-start-btn" onclick="ExportModule.executeBatchExport()">
-                                        <i class="fas fa-file-export me-2"></i>Export Selected
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                document.body.insertAdjacentHTML('beforeend', modalHtml);
-                modalElement = document.getElementById(modalId);
-            }
-
-            // Populate model list
-            this.populateBatchExportList();
-
-            // Show modal
-            const modal = new bootstrap.Modal(modalElement);
-            modal.show();
-        },
-
-        // Populate batch export model list
-        populateBatchExportList() {
-            const listContainer = document.getElementById('batch-export-model-list');
-            if (!listContainer) return;
-
-            if (AppState.trainedModels.length === 0) {
-                listContainer.innerHTML = '<div class="text-center text-muted p-3">No trained models available</div>';
-                return;
-            }
-
-            listContainer.innerHTML = AppState.trainedModels.map((model, index) => `
-                <div class="list-group-item">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="batch-model-${index}" value="${index}">
-                        <label class="form-check-label" for="batch-model-${index}">
-                            <strong>${CoreModule.escapeHtml(model.name)}</strong>
-                            <br>
-                            <small class="text-muted">
-                                ${this.formatFileSize(model.size)} | ${new Date(model.timestamp).toLocaleString()}
-                            </small>
-                        </label>
-                    </div>
-                </div>
-            `).join('');
-        },
-
-        // Execute batch export
-        executeBatchExport() {
-            const selectedModels = [];
-            const checkboxes = document.querySelectorAll('#batch-export-model-list input[type="checkbox"]:checked');
-
-            checkboxes.forEach(cb => {
-                const index = parseInt(cb.value);
-                if (AppState.trainedModels[index]) {
-                    selectedModels.push(AppState.trainedModels[index]);
-                }
-            });
-
-            if (selectedModels.length === 0) {
-                CoreModule.showAlert('Please select at least one model to export', 'warning');
-                return;
-            }
-
-            const format = document.getElementById('batch-export-format')?.value;
-            const quantize = document.getElementById('batch-export-quantize')?.checked;
-
-            // Show progress
-            const progressContainer = document.getElementById('batch-export-progress');
-            const startBtn = document.getElementById('batch-export-start-btn');
-
-            if (progressContainer) progressContainer.style.display = 'block';
-            if (startBtn) startBtn.disabled = true;
-
-            // Export models sequentially
-            this.exportModelsSequentially(selectedModels, format, quantize, 0);
-        },
-
-        // Export models sequentially
-        exportModelsSequentially(models, format, quantize, index) {
-            if (index >= models.length) {
-                // All exports complete
-                CoreModule.showAlert(`Successfully exported ${models.length} models`, 'success');
-
-                const progressContainer = document.getElementById('batch-export-progress');
-                const startBtn = document.getElementById('batch-export-start-btn');
-
-                if (progressContainer) progressContainer.style.display = 'none';
-                if (startBtn) startBtn.disabled = false;
-
-                // Close modal after a delay
-                setTimeout(() => {
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('batchExportModal'));
-                    if (modal) modal.hide();
-                }, 2000);
-                return;
-            }
-
-            const model = models[index];
-            const progressBar = document.getElementById('batch-export-progress-bar');
-            const statusText = document.getElementById('batch-export-status');
-
-            // Update progress
-            const progress = ((index + 1) / models.length) * 100;
-            if (progressBar) progressBar.style.width = progress + '%';
-            if (statusText) statusText.textContent = `Exporting ${model.name} (${index + 1}/${models.length})...`;
-
-            // Export current model
-            fetch('/api/export_model', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model_path: model.path,
-                    format: format,
-                    output_name: `${model.name}_${format}`,
-                    quantization: { enabled: quantize }
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Continue to next model
-                    this.exportModelsSequentially(models, format, quantize, index + 1);
-                } else {
-                    throw new Error(data.error || 'Export failed');
-                }
-            })
-            .catch(error => {
-                console.error(`Failed to export ${model.name}:`, error);
-                CoreModule.showAlert(`Failed to export ${model.name}: ${error.message}`, 'danger');
-                // Continue to next model despite error
-                this.exportModelsSequentially(models, format, quantize, index + 1);
-            });
-        },
-
         // Show export dialog for a specific model
         showExportDialog(sessionId, modelPath) {
             // Load available models first
@@ -951,14 +763,13 @@
             // Build details HTML
             let detailsHtml = `
                 <div class="mb-3">
-                    <h6 class="fw-bold mb-2">${CoreModule.escapeHtml(modelName)}</h6>
+                    <h6 class="fw-bold mb-2" style="color: var(--text-primary);">${CoreModule.escapeHtml(modelName)}</h6>
                     <div class="small text-muted">
                         <div class="mb-1"><strong>Session ID:</strong> ${CoreModule.escapeHtml(model.session_id)}</div>
                         <div class="mb-1"><strong>Path:</strong> ${CoreModule.escapeHtml(model.path)}</div>
                         <div class="mb-1"><strong>Created:</strong> ${new Date(model.created_at).toLocaleString()}</div>
                         <div class="mb-1"><strong>Completed:</strong> ${new Date(model.modified_at).toLocaleString()}</div>
                         <div class="mb-1"><strong>Epochs:</strong> ${model.epochs || 0}</div>
-                        <div class="mb-1"><strong>Best Reward:</strong> ${model.best_reward !== null && model.best_reward !== undefined ? model.best_reward.toFixed(4) : 'N/A'}</div>
                     </div>
                 </div>
             `;
@@ -966,7 +777,7 @@
             // Add checkpoints if available
             if (model.checkpoints && model.checkpoints.length > 0) {
                 const checkpointsList = model.checkpoints.map(cp => `
-                    <li class="list-group-item">
+                    <li class="list-group-item" style="background-color: var(--bg-card); color: var(--text-primary); border-color: var(--border-color);">
                         <div>
                             <strong>${CoreModule.escapeHtml(cp.name)}</strong>
                             <br>
@@ -976,9 +787,9 @@
                 `).join('');
 
                 detailsHtml += `
-                    <div class="card">
-                        <div class="card-header">
-                            <h6 class="mb-0">Model Checkpoints</h6>
+                    <div class="card" style="background-color: var(--bg-card); border-color: var(--border-color);">
+                        <div class="card-header" style="background-color: var(--bg-secondary); border-color: var(--border-color);">
+                            <h6 class="mb-0" style="color: var(--text-primary);">Model Checkpoints</h6>
                         </div>
                         <div class="card-body p-0">
                             <ul class="list-group list-group-flush">

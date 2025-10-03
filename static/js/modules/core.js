@@ -202,18 +202,20 @@
             const modalId = 'confirmModal-' + Date.now();
             const modalHtml = `
                 <div class="modal fade" id="${modalId}" tabindex="-1">
-                    <div class="modal-dialog">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title">${this.escapeHtml(title)}</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content" style="border: 2px solid #dc3545; box-shadow: 0 10px 40px rgba(0,0,0,0.3);">
+                            <div class="modal-header" style="background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border-bottom: none;">
+                                <h5 class="modal-title" style="font-size: 1.5rem; font-weight: 600;">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>${this.escapeHtml(title)}
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                             </div>
-                            <div class="modal-body">
-                                <p>${this.escapeHtml(message)}</p>
+                            <div class="modal-body" style="padding: 2rem; background-color: #fff3cd; font-size: 1.1rem;">
+                                <p class="mb-0" style="color: #856404;">${this.escapeHtml(message)}</p>
                             </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                <button type="button" class="btn ${confirmBtnClass}" id="${modalId}-confirm">Confirm</button>
+                            <div class="modal-footer" style="padding: 1.5rem; border-top: none; gap: 1rem;">
+                                <button type="button" class="btn btn-secondary btn-lg" data-bs-dismiss="modal" style="min-width: 100px;">Cancel</button>
+                                <button type="button" class="btn ${confirmBtnClass} btn-lg" id="${modalId}-confirm" style="min-width: 100px;">Confirm</button>
                             </div>
                         </div>
                     </div>

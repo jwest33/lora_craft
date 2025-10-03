@@ -437,10 +437,14 @@ class DatasetHandler:
 
                 # max_samples now represents "samples per epoch"
                 # TRL will handle repeating the dataset for multiple epochs
-                # We only limit if we want fewer samples per epoch than available
-                if self.config.max_samples and dataset_len > self.config.max_samples:
-                    dataset = dataset.select(range(self.config.max_samples))
-                    logger.info(f"Limited dataset to {self.config.max_samples} samples per epoch")
+                # Gracefully handle case where requested samples exceed dataset size
+                if self.config.max_samples:
+                    actual_samples = min(self.config.max_samples, dataset_len)
+                    if actual_samples < dataset_len:
+                        dataset = dataset.select(range(actual_samples))
+                        logger.info(f"Limited dataset to {actual_samples} samples per epoch (requested: {self.config.max_samples}, available: {dataset_len})")
+                    else:
+                        logger.info(f"Using all {dataset_len} samples per epoch (requested: {self.config.max_samples} <= available: {dataset_len})")
 
                 # Shuffle if requested
                 if self.config.shuffle and not self.config.sample_size:
@@ -725,12 +729,15 @@ class DatasetHandler:
         if self.config.lowercase or self.config.strip_whitespace:
             dataset = self._transform_text(dataset)
 
-        # Limit samples
+        # Limit samples (gracefully handle case where requested exceeds available)
         if self.config.max_samples and not self.config.streaming:
-            if len(dataset) > self.config.max_samples:
-                original_size = len(dataset)
-                dataset = dataset.select(range(self.config.max_samples))
-                logger.info(f"Limited dataset from {original_size} to {self.config.max_samples} samples (in preprocessing)")
+            original_size = len(dataset)
+            actual_samples = min(self.config.max_samples, original_size)
+            if actual_samples < original_size:
+                dataset = dataset.select(range(actual_samples))
+                logger.info(f"Limited dataset from {original_size} to {actual_samples} samples in preprocessing (requested: {self.config.max_samples})")
+            else:
+                logger.info(f"Using all {original_size} samples in preprocessing (requested: {self.config.max_samples} <= available: {original_size})")
 
         return dataset
 

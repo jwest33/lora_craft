@@ -1,0 +1,23 @@
+{
+  "name": "SFT Large-Scale",
+  "description": "Optimal configuration for supervised fine-tuning on large datasets (>50k samples).",
+  "source": "https://thinkingmachines.ai/blog/lora/",
+  "lora_r": 256,
+  "lora_alpha": 32,
+  "lora_dropout": 0.0,
+  "lora_target_modules": [
+    "q_proj",
+    "k_proj",
+    "v_proj",
+    "o_proj",
+    "gate_proj",
+    "up_proj",
+    "down_proj"
+  ],
+  "learning_rate": 1e-5,
+  "lr_scheduler_type": "cosine",
+  "warmup_ratio": 0.0,
+  "max_grad_norm": 1.0,
+  "max_sequence_length": 5120,
+  "max_new_tokens": 4096
+}

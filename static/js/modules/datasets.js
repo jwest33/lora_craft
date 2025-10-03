@@ -126,15 +126,7 @@
         selectDataset(datasetPath, datasetName) {
             console.log('Dataset selected:', datasetPath);
 
-            // Store selection
-            AppState.setConfigValue('datasetPath', datasetPath);
-            AppState.setConfigValue('datasetName', datasetName);
-
-            // Set datasetType to 'popular' so it maps to 'huggingface' source_type
-            // This is crucial for the backend to know to download from HuggingFace
-            AppState.setConfigValue('datasetType', 'popular');
-
-            // Update UI to show selection
+            // Update UI to show selection (HTML inputs are source of truth, no AppState persistence)
             const datasetPathInput = document.getElementById('dataset-path');
             if (datasetPathInput) {
                 datasetPathInput.value = datasetPath;
@@ -408,17 +400,45 @@
             this.currentUploadData.instruction_field = instructionField;
             this.currentUploadData.response_field = responseField;
 
-            // Save column mapping state for persistence
-            const mappingState = {
-                columns: this.currentUploadData.columns,
+            // Persist column mappings by dataset path in localStorage (for auto-restore within session)
+            this.saveColumnMappingForDataset(this.currentUploadData.path, {
                 instructionField: instructionField,
                 responseField: responseField,
-                datasetPath: this.currentUploadData.path
-            };
-            AppState.setConfigValue('currentColumnMapping', mappingState);
+                columns: this.currentUploadData.columns
+            });
+
+            // No AppState persistence - column mapping is session-only unless saved in config
 
             // Finalize selection
             this.finalizeDatasetSelection(this.currentUploadData);
+        },
+
+        // Save column mapping for a specific dataset path
+        saveColumnMappingForDataset(datasetPath, mapping) {
+            try {
+                const savedMappings = JSON.parse(localStorage.getItem('datasetColumnMappings') || '{}');
+                savedMappings[datasetPath] = mapping;
+                localStorage.setItem('datasetColumnMappings', JSON.stringify(savedMappings));
+                console.log('[Column Mapping] Saved mapping for:', datasetPath);
+            } catch (error) {
+                console.error('[Column Mapping] Failed to save mapping:', error);
+            }
+        },
+
+        // Restore column mapping for a specific dataset path
+        restoreColumnMappingForDataset(datasetPath) {
+            try {
+                const savedMappings = JSON.parse(localStorage.getItem('datasetColumnMappings') || '{}');
+                const mapping = savedMappings[datasetPath];
+                if (mapping) {
+                    console.log('[Column Mapping] Restored mapping for:', datasetPath, mapping);
+                    return mapping;
+                }
+                return null;
+            } catch (error) {
+                console.error('[Column Mapping] Failed to restore mapping:', error);
+                return null;
+            }
         },
 
         // Finalize dataset selection after column mapping
@@ -440,12 +460,7 @@
                 responseFieldInput.value = data.response_field;
             }
 
-            // Update stats
-            AppState.setConfigValue('datasetPath', data.path);
-            AppState.setConfigValue('datasetSamples', data.sample_count);
-            AppState.setConfigValue('datasetType', 'upload');  // Explicitly set type to upload
-            AppState.setConfigValue('instructionField', data.instruction_field || 'instruction');
-            AppState.setConfigValue('responseField', data.response_field || 'output');
+            // Update stats (no AppState persistence - HTML inputs are source of truth)
             this.updateDatasetStats();
 
             // Make columns available to reward system
@@ -494,32 +509,46 @@
 
             if (!container || !grid) return;
 
+            // Get currently selected dataset from HTML input (source of truth)
+            const datasetPathInput = document.getElementById('dataset-path');
+            const currentDatasetPath = datasetPathInput?.value || '';
+
             container.style.display = 'block';
-            grid.innerHTML = files.map(file => `
-                <div class="col-md-6">
-                    <div class="card uploaded-dataset-card">
-                        <div class="card-body">
-                            <h6 class="card-title text-truncate" title="${CoreModule.escapeHtml(file.filename)}">
-                                ${CoreModule.escapeHtml(file.filename)}
-                            </h6>
-                            <p class="card-text small text-muted mb-2">
-                                <i class="fas fa-database"></i> ${file.size_mb} MB<br>
-                                <i class="fas fa-clock"></i> ${new Date(file.uploaded_at).toLocaleString()}
-                            </p>
-                            <div class="d-flex gap-2">
-                                <button class="btn btn-sm btn-primary flex-grow-1"
-                                        onclick="DatasetsModule.selectUploadedDataset('${file.relative_path}', '${CoreModule.escapeHtml(file.filename)}')">
-                                    <i class="fas fa-check"></i> Select
-                                </button>
-                                <button class="btn btn-sm btn-outline-danger"
-                                        onclick="DatasetsModule.deleteUploadedDataset('${CoreModule.escapeHtml(file.filename)}')">
-                                    <i class="fas fa-trash"></i>
-                                </button>
+            grid.innerHTML = files.map(file => {
+                // Only show as selected if HTML input path matches this upload file
+                const isSelected = currentDatasetPath === file.relative_path;
+                const cardClass = isSelected ? 'uploaded-dataset-card selected-dataset' : 'uploaded-dataset-card';
+                const buttonClass = isSelected ? 'btn-success' : 'btn-primary';
+                const buttonIcon = isSelected ? 'fa-check-circle' : 'fa-check';
+                const buttonText = isSelected ? 'Selected' : 'Select';
+
+                return `
+                    <div class="col-md-6">
+                        <div class="card ${cardClass}">
+                            <div class="card-body">
+                                ${isSelected ? '<div class="selected-badge"><i class="fas fa-check-circle"></i> Active</div>' : ''}
+                                <h6 class="card-title text-truncate" title="${CoreModule.escapeHtml(file.filename)}">
+                                    ${CoreModule.escapeHtml(file.filename)}
+                                </h6>
+                                <p class="card-text small text-muted mb-2">
+                                    <i class="fas fa-database"></i> ${file.size_mb} MB<br>
+                                    <i class="fas fa-clock"></i> ${new Date(file.uploaded_at).toLocaleString()}
+                                </p>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-sm ${buttonClass} flex-grow-1" ${isSelected ? 'disabled' : ''}
+                                            onclick="DatasetsModule.selectUploadedDataset('${file.relative_path}', '${CoreModule.escapeHtml(file.filename)}')">
+                                        <i class="fas ${buttonIcon}"></i> ${buttonText}
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger"
+                                            onclick="DatasetsModule.deleteUploadedDataset('${CoreModule.escapeHtml(file.filename)}')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         },
 
         // Select an uploaded dataset
@@ -530,10 +559,7 @@
                 datasetPathInput.value = path;
             }
 
-            // Store in app state
-            AppState.setConfigValue('datasetPath', path);
-            AppState.setConfigValue('datasetName', filename);
-            AppState.setConfigValue('datasetType', 'upload');  // Explicitly set type to upload
+            // No AppState persistence - HTML inputs are source of truth
 
             // Fetch dataset info to get columns for mapping
             fetch('/api/upload_dataset_info', {
@@ -551,8 +577,32 @@
                         filename: filename
                     };
 
-                    // Show column mapping for previously uploaded file
-                    this.showColumnMapping(this.currentUploadData);
+                    // Check for previously saved column mapping
+                    const savedMapping = this.restoreColumnMappingForDataset(path);
+
+                    if (savedMapping && savedMapping.instructionField && savedMapping.responseField) {
+                        // Auto-restore saved column mapping
+                        console.log('[Dataset] Auto-restoring saved column mapping for:', path);
+                        this.currentUploadData.instruction_field = savedMapping.instructionField;
+                        this.currentUploadData.response_field = savedMapping.responseField;
+
+                        // Show column mapping with pre-selected values
+                        this.showColumnMapping(this.currentUploadData);
+
+                        // Auto-confirm if we have valid saved mappings
+                        const instructionSelect = document.getElementById('upload-instruction-field');
+                        const responseSelect = document.getElementById('upload-response-field');
+                        if (instructionSelect && responseSelect) {
+                            instructionSelect.value = savedMapping.instructionField;
+                            responseSelect.value = savedMapping.responseField;
+                        }
+
+                        // Finalize with saved mappings
+                        this.finalizeDatasetSelection(this.currentUploadData);
+                    } else {
+                        // Show column mapping for previously uploaded file (user needs to select)
+                        this.showColumnMapping(this.currentUploadData);
+                    }
                 } else {
                     // No columns detected, use defaults
                     this.finalizeSelectionWithDefaults(path, filename);
@@ -578,6 +628,9 @@
             if (NavigationModule && NavigationModule.validateStep) {
                 NavigationModule.validateStep(2);
             }
+
+            // Refresh the upload list to show selection indicator
+            this.loadUploadedDatasets();
         },
 
         // Delete an uploaded dataset
@@ -683,7 +736,7 @@
                 datasetPath.value = path;
             }
 
-            AppState.setConfigValue('datasetPath', path);
+            // No AppState persistence - HTML inputs are source of truth
             this.loadDatasetInfo(path);
             NavigationModule.validateStep(2);
         },
@@ -1052,7 +1105,7 @@ ${solutionStart}4${solutionEnd}`;
             const datasetConfig = document.getElementById('dataset-config');
             const catalogSection = document.getElementById('dataset-catalog');
             const customSection = document.getElementById('dataset-custom-area');
-            const uploadSection = document.getElementById('dataset-upload-zone');
+            const uploadSectionUnified = document.getElementById('dataset-upload-section-unified');
 
             // Remove active class from all cards
             document.querySelectorAll('.selection-card').forEach(card => {
@@ -1073,7 +1126,7 @@ ${solutionStart}4${solutionEnd}`;
             // Hide all sections first
             if (catalogSection) catalogSection.style.display = 'none';
             if (customSection) customSection.style.display = 'none';
-            if (uploadSection) uploadSection.style.display = 'none';
+            if (uploadSectionUnified) uploadSectionUnified.style.display = 'none';
 
             // Show the selected section
             switch (type) {
@@ -1084,65 +1137,23 @@ ${solutionStart}4${solutionEnd}`;
                     if (customSection) customSection.style.display = 'block';
                     break;
                 case 'upload':
-                    if (uploadSection) uploadSection.style.display = 'block';
+                    if (uploadSectionUnified) uploadSectionUnified.style.display = 'block';
                     this.loadUploadedDatasets();  // Load cached uploads
                     this.restoreColumnMapping();  // Restore column mapping if available
                     break;
             }
 
-            // Store selection in AppState
-            AppState.setConfigValue('datasetType', type);
+            // No AppState persistence - HTML inputs are source of truth
         },
 
-        // Restore column mapping UI from saved state
+        // Restore column mapping UI (session-only, not AppState)
         restoreColumnMapping() {
-            const mappingState = AppState.getConfigValue('currentColumnMapping');
-
-            if (!mappingState || !mappingState.columns) {
-                // No saved mapping, hide the section
-                const mappingSection = document.getElementById('column-mapping-section');
-                if (mappingSection) {
-                    mappingSection.style.display = 'none';
-                }
-                return;
-            }
-
+            // Column mapping section should only show after upload file selection
+            // Not from persistent AppState across page loads
             const mappingSection = document.getElementById('column-mapping-section');
-            const instructionSelect = document.getElementById('upload-instruction-field');
-            const responseSelect = document.getElementById('upload-response-field');
-
-            if (!mappingSection || !instructionSelect || !responseSelect) {
-                return;
+            if (mappingSection) {
+                mappingSection.style.display = 'none';
             }
-
-            // Populate dropdowns with saved columns
-            instructionSelect.innerHTML = '<option value="">-- Select Column --</option>';
-            responseSelect.innerHTML = '<option value="">-- Select Column --</option>';
-
-            mappingState.columns.forEach(column => {
-                const instructionOption = document.createElement('option');
-                instructionOption.value = column;
-                instructionOption.textContent = column;
-                instructionSelect.appendChild(instructionOption);
-
-                const responseOption = document.createElement('option');
-                responseOption.value = column;
-                responseOption.textContent = column;
-                responseSelect.appendChild(responseOption);
-            });
-
-            // Restore selected values
-            instructionSelect.value = mappingState.instructionField;
-            responseSelect.value = mappingState.responseField;
-
-            // Make columns available to reward system
-            if (mappingState.columns) {
-                window.currentDatasetColumns = mappingState.columns;
-                console.log('[Dataset] Restored currentDatasetColumns:', window.currentDatasetColumns);
-            }
-
-            // Show the mapping section
-            mappingSection.style.display = 'block';
         },
 
         // Filter datasets list

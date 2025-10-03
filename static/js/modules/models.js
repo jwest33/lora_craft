@@ -364,7 +364,13 @@
             const modelName = document.getElementById('model-name')?.value;
             const loraRank = document.getElementById('lora-rank')?.value;
             const loraAlpha = document.getElementById('lora-alpha')?.value;
-            const targetModules = document.getElementById('target-modules')?.value;
+
+            // Check if at least one target module checkbox is selected
+            const hasTargetModule =
+                document.getElementById('target-q-proj')?.checked ||
+                document.getElementById('target-v-proj')?.checked ||
+                document.getElementById('target-k-proj')?.checked ||
+                document.getElementById('target-o-proj')?.checked;
 
             const errors = [];
 
@@ -380,8 +386,8 @@
                 errors.push('LoRA alpha must be positive');
             }
 
-            if (!targetModules) {
-                errors.push('Target modules must be specified');
+            if (!hasTargetModule) {
+                errors.push('At least one target module must be selected');
             }
 
             if (errors.length > 0) {
@@ -394,12 +400,25 @@
 
         // Export model configuration
         exportModelConfig() {
+            // Gather target modules as array from individual checkboxes
+            const targetModules = [];
+            if (document.getElementById('target-q-proj')?.checked) targetModules.push('q_proj');
+            if (document.getElementById('target-v-proj')?.checked) targetModules.push('v_proj');
+            if (document.getElementById('target-k-proj')?.checked) targetModules.push('k_proj');
+            if (document.getElementById('target-o-proj')?.checked) targetModules.push('o_proj');
+            // MLP modules
+            if (document.getElementById('target-gate-proj')?.checked) targetModules.push('gate_proj');
+            if (document.getElementById('target-up-proj')?.checked) targetModules.push('up_proj');
+            if (document.getElementById('target-down-proj')?.checked) targetModules.push('down_proj');
+
             const config = {
                 modelName: document.getElementById('model-name')?.value,
+                customModelPath: document.getElementById('custom-model-path')?.value || '',
                 loraRank: parseInt(document.getElementById('lora-rank')?.value),
                 loraAlpha: parseInt(document.getElementById('lora-alpha')?.value),
-                targetModules: document.getElementById('target-modules')?.value,
+                targetModulesArray: targetModules,
                 loraDropout: parseFloat(document.getElementById('lora-dropout')?.value || 0),
+                loraBias: document.getElementById('lora-bias')?.value || 'none',
                 quantization: document.getElementById('quantization')?.value
             };
 
@@ -408,32 +427,78 @@
 
         // Import model configuration
         importModelConfig(config) {
+            console.log('ModelsModule.importModelConfig called with:', config);
+
             if (config.modelName) {
                 const modelSelect = document.getElementById('model-name');
                 if (modelSelect) {
                     modelSelect.value = config.modelName;
                     this.onModelChange();
+                } else {
+                    console.warn('model-name element not found');
+                }
+            }
+
+            if (config.customModelPath) {
+                const customPathInput = document.getElementById('custom-model-path');
+                if (customPathInput) {
+                    customPathInput.value = config.customModelPath;
                 }
             }
 
             if (config.loraRank) {
-                document.getElementById('lora-rank').value = config.loraRank;
+                const loraRankInput = document.getElementById('lora-rank');
+                const loraRankSlider = document.getElementById('lora-rank-slider');
+                if (loraRankInput) loraRankInput.value = config.loraRank;
+                if (loraRankSlider) loraRankSlider.value = config.loraRank;
             }
 
             if (config.loraAlpha) {
-                document.getElementById('lora-alpha').value = config.loraAlpha;
+                const loraAlphaInput = document.getElementById('lora-alpha');
+                const loraAlphaSlider = document.getElementById('lora-alpha-slider');
+                if (loraAlphaInput) loraAlphaInput.value = config.loraAlpha;
+                if (loraAlphaSlider) loraAlphaSlider.value = config.loraAlpha;
             }
 
-            if (config.targetModules) {
-                document.getElementById('target-modules').value = config.targetModules;
+            // Restore individual target module checkboxes
+            if (config.targetModulesArray && Array.isArray(config.targetModulesArray)) {
+                // First uncheck all (including MLP modules)
+                const targetCheckboxes = [
+                    'target-q-proj', 'target-v-proj', 'target-k-proj', 'target-o-proj',
+                    'target-gate-proj', 'target-up-proj', 'target-down-proj'
+                ];
+                targetCheckboxes.forEach(id => {
+                    const checkbox = document.getElementById(id);
+                    if (checkbox) checkbox.checked = false;
+                });
+
+                // Then check the ones in the array
+                config.targetModulesArray.forEach(module => {
+                    const checkboxId = `target-${module.replace('_', '-')}`;
+                    const checkbox = document.getElementById(checkboxId);
+                    if (checkbox) checkbox.checked = true;
+                });
             }
 
             if (config.loraDropout !== undefined) {
-                document.getElementById('lora-dropout').value = config.loraDropout;
+                const loraDropoutInput = document.getElementById('lora-dropout');
+                const loraDropoutSlider = document.getElementById('lora-dropout-slider');
+                if (loraDropoutInput) loraDropoutInput.value = config.loraDropout;
+                if (loraDropoutSlider) loraDropoutSlider.value = config.loraDropout;
+            }
+
+            if (config.loraBias) {
+                const loraBiasSelect = document.getElementById('lora-bias');
+                if (loraBiasSelect) {
+                    loraBiasSelect.value = config.loraBias;
+                }
             }
 
             if (config.quantization) {
-                document.getElementById('quantization').value = config.quantization;
+                const quantizationSelect = document.getElementById('quantization');
+                if (quantizationSelect) {
+                    quantizationSelect.value = config.quantization;
+                }
             }
         },
 
@@ -450,22 +515,32 @@
 
             let rank, alpha, dropout;
 
-            // Define preset configurations
+            // Define preset configurations (aligned with paper)
             switch (preset) {
+                case 'rl':  // RL/GRPO (paper-recommended)
+                    rank = 1;
+                    alpha = 32;
+                    dropout = 0.0;
+                    break;
+                case 'sft':  // SFT (paper-recommended)
+                    rank = 256;
+                    alpha = 32;
+                    dropout = 0.0;
+                    break;
                 case 'low':
                     rank = 8;
                     alpha = 16;
-                    dropout = 0.05;
+                    dropout = 0.0;
                     break;
                 case 'balanced':
                     rank = 16;
                     alpha = 32;
-                    dropout = 0.1;
+                    dropout = 0.0;
                     break;
                 case 'quality':
-                    rank = 32;
-                    alpha = 64;
-                    dropout = 0.1;
+                    rank = 64;
+                    alpha = 128;
+                    dropout = 0.0;
                     break;
                 default:
                     CoreModule.showAlert('Invalid preset selected', 'warning');
@@ -475,10 +550,15 @@
             // Apply values to form
             loraRankInput.value = rank;
             loraAlphaInput.value = alpha;
+            if (loraDropoutInput) loraDropoutInput.value = dropout;
 
-            if (loraDropoutInput) {
-                loraDropoutInput.value = dropout;
-            }
+            // Update sliders if present
+            const loraRankSlider = document.getElementById('lora-rank-slider');
+            const loraAlphaSlider = document.getElementById('lora-alpha-slider');
+            const loraDropoutSlider = document.getElementById('lora-dropout-slider');
+            if (loraRankSlider) loraRankSlider.value = rank;
+            if (loraAlphaSlider) loraAlphaSlider.value = alpha;
+            if (loraDropoutSlider) loraDropoutSlider.value = dropout;
 
             // Save to AppState
             AppState.setConfigValue('loraRank', rank);
@@ -492,12 +572,29 @@
 
             // Show feedback based on preset
             const presetDescriptions = {
-                'low': 'Low VRAM preset applied (Rank: 8) - Best for limited GPU memory',
-                'balanced': 'Balanced preset applied (Rank: 16) - Good balance of quality and speed',
-                'quality': 'High Quality preset applied (Rank: 32) - Best quality, requires more VRAM'
+                'rl': 'RL/GRPO preset (Rank: 1) - Paper-recommended for reinforcement learning',
+                'sft': 'SFT preset (Rank: 256) - Paper-recommended for large-scale supervised fine-tuning',
+                'low': 'Low VRAM preset (Rank: 8) - Best for limited GPU memory',
+                'balanced': 'Balanced preset (Rank: 16) - Good balance of quality and speed',
+                'quality': 'High quality preset (Rank: 64) - Best results with more VRAM'
             };
 
-            CoreModule.showAlert(presetDescriptions[preset], 'success');
+            CoreModule.showAlert(presetDescriptions[preset] || 'Preset applied', 'success');
+        },
+
+        // Select all-linear modules (attention + MLP)
+        selectAllLinearModules() {
+            const allModules = [
+                'target-q-proj', 'target-v-proj', 'target-k-proj', 'target-o-proj',
+                'target-gate-proj', 'target-up-proj', 'target-down-proj'
+            ];
+
+            allModules.forEach(id => {
+                const checkbox = document.getElementById(id);
+                if (checkbox) checkbox.checked = true;
+            });
+
+            CoreModule.showAlert('All-linear configuration applied (recommended by paper)', 'success');
         },
 
         // Load model from custom path

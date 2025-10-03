@@ -1104,18 +1104,18 @@
                     if (trainedStats && trainedResult.success) {
                         trainedStats.style.display = 'block';
                         trainedStats.innerHTML = `
-                            <strong>Time:</strong> ${trainedResult.generation_time?.toFixed(2) || 'N/A'}s |
-                            <strong>Tokens:</strong> ${trainedResult.token_count || 'N/A'} |
-                            <strong>Speed:</strong> ${trainedResult.tokens_per_second?.toFixed(1) || 'N/A'} tok/s
+                            <strong>Time:</strong> ${trainedResult.metadata?.generation_time?.toFixed(2) || 'N/A'}s |
+                            <strong>Tokens:</strong> ${trainedResult.metadata?.token_count || 'N/A'} |
+                            <strong>Speed:</strong> ${trainedResult.metadata?.tokens_per_second?.toFixed(1) || 'N/A'} tok/s
                         `;
                     }
 
                     if (baseStats && baseResult.success) {
                         baseStats.style.display = 'block';
                         baseStats.innerHTML = `
-                            <strong>Time:</strong> ${baseResult.generation_time?.toFixed(2) || 'N/A'}s |
-                            <strong>Tokens:</strong> ${baseResult.token_count || 'N/A'} |
-                            <strong>Speed:</strong> ${baseResult.tokens_per_second?.toFixed(1) || 'N/A'} tok/s
+                            <strong>Time:</strong> ${baseResult.metadata?.generation_time?.toFixed(2) || 'N/A'}s |
+                            <strong>Tokens:</strong> ${baseResult.metadata?.token_count || 'N/A'} |
+                            <strong>Speed:</strong> ${baseResult.metadata?.tokens_per_second?.toFixed(1) || 'N/A'} tok/s
                         `;
                     }
 
@@ -1207,9 +1207,9 @@
                             <div class="card-body">
                                 <pre class="mb-2" style="white-space: pre-wrap; max-height: 300px; overflow-y: auto;">${CoreModule.escapeHtml(trainedResult.response || 'No response')}</pre>
                                 <div class="small text-muted">
-                                    <strong>Time:</strong> ${trainedResult.generation_time?.toFixed(2) || 'N/A'}s |
-                                    <strong>Tokens:</strong> ${trainedResult.token_count || 'N/A'} |
-                                    <strong>Speed:</strong> ${trainedResult.tokens_per_second?.toFixed(1) || 'N/A'} tok/s
+                                    <strong>Time:</strong> ${trainedResult.metadata?.generation_time?.toFixed(2) || 'N/A'}s |
+                                    <strong>Tokens:</strong> ${trainedResult.metadata?.token_count || 'N/A'} |
+                                    <strong>Speed:</strong> ${trainedResult.metadata?.tokens_per_second?.toFixed(1) || 'N/A'} tok/s
                                 </div>
                             </div>
                         </div>
@@ -1222,9 +1222,9 @@
                             <div class="card-body">
                                 <pre class="mb-2" style="white-space: pre-wrap; max-height: 300px; overflow-y: auto;">${CoreModule.escapeHtml(baseResult.response || 'No response')}</pre>
                                 <div class="small text-muted">
-                                    <strong>Time:</strong> ${baseResult.generation_time?.toFixed(2) || 'N/A'}s |
-                                    <strong>Tokens:</strong> ${baseResult.token_count || 'N/A'} |
-                                    <strong>Speed:</strong> ${baseResult.tokens_per_second?.toFixed(1) || 'N/A'} tok/s
+                                    <strong>Time:</strong> ${baseResult.metadata?.generation_time?.toFixed(2) || 'N/A'}s |
+                                    <strong>Tokens:</strong> ${baseResult.metadata?.token_count || 'N/A'} |
+                                    <strong>Speed:</strong> ${baseResult.metadata?.tokens_per_second?.toFixed(1) || 'N/A'} tok/s
                                 </div>
                             </div>
                         </div>

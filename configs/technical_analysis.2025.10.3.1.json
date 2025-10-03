@@ -1,0 +1,93 @@
+{
+  "name": "technical_analysis.2025.10.3.1",
+  "description": "",
+  "config": {
+    "setupMode": "setup-recommended",
+    "model": {
+      "modelName": "unsloth/Qwen3-4B",
+      "customModelPath": "",
+      "loraRank": 16,
+      "loraAlpha": 32,
+      "targetModulesArray": [
+        "q_proj",
+        "v_proj"
+      ],
+      "loraDropout": 0.05,
+      "loraBias": "none",
+      "quantization": "q8_0",
+      "family": "qwen"
+    },
+    "dataset": {
+      "source": "huggingface",
+      "path": "uploads/dataset_20251001_131405_train_20251002_091329.csv",
+      "split": "train",
+      "sample_size": 0,
+      "train_split": 80,
+      "max_samples": 100,
+      "instruction_field": "input",
+      "response_field": "analysis"
+    },
+    "template": {
+      "reasoning_start": "<analysis>",
+      "reasoning_end": "</analysis>",
+      "solution_start": "<signal>",
+      "solution_end": "</signal>",
+      "system_prompt": "You are a technical analysis expert that evaluates trading indicators to classify market signals efficiently and concisely.\n\nANALYSIS APPROACH:\n1. Identify the 2-3 MOST SIGNIFICANT indicators (highest conviction signals)\n2. Note any OUTLIERS or extreme values that contradict the primary trend\n3. Synthesize a brief conclusion (2-3 sentences maximum)\n\nRESPONSE LENGTH: Keep your entire analysis under 150 words. Focus on WHAT matters, not EVERYTHING present.\n\nResponse Format:\n<analysis>\n[Key Indicator 1]: [Brief interpretation]\n[Key Indicator 2]: [Brief interpretation]\n[Outliers/Conflicts]: [If any]\n[Conclusion]: [1-2 sentence synthesis]\n</analysis>\n<signal>\nOne of: STRONG_BUY, WEAK_BUY, HOLD, WEAK_SELL, or STRONG_SELL\n</signal>",
+      "chat_template": "{% if messages[0]['role'] == 'system' %}{{ messages[0]['content'] + eos_token }}{% set loop_messages = messages[1:] %}{% else %}{{ system_prompt + eos_token }}{% set loop_messages = messages %}{% endif %}{% for message in loop_messages %}{% if message['role'] == 'user' %}{{ message['content'] }}{% elif message['role'] == 'assistant' %}{{ message['content'] + eos_token }}{% endif %}{% endfor %}{% if add_generation_prompt %}{{ reasoning_start }}{% endif %}",
+      "chat_template_type": "custom"
+    },
+    "algorithm": {
+      "selected": "grpo",
+      "epsilon": 0.0003,
+      "epsilon_high": 0.0004
+    },
+    "training": {
+      "num_epochs": 3,
+      "batch_size": 6,
+      "gradient_accumulation": 1,
+      "learning_rate": 0.0002,
+      "lr_schedule": "cosine",
+      "lr_scheduler_type": "constant",
+      "warmup_ratio": 0.1,
+      "warmup_steps": 10,
+      "weight_decay": 0.001,
+      "max_grad_norm": 0.3,
+      "max_sequence_length": 2048,
+      "max_new_tokens": 512,
+      "seed": 42,
+      "optimizer": "paged_adamw_32bit"
+    },
+    "grpo": {
+      "num_generations": 2,
+      "temperature": 0.7,
+      "top_p": 0.95,
+      "top_k": 50,
+      "repetition_penalty": 1,
+      "kl_weight": 0.1,
+      "kl_penalty": 0.05,
+      "clip_range": 0.2,
+      "value_coefficient": 1
+    },
+    "optimizations": {
+      "use_flash_attention": false,
+      "gradient_checkpointing": false,
+      "mixed_precision": true,
+      "use_bf16": false
+    },
+    "output": {
+      "name": "",
+      "save_steps": 100,
+      "eval_steps": 100,
+      "logging_steps": 10
+    },
+    "pre_training": {
+      "enabled": true,
+      "epochs": 2,
+      "max_samples": 100,
+      "filter_by_length": false,
+      "validate_format": true
+    },
+    "reward": null
+  },
+  "timestamp": 1759490912580
+}

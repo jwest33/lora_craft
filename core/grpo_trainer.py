@@ -100,8 +100,8 @@ class GRPOTrainingConfig:
     use_nested_quant: bool = False
 
     # LoRA configuration
-    lora_r: int = 16
-    lora_alpha: int = 16
+    lora_r: int = 1  # Changed from 16 → 1 (optimal for RL/GRPO per paper)
+    lora_alpha: int = 32  # Changed from 16 → 32 (matches paper)
     lora_dropout: float = 0.0
     lora_target_modules: List[str] = None
     lora_bias: str = "none"
@@ -110,36 +110,36 @@ class GRPOTrainingConfig:
     num_train_epochs: int = 3
     per_device_train_batch_size: int = 4
     gradient_accumulation_steps: int = 1
-    learning_rate: float = 2e-4
+    learning_rate: float = 1e-6  # Changed from 2e-4 → 1e-6 (paper recommendation for RL)
     warmup_steps: int = 10
-    warmup_ratio: float = 0.1
+    warmup_ratio: float = 0.0  # Changed from 0.1 → 0.0 (paper recommendation)
     logging_steps: int = 1  # Log every step for real-time frontend metrics
     save_steps: int = 100
     eval_steps: int = 100
-    max_grad_norm: float = 0.3
+    max_grad_norm: float = 1.0  # Changed from 0.3 → 1.0 (paper recommendation)
     weight_decay: float = 0.001
     optim: str = "paged_adamw_32bit"
-    lr_scheduler_type: str = "constant"
+    lr_scheduler_type: str = "cosine"  # Changed from "constant" → "cosine" (paper recommendation)
     seed: int = 42
 
     # Pre-training configuration
     pre_training_epochs: int = 2  # Default: 2 epochs (matches official GRPO notebook)
-    pre_training_max_samples: Optional[int] = None  # Separate sample limit for pre-training phase
+    pre_training_max_samples: Optional[int] = 500  # Paper uses ~59 short samples, we default to 500 for format learning
     pre_training_filter_by_length: bool = False  # Filter pre-training samples by length
     pre_training_max_length_ratio: float = 0.5  # Max length as ratio of max_sequence_length
 
     # GRPO/GSPO specific
     loss_type: str = "grpo"  # Always use "grpo" for TRL compatibility
     importance_sampling_level: str = "token"  # Options: "token" (GRPO), "sequence" (GSPO)
-    max_sequence_length: int = 2048
-    max_new_tokens: int = 512  # Maximum tokens to generate (reduced for performance)
-    num_generations_per_prompt: int = 2  # Reduced from 4 for faster training
-    num_generations: int = 2  # Same as num_generations_per_prompt for TRL compatibility
+    max_sequence_length: int = 5120  # Changed from 2048 → 5120 (paper uses 1024 prompt + 4096 completion)
+    max_new_tokens: int = 4096  # Changed from 512 → 4096 (paper recommendation)
+    num_generations_per_prompt: int = 4  # Changed from 2 → 4 (compromise: paper uses 16)
+    num_generations: int = 4  # Changed from 2 → 4 (same as num_generations_per_prompt for TRL compatibility)
     temperature: float = 0.7
     top_k: int = 50
     top_p: float = 0.95
     repetition_penalty: float = 1.0
-    kl_penalty: float = 0.05  # Increased to prevent KL divergence
+    kl_penalty: float = 0.0  # Changed from 0.05 → 0.0 (paper uses beta=0.0)
     clip_range: float = 0.2
     value_coefficient: float = 1.0
 
@@ -348,7 +348,10 @@ class GRPOModelTrainer:
             r=self.config.lora_r,
             lora_alpha=self.config.lora_alpha,
             lora_dropout=self.config.lora_dropout,
-            target_modules=self.config.lora_target_modules or ["q_proj", "v_proj"],
+            target_modules=self.config.lora_target_modules or [
+                "q_proj", "k_proj", "v_proj", "o_proj",      # Attention
+                "gate_proj", "up_proj", "down_proj"          # MLP (paper recommendation)
+            ],
             bias=self.config.lora_bias,
         )
 
@@ -1033,12 +1036,23 @@ class GRPOModelTrainer:
                     last_step_reported = current_step
                     logger.debug(f"Step {current_step} - Available log keys: {list(logs.keys())}")
 
-                # Send metrics only when we have complete data from TRL
-                # TRL calls log() multiple times per step - first with basic metrics, then with all metrics
-                # We only send when we detect the complete metrics (presence of 'kl' or 'epoch' indicates complete data)
-                has_complete_metrics = 'kl' in logs or 'epoch' in logs or 'completions/mean_length' in logs
+                # Send metrics only when we have actual training data from TRL
+                # TRL calls log() multiple times per step - we want the call with actual metrics
+                # Check for presence of key metrics that indicate this is a real training log
+                has_training_metrics = (
+                    'loss' in logs or
+                    'reward' in logs or
+                    'rewards/reward_wrapper/mean' in logs or
+                    'kl' in logs or
+                    'epoch' in logs or
+                    'completions/mean_length' in logs
+                )
 
-                if current_step is not None and has_complete_metrics and (parent.config.logging_steps == 1 or current_step % parent.config.logging_steps == 0):
+                # Debug: Log why we're accepting or rejecting this log call
+                if current_step and not has_training_metrics:
+                    logger.debug(f"Step {current_step} - Skipping log call without training metrics. Keys: {list(logs.keys())[:10]}")
+
+                if current_step is not None and has_training_metrics and (parent.config.logging_steps == 1 or current_step % parent.config.logging_steps == 0):
                     logger.debug(f"Metrics logging triggered at step {current_step} with complete metrics (logging_steps={parent.config.logging_steps})")
                     # Extract actual values from the logs with comprehensive fallbacks
                     # Try multiple possible key names for loss
@@ -1126,9 +1140,13 @@ class GRPOModelTrainer:
                                 pass  # Skip non-numeric values
 
                     # Update tracking
-                    if metrics['mean_reward'] > parent.best_reward:
-                        parent.best_reward = metrics['mean_reward']
+                    current_reward = metrics['mean_reward']
+                    if current_reward > parent.best_reward:
+                        logger.info(f"New best reward: {current_reward:.6f} (previous: {parent.best_reward:.6f})")
+                        parent.best_reward = current_reward
                         parent.save_checkpoint(f"best_step_{metrics['step']}")
+                    else:
+                        logger.debug(f"Current reward {current_reward:.6f} not better than best {parent.best_reward:.6f}")
 
                     parent.training_history.append(metrics)
 
@@ -1284,8 +1302,32 @@ class GRPOModelTrainer:
 
     def _compile_training_metrics(self) -> Dict[str, Any]:
         """Compile training metrics."""
+        # If best_reward is still at initial value, calculate from training history
+        final_reward = self.best_reward
+
+        # Check if we have an empty or missing training history
+        if not self.training_history:
+            logger.error("Training history is empty! Metrics callback may not have fired during training.")
+            logger.error("This suggests TRL did not provide expected log keys during training.")
+            # Set final_reward to None if we have no data
+            if final_reward == float('-inf'):
+                final_reward = None
+                logger.warning("No training metrics captured - best_reward will be None")
+        elif final_reward == float('-inf'):
+            logger.warning("best_reward not updated during training, calculating from training_history")
+            # Find the maximum mean_reward from all logged metrics
+            rewards = [m.get('mean_reward', float('-inf')) for m in self.training_history if 'mean_reward' in m]
+            if rewards:
+                final_reward = max(rewards)
+                logger.info(f"Calculated best_reward from history: {final_reward:.6f}")
+                # Update self.best_reward for checkpoint saving
+                self.best_reward = final_reward
+            else:
+                logger.warning("No mean_reward found in training_history")
+                final_reward = None
+
         return {
-            'final_reward': self.best_reward,
+            'final_reward': final_reward,
             'training_history': self.training_history,
             'global_steps': self.global_step,
             'epochs_trained': self.current_epoch + 1,
@@ -1308,11 +1350,16 @@ class GRPOModelTrainer:
         # Handle infinity values which are not valid JSON
         best_reward_value = self.best_reward
         if best_reward_value == float('-inf'):
+            logger.warning(f"Checkpoint '{name}' has best_reward at initial value (-inf), may indicate tracking issue")
             best_reward_value = None
         elif best_reward_value == float('inf'):
+            logger.warning(f"Checkpoint '{name}' has best_reward at infinity, replacing with None")
             best_reward_value = None
         elif best_reward_value != best_reward_value:  # Check for NaN
+            logger.warning(f"Checkpoint '{name}' has best_reward as NaN, replacing with None")
             best_reward_value = None
+        else:
+            logger.info(f"Checkpoint '{name}' saving with best_reward: {best_reward_value:.6f}")
 
         state = {
             'global_step': self.global_step,

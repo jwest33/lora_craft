@@ -14,6 +14,8 @@
         init() {
             this.setupEventListeners();
             this.loadConfigList();
+            // Ensure GRPO is selected by default
+            this.selectAlgorithm('grpo');
         },
 
         // Setup configuration-related event listeners
@@ -232,7 +234,12 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        this.applyConfiguration(data.configuration);
+                        // The API returns {success, configuration: {name, description, config, timestamp}}
+                        // We need to apply the nested 'config' object
+                        const configToApply = data.configuration.config || data.configuration;
+
+                        console.log('Loading configuration:', configToApply);
+                        this.applyConfiguration(configToApply);
 
                         // Close modal
                         const modal = bootstrap.Modal.getInstance(document.getElementById('loadConfigModal'));
@@ -286,6 +293,7 @@
                     family: document.getElementById('model-family')?.value || 'qwen'
                 },
                 dataset: {
+                    source: document.getElementById('dataset-source')?.value || 'huggingface',
                     type: document.getElementById('dataset-type')?.value,
                     path: document.getElementById('dataset-path')?.value,
                     split: document.getElementById('dataset-split')?.value,
@@ -296,6 +304,11 @@
                     response_field: document.getElementById('response-field')?.value || 'output'
                 },
                 template: TemplatesModule.exportTemplateConfig(),
+                algorithm: {
+                    selected: AppState.getConfigValue('selectedAlgorithm') || 'grpo',
+                    epsilon: parseFloat(document.getElementById('epsilon')?.value) || 0.0003,
+                    epsilon_high: parseFloat(document.getElementById('epsilon-high')?.value) || 0.0004
+                },
                 training: {
                     num_epochs: parseInt(document.getElementById('num-epochs')?.value) || 1,
                     batch_size: parseInt(document.getElementById('batch-size')?.value) || 4,
@@ -342,12 +355,17 @@
                     filter_by_length: document.getElementById('pre-training-filter-length')?.checked ?? false,
                     validate_format: document.getElementById('validate-format')?.checked ?? true
                 },
-                reward: AppState.getConfigValue('rewardConfig') || null
+                // Get reward config from the actual reward system (rewards.js)
+                reward: (typeof gatherRewardConfig === 'function')
+                    ? gatherRewardConfig()
+                    : (AppState.getConfigValue('rewardConfig') || window.selectedRewardConfig || null)
             };
         },
 
         // Apply configuration
         applyConfiguration(config) {
+            console.log('Applying configuration:', config);
+
             // Apply setup mode first
             if (config.setupMode) {
                 const setupModeRadio = document.getElementById(config.setupMode);
@@ -356,11 +374,14 @@
                     if (ModelsModule && ModelsModule.handleSetupModeChange) {
                         ModelsModule.handleSetupModeChange();
                     }
+                } else {
+                    console.warn(`Setup mode radio not found: ${config.setupMode}`);
                 }
             }
 
             // Apply model configuration - family first, then model details
             if (config.model) {
+                console.log('Applying model config:', config.model);
                 if (config.model.family) {
                     const familySelect = document.getElementById('model-family');
                     if (familySelect) {
@@ -368,44 +389,100 @@
                         if (ModelsModule && ModelsModule.updateModelList) {
                             ModelsModule.updateModelList();
                         }
+                    } else {
+                        console.warn('model-family element not found');
                     }
                 }
-                ModelsModule.importModelConfig(config.model);
+                if (ModelsModule && ModelsModule.importModelConfig) {
+                    ModelsModule.importModelConfig(config.model);
+                } else {
+                    console.error('ModelsModule.importModelConfig not available');
+                }
             }
 
             // Apply dataset configuration
             if (config.dataset) {
+                console.log('Applying dataset config:', config.dataset);
+                if (config.dataset.source) {
+                    const datasetSourceElement = document.getElementById('dataset-source');
+                    if (datasetSourceElement) {
+                        datasetSourceElement.value = config.dataset.source;
+                    } else {
+                        console.warn('dataset-source element not found');
+                    }
+                }
                 if (config.dataset.type) {
-                    document.getElementById('dataset-type').value = config.dataset.type;
-                    if (DatasetModule && DatasetModule.onDatasetTypeChange) {
-                        DatasetModule.onDatasetTypeChange();
+                    const datasetTypeElement = document.getElementById('dataset-type');
+                    if (datasetTypeElement) {
+                        datasetTypeElement.value = config.dataset.type;
+                        if (DatasetModule && DatasetModule.onDatasetTypeChange) {
+                            DatasetModule.onDatasetTypeChange();
+                        }
                     }
                 }
                 if (config.dataset.path) {
-                    document.getElementById('dataset-path').value = config.dataset.path;
+                    const datasetPathElement = document.getElementById('dataset-path');
+                    if (datasetPathElement) datasetPathElement.value = config.dataset.path;
                 }
                 if (config.dataset.split) {
                     const splitElement = document.getElementById('dataset-split');
                     if (splitElement) splitElement.value = config.dataset.split;
                 }
                 if (config.dataset.sample_size !== undefined) {
-                    document.getElementById('sample-size').value = config.dataset.sample_size;
+                    const sampleSizeElement = document.getElementById('sample-size');
+                    if (sampleSizeElement) sampleSizeElement.value = config.dataset.sample_size;
                 }
                 if (config.dataset.train_split !== undefined) {
-                    document.getElementById('train-split').value = config.dataset.train_split;
-                    if (DatasetModule && DatasetModule.updateSplitDisplay) {
-                        DatasetModule.updateSplitDisplay();
+                    const trainSplitElement = document.getElementById('train-split');
+                    if (trainSplitElement) {
+                        trainSplitElement.value = config.dataset.train_split;
+                        if (DatasetModule && DatasetModule.updateSplitDisplay) {
+                            DatasetModule.updateSplitDisplay();
+                        }
                     }
                 }
                 if (config.dataset.max_samples !== undefined) {
                     const maxSamplesElement = document.getElementById('max-samples');
                     if (maxSamplesElement) maxSamplesElement.value = config.dataset.max_samples;
                 }
+                if (config.dataset.instruction_field) {
+                    const instructionFieldElement = document.getElementById('instruction-field');
+                    if (instructionFieldElement) instructionFieldElement.value = config.dataset.instruction_field;
+                }
+                if (config.dataset.response_field) {
+                    const responseFieldElement = document.getElementById('response-field');
+                    if (responseFieldElement) responseFieldElement.value = config.dataset.response_field;
+                }
             }
 
             // Apply template configuration
             if (config.template) {
-                TemplatesModule.importTemplateConfig(config.template);
+                console.log('Applying template config:', config.template);
+                if (TemplatesModule && TemplatesModule.importTemplateConfig) {
+                    TemplatesModule.importTemplateConfig(config.template);
+                } else {
+                    console.error('TemplatesModule.importTemplateConfig not available');
+                }
+            }
+
+            // Apply algorithm configuration
+            if (config.algorithm) {
+                console.log('Applying algorithm config:', config.algorithm);
+                if (config.algorithm.selected) {
+                    AppState.setConfigValue('selectedAlgorithm', config.algorithm.selected);
+                    // Trigger UI update for algorithm selection
+                    if (this.selectAlgorithm) {
+                        this.selectAlgorithm(config.algorithm.selected);
+                    }
+                }
+                if (config.algorithm.epsilon !== undefined) {
+                    const epsilonElement = document.getElementById('epsilon');
+                    if (epsilonElement) epsilonElement.value = config.algorithm.epsilon;
+                }
+                if (config.algorithm.epsilon_high !== undefined) {
+                    const epsilonHighElement = document.getElementById('epsilon-high');
+                    if (epsilonHighElement) epsilonHighElement.value = config.algorithm.epsilon_high;
+                }
             }
 
             // Apply training configuration
@@ -530,7 +607,25 @@
 
             // Apply reward configuration
             if (config.reward) {
+                console.log('Applying reward config:', config.reward);
                 AppState.setConfigValue('rewardConfig', config.reward);
+                window.selectedRewardConfig = config.reward;
+
+                // Restore the reward selection in the UI
+                if (config.reward.type === 'preset' && config.reward.preset_name) {
+                    // Preset reward - use selectPresetByName if available
+                    if (typeof selectPresetByName === 'function') {
+                        setTimeout(() => {
+                            selectPresetByName(config.reward.preset_name, true);
+                        }, 500);
+                    }
+                } else if (config.reward.type === 'custom' && config.reward.components) {
+                    // Custom reward - restore components
+                    if (typeof restoreCustomReward === 'function') {
+                        restoreCustomReward(config.reward);
+                    }
+                }
+
                 // Update reward display if available
                 if (typeof updateRewardDisplay === 'function') {
                     updateRewardDisplay();
@@ -1014,9 +1109,10 @@
                 selectedCard.classList.add('border-primary', 'border-2');
             }
 
-            // Store template selection
+            // Store template selection in both AppState and window for consistency
             AppState.setConfigValue('selectedRewardTemplate', template);
             AppState.setConfigValue('rewardConfig', selectedTemplate.config);
+            window.selectedRewardConfig = selectedTemplate.config;
 
             CoreModule.showAlert(`Template "${selectedTemplate.name}" selected`, 'success');
         },
@@ -1103,8 +1199,9 @@
                 components: components
             };
 
-            // Store custom reward configuration
+            // Store custom reward configuration in both AppState and window for consistency
             AppState.setConfigValue('rewardConfig', rewardConfig);
+            window.selectedRewardConfig = rewardConfig;
 
             // Update selected reward display
             const rewardNameEl = document.getElementById('selected-reward-name');
@@ -1296,9 +1393,9 @@
                         }
                     }
 
-                    // Reset LoRA settings
-                    if (document.getElementById('lora-rank')) document.getElementById('lora-rank').value = '16';
-                    if (document.getElementById('lora-rank-slider')) document.getElementById('lora-rank-slider').value = '16';
+                    // Reset LoRA settings (paper-aligned defaults)
+                    if (document.getElementById('lora-rank')) document.getElementById('lora-rank').value = '1';
+                    if (document.getElementById('lora-rank-slider')) document.getElementById('lora-rank-slider').value = '1';
                     if (document.getElementById('lora-alpha')) document.getElementById('lora-alpha').value = '32';
                     if (document.getElementById('lora-alpha-slider')) document.getElementById('lora-alpha-slider').value = '32';
                     if (document.getElementById('lora-dropout')) document.getElementById('lora-dropout').value = '0.00';
@@ -1310,26 +1407,33 @@
                     if (document.getElementById('sample-size')) document.getElementById('sample-size').value = '';
                     if (document.getElementById('train-split')) document.getElementById('train-split').value = '80';
 
-                    // Reset training settings
+                    // Reset training settings (paper-aligned defaults)
                     if (document.getElementById('num-epochs')) document.getElementById('num-epochs').value = '3';
                     if (document.getElementById('batch-size')) document.getElementById('batch-size').value = '4';
                     if (document.getElementById('gradient-accumulation')) document.getElementById('gradient-accumulation').value = '1';
-                    if (document.getElementById('learning-rate')) document.getElementById('learning-rate').value = '0.0002';
+                    if (document.getElementById('learning-rate')) document.getElementById('learning-rate').value = '0.000001';
                     if (document.getElementById('warmup-steps')) document.getElementById('warmup-steps').value = '10';
                     if (document.getElementById('weight-decay')) document.getElementById('weight-decay').value = '0.001';
-                    if (document.getElementById('max-grad-norm')) document.getElementById('max-grad-norm').value = '0.3';
-                    if (document.getElementById('max-sequence-length')) document.getElementById('max-sequence-length').value = '2048';
-                    if (document.getElementById('max-new-tokens')) document.getElementById('max-new-tokens').value = '256';
+                    if (document.getElementById('max-grad-norm')) document.getElementById('max-grad-norm').value = '1.0';
+                    if (document.getElementById('max-sequence-length')) document.getElementById('max-sequence-length').value = '5120';
+                    if (document.getElementById('max-new-tokens')) document.getElementById('max-new-tokens').value = '4096';
                     if (document.getElementById('max-samples')) document.getElementById('max-samples').value = '';
 
-                    // Reset GRPO settings
+                    // Reset GRPO settings (paper-aligned defaults)
                     if (document.getElementById('temperature')) document.getElementById('temperature').value = '0.7';
                     if (document.getElementById('top-p')) document.getElementById('top-p').value = '0.95';
                     if (document.getElementById('top-k')) document.getElementById('top-k').value = '50';
                     if (document.getElementById('repetition-penalty')) document.getElementById('repetition-penalty').value = '1.0';
-                    if (document.getElementById('kl-penalty')) document.getElementById('kl-penalty').value = '0.05';
+                    if (document.getElementById('kl-penalty')) document.getElementById('kl-penalty').value = '0.0';
                     if (document.getElementById('clip-range')) document.getElementById('clip-range').value = '0.2';
                     if (document.getElementById('value-coefficient')) document.getElementById('value-coefficient').value = '1.0';
+
+                    // Reset pre-training settings
+                    if (document.getElementById('enable-pre-training')) document.getElementById('enable-pre-training').checked = true;
+                    if (document.getElementById('pre-training-epochs')) document.getElementById('pre-training-epochs').value = '2';
+                    if (document.getElementById('pre-training-samples')) document.getElementById('pre-training-samples').value = '500';
+                    if (document.getElementById('pre-training-filter-length')) document.getElementById('pre-training-filter-length').checked = false;
+                    if (document.getElementById('validate-format')) document.getElementById('validate-format').checked = true;
 
                     // Reset optimizations
                     if (document.getElementById('use-flash-attention')) document.getElementById('use-flash-attention').checked = false;
@@ -1337,8 +1441,8 @@
                     if (document.getElementById('mixed-precision')) document.getElementById('mixed-precision').checked = true;
                     if (document.getElementById('use-bf16')) document.getElementById('use-bf16').checked = false;
 
-                    // Reset advanced settings
-                    if (document.getElementById('lr-scheduler-type')) document.getElementById('lr-scheduler-type').value = 'constant';
+                    // Reset advanced settings (paper-aligned defaults)
+                    if (document.getElementById('lr-scheduler-type')) document.getElementById('lr-scheduler-type').value = 'cosine';
                     if (document.getElementById('optimizer')) document.getElementById('optimizer').value = 'paged_adamw_32bit';
                     if (document.getElementById('logging-steps')) document.getElementById('logging-steps').value = '10';
                     if (document.getElementById('save-steps')) document.getElementById('save-steps').value = '100';

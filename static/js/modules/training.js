@@ -658,9 +658,6 @@
             if (data.metrics) {
                 this.updateCharts(data.metrics);
             }
-
-            // Update time estimate
-            this.updateTimeRemaining(data);
         },
 
         // Handle training completion
@@ -748,10 +745,10 @@
 
             // Primary metrics
             updateMetric('metric-step', data.step || 0);
-            // Display "Pre-training" for negative epochs, otherwise show epoch number
+            // Display "Pre-training" for negative epochs, otherwise show 1-based epoch number
             const epochValue = data.epoch !== undefined && data.epoch < 0
                 ? 'Pre-training'
-                : Math.floor(data.epoch || 0);
+                : Math.floor(data.epoch || 0) + 1;  // Add 1 to convert 0-based to 1-based display
             updateMetric('metric-epoch', epochValue);
             updateMetric('metric-loss', data.loss, v => v.toFixed(4));
 
@@ -891,37 +888,6 @@
             });
         },
 
-        // Update time remaining
-        updateTimeRemaining(data) {
-            if (!this.trainingStartTime || !data.current_step || !data.total_steps) return;
-
-            const elapsed = Date.now() - this.trainingStartTime;
-            const stepsComplete = data.current_step;
-            const stepsRemaining = data.total_steps - stepsComplete;
-            const timePerStep = elapsed / stepsComplete;
-            const timeRemaining = timePerStep * stepsRemaining;
-
-            const timeDisplay = document.getElementById('time-remaining');
-            if (timeDisplay) {
-                timeDisplay.textContent = this.formatTime(timeRemaining);
-            }
-        },
-
-        // Format time duration
-        formatTime(milliseconds) {
-            const seconds = Math.floor(milliseconds / 1000);
-            const minutes = Math.floor(seconds / 60);
-            const hours = Math.floor(minutes / 60);
-
-            if (hours > 0) {
-                return `${hours}h ${minutes % 60}m`;
-            } else if (minutes > 0) {
-                return `${minutes}m ${seconds % 60}s`;
-            } else {
-                return `${seconds}s`;
-            }
-        },
-
         // Estimate training time
         estimateTrainingTime(config) {
             // GRPO-specific calculation
@@ -972,6 +938,31 @@
             } else {
                 return `${this.formatTime(minSeconds * 1000)} - ${this.formatTime(maxSeconds * 1000)}`;
             }
+        },
+
+        // Format time in milliseconds to human-readable string
+        formatTime(milliseconds) {
+            const totalSeconds = Math.floor(milliseconds / 1000);
+
+            if (totalSeconds < 60) {
+                return `${totalSeconds}s`;
+            }
+
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+
+            if (hours > 0) {
+                if (minutes > 0) {
+                    return `${hours}h ${minutes}m`;
+                }
+                return `${hours}h`;
+            }
+
+            if (seconds > 0) {
+                return `${minutes}m ${seconds}s`;
+            }
+            return `${minutes}m`;
         },
 
         // Handle LR schedule change

@@ -95,7 +95,7 @@
                     setTimeout(() => {
                         const targetStep = document.getElementById(`step-${stepNum}`);
                         if (targetStep) {
-                            targetStep.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            targetStep.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
                         }
                     }, 100);
                 }
@@ -122,7 +122,7 @@
                             setTimeout(() => {
                                 const targetStep = document.getElementById(`step-${stepNum}`);
                                 if (targetStep) {
-                                    targetStep.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                    targetStep.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
                                 }
                             }, 100);
                         } else {
@@ -144,6 +144,8 @@
                         chevron.classList.remove('fa-chevron-up');
                         chevron.classList.add('fa-chevron-down');
                     }
+                    // Update indicators when collapsing
+                    this.updateStepIndicators();
                 } else {
                     collapseInstance.show();
                     if (chevron) {
@@ -154,7 +156,7 @@
                     setTimeout(() => {
                         const targetStep = document.getElementById(`step-${stepNum}`);
                         if (targetStep) {
-                            targetStep.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            targetStep.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
                         }
                     }, 350); // Bootstrap collapse animation is typically 350ms
                 }
@@ -169,7 +171,7 @@
                         setTimeout(() => {
                             const targetStep = document.getElementById(`step-${stepNum}`);
                             if (targetStep) {
-                                targetStep.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                targetStep.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
                             }
                         }, 100);
                     } else {
@@ -229,12 +231,25 @@
                     // Small delay to ensure DOM is ready
                     setTimeout(() => window.updateConfigSummary(), 100);
                 }
+            } else if (stepNum === 5) {
+                // Refresh export models when navigating to Export step
+                if (window.ExportModule && typeof ExportModule.loadExportableModels === 'function') {
+                    setTimeout(() => ExportModule.loadExportableModels(), 100);
+                }
+                if (window.ExportModule && typeof ExportModule.displayTrainedModelCards === 'function') {
+                    setTimeout(() => ExportModule.displayTrainedModelCards(), 100);
+                }
+            } else if (stepNum === 6) {
+                // Refresh test models when navigating to Test step
+                if (window.TestingModule && typeof TestingModule.loadTestableModels === 'function') {
+                    setTimeout(() => TestingModule.loadTestableModels(), 100);
+                }
             }
 
             // Scroll to the target step
             const targetStep = document.getElementById(`step-${stepNum}`);
             if (targetStep) {
-                targetStep.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                targetStep.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
             }
 
             // Save state

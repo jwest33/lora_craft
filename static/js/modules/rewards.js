@@ -250,6 +250,11 @@ async function selectPresetByName(presetName, silent = false) {
     selectedRewardName = preset.name;
     selectedRewardType = 'preset';
 
+    // Sync with AppState for config save/load
+    if (window.AppState && AppState.setConfigValue) {
+        AppState.setConfigValue('rewardConfig', window.selectedRewardConfig);
+    }
+
     // Clear previous selection
     document.querySelectorAll('.preset-card, .template-card').forEach(card => {
         card.classList.remove('selected');

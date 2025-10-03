@@ -542,6 +542,9 @@ You are a helpful AI assistant.
             input_tokens = len(inputs['input_ids'][0])
             output_tokens = len(outputs[0]) - input_tokens
 
+            # Calculate tokens per second
+            tokens_per_second = output_tokens / generation_time if generation_time > 0 else 0
+
             return {
                 "success": True,
                 "response": response,
@@ -552,6 +555,8 @@ You are a helpful AI assistant.
                     "output_tokens": output_tokens,
                     "total_tokens": input_tokens + output_tokens,
                     "generation_time": generation_time,
+                    "token_count": output_tokens,  # Add for frontend compatibility
+                    "tokens_per_second": tokens_per_second,  # Add for frontend compatibility
                     "formatted_prompt": formatted_prompt,
                     "system_prompt": system_prompt,
                     "config": {

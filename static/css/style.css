@@ -203,10 +203,57 @@
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
 }
 
+/* Upload Zone Styles */
+.upload-zone {
+    background: var(--bg-primary);
+    border: 2px dashed var(--border-color);
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.upload-zone:hover {
+    border-color: var(--primary);
+    background: rgba(99, 102, 241, 0.03);
+}
+
+.upload-zone.dragover {
+    border-color: var(--primary);
+    background: rgba(99, 102, 241, 0.08);
+    transform: scale(1.01);
+}
+
+.upload-zone .upload-title {
+    color: var(--text-primary);
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+[data-theme="dark"] .upload-zone {
+    background: rgba(30, 41, 59, 0.4);
+    border: 2px dashed rgba(168, 85, 247, 0.3);
+}
+
+[data-theme="dark"] .upload-zone:hover {
+    border-color: var(--primary);
+    background: rgba(168, 85, 247, 0.1);
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.15);
+}
+
+[data-theme="dark"] .upload-zone.dragover {
+    border-color: var(--secondary);
+    background: rgba(236, 72, 153, 0.15);
+    box-shadow: 0 0 30px rgba(236, 72, 153, 0.3);
+}
+
+[data-theme="dark"] .upload-zone .upload-title {
+    color: var(--text-primary);
+}
+
 /* Uploaded Dataset Card Styles */
 .uploaded-dataset-card {
     background: var(--bg-card);
     border: 2px solid var(--border-color);
+    position: relative;
     transition: all 0.3s ease;
 }
 
@@ -215,10 +262,38 @@
     box-shadow: var(--shadow-md);
 }
 
+.uploaded-dataset-card.selected-dataset {
+    border: 2px solid var(--success, #14b8a6);
+    background: rgba(20, 184, 166, 0.05);
+    box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.1);
+}
+
+/* Legacy support for old class name */
 .uploaded-dataset-card.selected {
-    border-color: var(--primary);
-    background: rgba(99, 102, 241, 0.05);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    border-color: var(--success, #14b8a6);
+    background: rgba(20, 184, 166, 0.05);
+    box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.1);
+}
+
+/* Selected badge for active dataset */
+.selected-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: var(--success, #14b8a6);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    z-index: 10;
+}
+
+.selected-badge i {
+    font-size: 0.875rem;
 }
 
 .uploaded-dataset-card h6 {
@@ -235,6 +310,47 @@
     color: var(--text-primary);
     font-weight: 600;
     margin-bottom: 1rem;
+}
+
+[data-theme="dark"] .uploaded-dataset-card {
+    background: rgba(51, 65, 85, 0.5);
+    border-color: rgba(168, 85, 247, 0.2);
+}
+
+[data-theme="dark"] .uploaded-dataset-card:hover {
+    border-color: var(--primary);
+    box-shadow: 0 4px 16px rgba(168, 85, 247, 0.3);
+}
+
+.uploaded-files-title {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .uploaded-files-title {
+    color: var(--text-secondary);
+}
+
+/* Column Mapping Section Styles */
+#column-mapping-section .column-mapping-title {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+[data-theme="dark"] #column-mapping-section .column-mapping-title {
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] #column-mapping-section .card {
+    background: rgba(51, 65, 85, 0.5);
+    border-color: rgba(168, 85, 247, 0.2);
+}
+
+[data-theme="dark"] #column-mapping-section .form-label {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] #column-mapping-section .text-muted {
+    color: var(--text-muted) !important;
 }
 
 .dataset-catalog-card .dataset-status {
@@ -675,6 +791,31 @@ body {
     font-size: 0.7rem;
     color: var(--text-muted);
     margin: 0;
+}
+
+/* Algorithm selection card styling */
+.algorithm-selection .selection-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.algorithm-selection .selection-card i {
+    display: block;
+    font-size: 2rem;
+    margin: 0 auto 0.5rem auto;
+}
+
+.algorithm-selection .selection-card span {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.algorithm-selection .selection-card small {
+    display: block;
 }
 
 /* Responsive grid adjustments */

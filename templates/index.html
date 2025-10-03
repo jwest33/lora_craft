@@ -232,6 +232,12 @@
                                 <!-- LoRA Presets (for Custom mode) -->
                                 <div id="lora-presets" class="mb-3" style="display: none;">
                                     <div class="btn-group" role="group">
+                                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="applyLoRAPreset('rl')">
+                                            <i class="fas fa-brain"></i> RL/GRPO
+                                        </button>
+                                        <button type="button" class="btn btn-outline-success btn-sm" onclick="applyLoRAPreset('sft')">
+                                            <i class="fas fa-graduation-cap"></i> SFT
+                                        </button>
                                         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="applyLoRAPreset('low')">
                                             <i class="fas fa-memory"></i> Low VRAM
                                         </button>
@@ -239,7 +245,7 @@
                                             <i class="fas fa-balance-scale"></i> Balanced
                                         </button>
                                         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="applyLoRAPreset('quality')">
-                                            <i class="fas fa-gem"></i> High Quality
+                                            <i class="fas fa-gem"></i> Quality
                                         </button>
                                     </div>
                                 </div>
@@ -247,23 +253,23 @@
                                 <div class="row">
                                     <div class="col-md-4">
                                         <div class="form-group">
-                                            <label class="form-label">Rank (r) <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Higher rank = more parameters to train"></i></label>
-                                            <input type="range" class="form-range" id="lora-rank-slider" min="4" max="128" value="16" onchange="updateValue('lora-rank', this.value); updateConfigSummary();">
-                                            <input type="number" class="form-control" id="lora-rank" value="16" min="4" max="128">
+                                            <label class="form-label">Rank (r) <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Paper recommends: 1-32 for RL/GRPO, 256 for large-scale SFT"></i></label>
+                                            <input type="range" class="form-range" id="lora-rank-slider" min="1" max="256" value="1" onchange="updateValue('lora-rank', this.value); updateConfigSummary();">
+                                            <input type="number" class="form-control" id="lora-rank" value="1" min="1" max="256">
                                         </div>
                                     </div>
                                     <div class="col-md-4">
                                         <div class="form-group">
-                                            <label class="form-label">Alpha <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Scaling factor, typically 2x rank"></i></label>
+                                            <label class="form-label">Alpha <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Scaling factor. Paper uses 32 regardless of rank (rank-independent)"></i></label>
                                             <input type="range" class="form-range" id="lora-alpha-slider" min="8" max="256" value="32" onchange="updateValue('lora-alpha', this.value); updateConfigSummary();">
                                             <input type="number" class="form-control" id="lora-alpha" value="32" min="8" max="256">
                                         </div>
                                     </div>
                                     <div class="col-md-4">
                                         <div class="form-group">
-                                            <label class="form-label">Dropout <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Regularization to prevent overfitting"></i></label>
-                                            <input type="range" class="form-range" id="lora-dropout-slider" min="0" max="0.5" step="0.05" value="0.05" onchange="updateValue('lora-dropout', this.value); updateConfigSummary();">
-                                            <input type="number" class="form-control" id="lora-dropout" value="0.05" min="0" max="0.5" step="0.05">
+                                            <label class="form-label">Dropout <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Paper uses 0.0 for best performance"></i></label>
+                                            <input type="range" class="form-range" id="lora-dropout-slider" min="0" max="0.5" step="0.05" value="0" onchange="updateValue('lora-dropout', this.value); updateConfigSummary();">
+                                            <input type="number" class="form-control" id="lora-dropout" value="0" min="0" max="0.5" step="0.05">
                                         </div>
                                     </div>
                                 </div>
@@ -288,7 +294,7 @@
                                 <div class="row">
                                     <div class="col-md-6">
                                         <div class="form-group">
-                                            <label class="form-label">Target Modules</label>
+                                            <label class="form-label">Attention Modules</label>
                                             <div class="form-check">
                                                 <input class="form-check-input" type="checkbox" id="target-q-proj" checked>
                                                 <label class="form-check-label" for="target-q-proj">q_proj</label>
@@ -298,16 +304,41 @@
                                                 <label class="form-check-label" for="target-v-proj">v_proj</label>
                                             </div>
                                             <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" id="target-k-proj">
+                                                <input class="form-check-input" type="checkbox" id="target-k-proj" checked>
                                                 <label class="form-check-label" for="target-k-proj">k_proj</label>
                                             </div>
                                             <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" id="target-o-proj">
+                                                <input class="form-check-input" type="checkbox" id="target-o-proj" checked>
                                                 <label class="form-check-label" for="target-o-proj">o_proj</label>
                                             </div>
                                         </div>
                                     </div>
                                     <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label class="form-label">MLP Modules
+                                                <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Paper shows 15-25% improvement with MLP modules included"></i>
+                                            </label>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="target-gate-proj" checked>
+                                                <label class="form-check-label" for="target-gate-proj">gate_proj</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="target-up-proj" checked>
+                                                <label class="form-check-label" for="target-up-proj">up_proj</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="target-down-proj" checked>
+                                                <label class="form-check-label" for="target-down-proj">down_proj</label>
+                                            </div>
+                                            <button type="button" class="btn btn-sm btn-outline-success mt-2" onclick="ModelsModule.selectAllLinearModules()">
+                                                <i class="fas fa-check-double"></i> All-Linear (Recommended)
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row mt-2">
+                                    <div class="col-md-12">
                                         <div class="form-group">
                                             <label class="form-label">Quantization</label>
                                             <select class="form-select" id="quantization">
@@ -429,26 +460,45 @@
                                     </div>
                                 </div>
 
-                                <!-- Upload Dataset -->
-                                <div id="dataset-upload-zone" class="upload-zone" style="display: none; cursor: pointer; padding: 1.5rem; border: 2px dashed var(--border-color); border-radius: 8px; text-align: center; transition: all 0.3s;">
-                                    <div class="upload-area">
-                                        <i class="fas fa-cloud-upload-alt fa-2x mb-2"></i>
-                                        <h6>Drop your dataset file here</h6>
-                                        <p class="text-muted mb-2">or click to browse</p>
-                                        <input type="file" id="dataset-file-input" accept=".json,.jsonl,.csv,.parquet,.txt" style="display: none;">
-                                        <button class="btn btn-outline-primary btn-sm" onclick="document.getElementById('dataset-file-input').click()">
-                                            Browse Files
-                                        </button>
+                                <!-- Upload Dataset Section (Combined with Previously Uploaded) -->
+                                <div id="dataset-upload-section-unified" style="display: none;">
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <!-- Upload Zone -->
+                                            <div id="dataset-upload-zone" class="upload-zone" style="cursor: pointer; padding: 1.5rem; border: 2px dashed var(--border-color); border-radius: 8px; text-align: center; transition: all 0.3s;">
+                                                <div class="upload-area">
+                                                    <i class="fas fa-cloud-upload-alt fa-2x mb-2"></i>
+                                                    <h6 class="upload-title">Drop your dataset file here</h6>
+                                                    <p class="text-muted mb-2">or click to browse</p>
+                                                    <input type="file" id="dataset-file-input" accept=".json,.jsonl,.csv,.parquet,.txt" style="display: none;">
+                                                    <button class="btn btn-outline-primary btn-sm" onclick="document.getElementById('dataset-file-input').click()">
+                                                        Browse Files
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <!-- Upload Status -->
+                                            <div id="dataset-upload-status" class="mt-3"></div>
+
+                                            <!-- Previously Uploaded Files (shown when available) -->
+                                            <div id="uploaded-datasets-container" style="display: none;">
+                                                <hr class="my-3">
+                                                <h6 class="text-muted mb-3 uploaded-files-title">
+                                                    <i class="fas fa-history"></i> Previously Uploaded Files
+                                                </h6>
+                                                <div id="uploaded-datasets-grid" class="row g-3">
+                                                    <!-- Populated by JavaScript -->
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                                <!-- Upload Status -->
-                                <div id="dataset-upload-status" class="mt-3"></div>
 
-                                <!-- Column Mapping Section (shown after upload) -->
+                                <!-- Column Mapping Section (shown after upload or file selection) -->
                                 <div id="column-mapping-section" class="mt-3" style="display: none;">
                                     <div class="card">
                                         <div class="card-body">
-                                            <h6 class="card-title mb-3">
+                                            <h6 class="card-title mb-3 column-mapping-title">
                                                 <i class="fas fa-columns"></i> Select Dataset Columns
                                             </h6>
                                             <div class="row g-3">
@@ -476,31 +526,27 @@
                                     </div>
                                 </div>
 
-                                <!-- Previously Uploaded Files -->
-                                <div id="uploaded-datasets-container" style="display: none;">
-                                    <hr class="my-3">
-                                    <h6 class="text-muted mb-3">
-                                        <i class="fas fa-history"></i> Previously Uploaded Files
-                                    </h6>
-                                    <div id="uploaded-datasets-grid" class="row g-3">
-                                        <!-- Populated by JavaScript -->
-                                    </div>
-                                </div>
-
                                 <!-- Selected Dataset Configuration -->
                                 <div id="dataset-selected" class="mt-3">
                                     <div class="row">
                                         <div class="col-md-6">
                                             <div class="form-group">
                                                 <label class="form-label">Selected Dataset</label>
-                                                <input type="text" class="form-control" id="dataset-path" value="yahma/alpaca-cleaned" readonly>
+                                                <input type="text" class="form-control" id="dataset-path" value="" placeholder="Select a dataset..." readonly>
                                             </div>
                                         </div>
-                                        <div class="col-md-6">
+                                        <div class="col-md-3">
                                             <div class="form-group">
                                                 <label class="form-label">Split</label>
                                                 <input type="text" class="form-control" id="dataset-split" value="train">
                                                 <small class="text-muted">e.g., train, test, validation</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="form-label">Samples Per Epoch <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Number of samples to use per epoch. Leave empty to use all available samples per epoch"></i></label>
+                                                <input type="number" class="form-control input-highlight" id="max-samples" placeholder="All" min="1">
+                                                <small class="text-muted">Leave empty for all</small>
                                             </div>
                                         </div>
                                     </div>
@@ -684,8 +730,8 @@ Then, provide your solution between &lt;SOLUTION&gt;&lt;/SOLUTION&gt;</textarea>
                                                 </div>
                                                 <div class="col-md-6">
                                                     <label class="form-label small">Pre-training Sample Size</label>
-                                                    <input type="number" class="form-control form-control-sm input-highlight" id="pre-training-samples" placeholder="Auto (filters from training dataset)" min="10" max="5000">
-                                                    <small class="text-muted">Leave empty to use all samples, or specify a smaller subset. Official GRPO: ~59 filtered samples</small>
+                                                    <input type="number" class="form-control form-control-sm input-highlight" id="pre-training-samples" value="500" placeholder="500" min="10" max="5000">
+                                                    <small class="text-muted">Default: 500 samples for format learning. Official GRPO used ~59 short samples</small>
                                                 </div>
                                             </div>
                                             <div class="row mt-2">
@@ -1045,11 +1091,11 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                     <div class="col-md-3">
                                         <div class="form-group">
                                             <label class="form-label">Learning Rate</label>
-                                            <input type="number" class="form-control" id="learning-rate" value="0.0002" step="0.00001">
+                                            <input type="number" class="form-control" id="learning-rate" value="0.000001" step="0.000001">
                                         </div>
                                     </div>
                                 </div>
-                                <div class="row mt-3">
+                                <div class="row mt-2">
                                     <div class="col-md-3">
                                         <div class="form-group">
                                             <label class="form-label">Gradient Accumulation <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Accumulate gradients over multiple steps"></i></label>
@@ -1059,29 +1105,23 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                     <div class="col-md-3">
                                         <div class="form-group">
                                             <label class="form-label">Max Sequence Length</label>
-                                            <input type="number" class="form-control" id="max-sequence-length" value="2048" min="128" max="32768" step="128">
+                                            <input type="number" class="form-control" id="max-sequence-length" value="5120" min="128" max="32768" step="128">
                                         </div>
                                     </div>
                                     <div class="col-md-3">
                                         <div class="form-group">
                                             <label class="form-label">Max New Tokens</label>
-                                            <input type="number" class="form-control" id="max-new-tokens" value="256" min="32" max="2048" step="32">
+                                            <input type="number" class="form-control" id="max-new-tokens" value="4096" min="32" max="8192" step="32">
                                         </div>
                                     </div>
-                                    <div class="col-md-3">
-                                        <div class="form-group">
-                                            <label class="form-label">Samples Per Epoch <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Number of samples to use per epoch. Leave empty to use all available samples per epoch"></i></label>
-                                            <input type="number" class="form-control input-highlight" id="max-samples" placeholder="All" min="1">
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="row mt-3">
                                     <div class="col-md-3">
                                         <div class="form-group">
                                             <label class="form-label">Warmup Steps</label>
                                             <input type="number" class="form-control" id="warmup-steps" value="10" min="0" max="1000">
                                         </div>
                                     </div>
+                                </div>
+                                <div class="row mt-2">
                                     <div class="col-md-3">
                                         <div class="form-group">
                                             <label class="form-label">Weight Decay</label>
@@ -1124,7 +1164,7 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="row mt-3">
+                                    <div class="row mt-2">
                                         <div class="col-md-3">
                                             <div class="form-group">
                                                 <label class="form-label">KL Penalty</label>
@@ -1352,14 +1392,6 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                         <span class="summary-value" id="summary-dataset">--</span>
                                     </div>
                                     <div class="summary-item">
-                                        <span class="summary-label">Training Time:</span>
-                                        <span class="summary-value" id="summary-time">~15 minutes</span>
-                                    </div>
-                                    <div class="summary-item">
-                                        <span class="summary-label">VRAM Required:</span>
-                                        <span class="summary-value" id="summary-vram">~4GB</span>
-                                    </div>
-                                    <div class="summary-item">
                                         <span class="summary-label">Epochs:</span>
                                         <span class="summary-value" id="summary-epochs">--</span>
                                     </div>
@@ -1558,9 +1590,6 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                 <div>
                                     <button class="btn btn-sm btn-outline-primary me-2" onclick="refreshTrainedModels()">
                                         <i class="fas fa-sync"></i> Refresh
-                                    </button>
-                                    <button class="btn btn-sm btn-success" onclick="showBatchExport()">
-                                        <i class="fas fa-file-archive"></i> Batch Export
                                     </button>
                                 </div>
                             </div>

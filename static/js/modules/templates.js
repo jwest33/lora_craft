@@ -469,11 +469,15 @@
 
         // Import template configuration
         importTemplateConfig(config) {
+            console.log('TemplatesModule.importTemplateConfig called with:', config);
+
             if (config.preset) {
                 const templateSelect = document.getElementById('template-preset');
                 if (templateSelect) {
                     templateSelect.value = config.preset;
                     this.onTemplateChange();
+                } else {
+                    console.warn('template-preset element not found');
                 }
             }
 
@@ -487,6 +491,65 @@
                 this.setFieldValue('assistant-suffix', config.assistant_suffix || '');
                 this.saveCustomTemplate();
                 this.updateTemplatePreview();
+            }
+
+            // Restore custom prompt markers (reasoning and solution)
+            if (config.reasoning_start) {
+                const reasoningStartElement = document.getElementById('custom-reasoning-start');
+                const reasoningStartHidden = document.getElementById('reasoning-start');
+                if (reasoningStartElement) reasoningStartElement.value = config.reasoning_start;
+                if (reasoningStartHidden) reasoningStartHidden.value = config.reasoning_start;
+            }
+            if (config.reasoning_end) {
+                const reasoningEndElement = document.getElementById('custom-reasoning-end');
+                const reasoningEndHidden = document.getElementById('reasoning-end');
+                if (reasoningEndElement) reasoningEndElement.value = config.reasoning_end;
+                if (reasoningEndHidden) reasoningEndHidden.value = config.reasoning_end;
+            }
+            if (config.solution_start) {
+                const solutionStartElement = document.getElementById('custom-solution-start');
+                const solutionStartHidden = document.getElementById('solution-start');
+                if (solutionStartElement) solutionStartElement.value = config.solution_start;
+                if (solutionStartHidden) solutionStartHidden.value = config.solution_start;
+            }
+            if (config.solution_end) {
+                const solutionEndElement = document.getElementById('custom-solution-end');
+                const solutionEndHidden = document.getElementById('solution-end');
+                if (solutionEndElement) solutionEndElement.value = config.solution_end;
+                if (solutionEndHidden) solutionEndHidden.value = config.solution_end;
+            }
+
+            // Restore system prompt
+            if (config.system_prompt) {
+                const systemPromptElement = document.getElementById('custom-system-prompt');
+                const systemPromptHidden = document.getElementById('system-prompt');
+                if (systemPromptElement) systemPromptElement.value = config.system_prompt;
+                if (systemPromptHidden) systemPromptHidden.value = config.system_prompt;
+            }
+
+            // Restore chat template
+            if (config.chat_template) {
+                const chatTemplateElement = document.getElementById('custom-chat-template');
+                const chatTemplateHidden = document.getElementById('chat-template');
+                if (chatTemplateElement) chatTemplateElement.value = config.chat_template;
+                if (chatTemplateHidden) chatTemplateHidden.value = config.chat_template;
+            }
+
+            // Restore chat template type selection
+            if (config.chat_template_type) {
+                const chatTemplateTypeSelect = document.getElementById('prompt-template-select');
+                if (chatTemplateTypeSelect) {
+                    chatTemplateTypeSelect.value = config.chat_template_type;
+                    // Trigger change event if needed
+                    if (typeof onChatTemplateTypeChange === 'function') {
+                        onChatTemplateTypeChange();
+                    }
+                }
+            }
+
+            // Update preview if template preview function exists
+            if (typeof updateTemplatePreview === 'function') {
+                updateTemplatePreview();
             }
         },
 
