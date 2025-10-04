@@ -100,8 +100,8 @@ class GRPOTrainingConfig:
     use_nested_quant: bool = False
 
     # LoRA configuration
-    lora_r: int = 1  # Changed from 16 → 1 (optimal for RL/GRPO per paper)
-    lora_alpha: int = 32  # Changed from 16 → 32 (matches paper)
+    lora_r: int = 1  # Changed from 16 → 1
+    lora_alpha: int = 32  # Changed from 16 → 32
     lora_dropout: float = 0.0
     lora_target_modules: List[str] = None
     lora_bias: str = "none"
@@ -110,36 +110,36 @@ class GRPOTrainingConfig:
     num_train_epochs: int = 3
     per_device_train_batch_size: int = 4
     gradient_accumulation_steps: int = 1
-    learning_rate: float = 1e-6  # Changed from 2e-4 → 1e-6 (paper recommendation for RL)
+    learning_rate: float = 1e-6  # Changed from 2e-4 → 1e-6
     warmup_steps: int = 10
-    warmup_ratio: float = 0.0  # Changed from 0.1 → 0.0 (paper recommendation)
+    warmup_ratio: float = 0.0  # Changed from 0.1 → 0.0
     logging_steps: int = 1  # Log every step for real-time frontend metrics
     save_steps: int = 100
     eval_steps: int = 100
-    max_grad_norm: float = 1.0  # Changed from 0.3 → 1.0 (paper recommendation)
+    max_grad_norm: float = 1.0  # Changed from 0.3 → 1.0
     weight_decay: float = 0.001
     optim: str = "paged_adamw_32bit"
-    lr_scheduler_type: str = "cosine"  # Changed from "constant" → "cosine" (paper recommendation)
+    lr_scheduler_type: str = "cosine"  # Changed from "constant" → "cosine"
     seed: int = 42
 
     # Pre-training configuration
     pre_training_epochs: int = 2  # Default: 2 epochs (matches official GRPO notebook)
-    pre_training_max_samples: Optional[int] = 500  # Paper uses ~59 short samples, we default to 500 for format learning
+    pre_training_max_samples: Optional[int] = 500  # We default to 500 for format learning
     pre_training_filter_by_length: bool = False  # Filter pre-training samples by length
     pre_training_max_length_ratio: float = 0.5  # Max length as ratio of max_sequence_length
 
     # GRPO/GSPO specific
     loss_type: str = "grpo"  # Always use "grpo" for TRL compatibility
     importance_sampling_level: str = "token"  # Options: "token" (GRPO), "sequence" (GSPO)
-    max_sequence_length: int = 5120  # Changed from 2048 → 5120 (paper uses 1024 prompt + 4096 completion)
-    max_new_tokens: int = 4096  # Changed from 512 → 4096 (paper recommendation)
-    num_generations_per_prompt: int = 4  # Changed from 2 → 4 (compromise: paper uses 16)
+    max_sequence_length: int = 5120  # Changed from 2048 → 5120 (1024 prompt + 4096 completion)
+    max_new_tokens: int = 4096  # Changed from 512 → 4096
+    num_generations_per_prompt: int = 4  # Changed from 2 → 4
     num_generations: int = 4  # Changed from 2 → 4 (same as num_generations_per_prompt for TRL compatibility)
     temperature: float = 0.7
     top_k: int = 50
     top_p: float = 0.95
     repetition_penalty: float = 1.0
-    kl_penalty: float = 0.0  # Changed from 0.05 → 0.0 (paper uses beta=0.0)
+    kl_penalty: float = 0.0  # Changed from 0.05 → 0.0
     clip_range: float = 0.2
     value_coefficient: float = 1.0
 
@@ -350,7 +350,7 @@ class GRPOModelTrainer:
             lora_dropout=self.config.lora_dropout,
             target_modules=self.config.lora_target_modules or [
                 "q_proj", "k_proj", "v_proj", "o_proj",      # Attention
-                "gate_proj", "up_proj", "down_proj"          # MLP (paper recommendation)
+                "gate_proj", "up_proj", "down_proj"          # MLP
             ],
             bias=self.config.lora_bias,
         )

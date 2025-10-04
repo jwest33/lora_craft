@@ -668,7 +668,9 @@ body {
     border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 1.5rem;
-    height: 400px;  /* Fixed height for vertical fill */
+    min-height: 350px;  /* Minimum height */
+    height: 400px;      /* Default height */
+    max-height: 600px;  /* Maximum height for very large screens */
     box-shadow: var(--shadow-sm);
     transition: all 0.3s ease;
     position: relative;
@@ -679,6 +681,30 @@ body {
 .chart-container:hover {
     box-shadow: var(--shadow-md);
     border-color: var(--primary-light);
+}
+
+/* Chart header with reset button */
+.chart-header {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 0.5rem;
+    min-height: 32px;
+}
+
+.chart-reset-btn {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+}
+
+.chart-reset-btn:hover {
+    opacity: 1;
+}
+
+.chart-reset-btn i {
+    font-size: 0.7rem;
+    margin-right: 0.25rem;
 }
 
 [data-theme="dark"] .chart-container {
@@ -695,6 +721,20 @@ body {
 .chart-container canvas {
     max-width: 100%;
     flex: 1;  /* Allow canvas to fill container height */
+}
+
+/* Responsive chart heights for different screen sizes */
+@media (min-width: 1400px) {
+    .chart-container {
+        height: 450px;
+    }
+}
+
+@media (max-width: 768px) {
+    .chart-container {
+        height: 300px;
+        min-height: 250px;
+    }
 }
 
 /* Optimize chart rendering during collapse */
@@ -1046,13 +1086,30 @@ body {
     margin-bottom: 0.75rem;
 }
 
+.dataset-icon-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+}
+
+.dataset-category-icon {
+    font-size: 1.5rem;
+    line-height: 1;
+}
+
 .dataset-name {
     font-size: 0.95rem;
     font-weight: 600;
     color: var(--text-primary);
     margin: 0;
-    flex: 1;
     line-height: 1.3;
+}
+
+.dataset-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
 }
 
 .dataset-catalog-card {
@@ -3695,6 +3752,36 @@ body {
 
 [data-theme="dark"] .streaming-text {
     background: rgba(255, 255, 255, 0.05);
+}
+
+/* Dataset Preview Modal Dark Mode */
+[data-theme="dark"] #dataset-preview-content .dataset-preview-card {
+    background: var(--bg-card);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] #dataset-preview-content .dataset-preview-card-header {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] #dataset-preview-content .dataset-preview-card-body {
+    background: var(--bg-card);
+}
+
+[data-theme="dark"] #dataset-preview-content .dataset-preview-pre {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    padding: 1rem;
+    border-radius: 4px;
+}
+
+[data-theme="dark"] #dataset-stats {
+    background: var(--bg-card) !important;
+    color: var(--text-primary);
+    border-color: var(--border-color);
 }
 
 /* Smooth scrolling for streaming content */

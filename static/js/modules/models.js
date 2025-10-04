@@ -400,26 +400,10 @@
 
         // Export model configuration
         exportModelConfig() {
-            // Gather target modules as array from individual checkboxes
-            const targetModules = [];
-            if (document.getElementById('target-q-proj')?.checked) targetModules.push('q_proj');
-            if (document.getElementById('target-v-proj')?.checked) targetModules.push('v_proj');
-            if (document.getElementById('target-k-proj')?.checked) targetModules.push('k_proj');
-            if (document.getElementById('target-o-proj')?.checked) targetModules.push('o_proj');
-            // MLP modules
-            if (document.getElementById('target-gate-proj')?.checked) targetModules.push('gate_proj');
-            if (document.getElementById('target-up-proj')?.checked) targetModules.push('up_proj');
-            if (document.getElementById('target-down-proj')?.checked) targetModules.push('down_proj');
-
             const config = {
                 modelName: document.getElementById('model-name')?.value,
                 customModelPath: document.getElementById('custom-model-path')?.value || '',
-                loraRank: parseInt(document.getElementById('lora-rank')?.value),
-                loraAlpha: parseInt(document.getElementById('lora-alpha')?.value),
-                targetModulesArray: targetModules,
-                loraDropout: parseFloat(document.getElementById('lora-dropout')?.value || 0),
-                loraBias: document.getElementById('lora-bias')?.value || 'none',
-                quantization: document.getElementById('quantization')?.value
+                quantization: document.getElementById('quantization')?.value || 'q8_0'
             };
 
             return config;
@@ -515,14 +499,14 @@
 
             let rank, alpha, dropout;
 
-            // Define preset configurations (aligned with paper)
+            // Define preset configurations
             switch (preset) {
-                case 'rl':  // RL/GRPO (paper-recommended)
+                case 'rl':  // RL/GRPO
                     rank = 1;
                     alpha = 32;
                     dropout = 0.0;
                     break;
-                case 'sft':  // SFT (paper-recommended)
+                case 'sft':  // SFT
                     rank = 256;
                     alpha = 32;
                     dropout = 0.0;
@@ -572,8 +556,8 @@
 
             // Show feedback based on preset
             const presetDescriptions = {
-                'rl': 'RL/GRPO preset (Rank: 1) - Paper-recommended for reinforcement learning',
-                'sft': 'SFT preset (Rank: 256) - Paper-recommended for large-scale supervised fine-tuning',
+                'rl': 'RL/GRPO preset (Rank: 1) - Recommended for reinforcement learning',
+                'sft': 'SFT preset (Rank: 256) - Recommended for large-scale supervised fine-tuning',
                 'low': 'Low VRAM preset (Rank: 8) - Best for limited GPU memory',
                 'balanced': 'Balanced preset (Rank: 16) - Good balance of quality and speed',
                 'quality': 'High quality preset (Rank: 64) - Best results with more VRAM'
@@ -594,7 +578,7 @@
                 if (checkbox) checkbox.checked = true;
             });
 
-            CoreModule.showAlert('All-linear configuration applied (recommended by paper)', 'success');
+            CoreModule.showAlert('All-linear configuration applied', 'success');
         },
 
         // Load model from custom path

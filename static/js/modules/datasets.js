@@ -6,6 +6,9 @@
     'use strict';
 
     const DatasetModule = {
+        // Track currently previewed dataset for "Use This Dataset" button
+        currentPreviewDataset: null,
+
         // GRPO prompt templates
         promptTemplates: {
             'grpo-default': {
@@ -101,25 +104,80 @@
                 });
         },
 
+        // Get category icon
+        getCategoryIcon(category) {
+            const icons = {
+                'math': '🔢',
+                'coding': '💻',
+                'general': '📚',
+                'qa': '❓'
+            };
+            return icons[category] || '📄';
+        },
+
         // Render dataset grid
         renderDatasetGrid(datasets) {
             const grid = document.getElementById('dataset-grid');
             if (!grid) return;
 
-            grid.innerHTML = datasets.map(dataset => `
-                <div class="dataset-item ${dataset.category}" data-dataset-path="${dataset.path}">
-                    <div class="dataset-card" onclick="DatasetsModule.selectDataset('${dataset.path}', '${CoreModule.escapeHtml(dataset.name)}')">
-                        <div class="dataset-header">
-                            <h6 class="dataset-name">${CoreModule.escapeHtml(dataset.name)}</h6>
-                            ${dataset.is_cached ? '<span class="badge bg-success"><i class="fas fa-check"></i> Cached</span>' : '<span class="badge bg-secondary"><i class="fas fa-download"></i> Download</span>'}
-                        </div>
-                        <div class="dataset-meta">
-                            <span class="badge bg-info">${dataset.category}</span>
-                            <span class="text-muted small">${dataset.size}</span>
+            grid.innerHTML = datasets.map(dataset => {
+                // Escape for HTML attributes using double encoding for onclick strings
+                const escapedPath = dataset.path.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                const escapedName = dataset.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
+                return `
+                    <div class="dataset-item ${dataset.category}" data-dataset-path="${dataset.path}" data-dataset-name="${CoreModule.escapeHtml(dataset.name)}">
+                        <div class="dataset-card">
+                            <div class="dataset-header">
+                                <div class="dataset-icon-title">
+                                    <span class="dataset-category-icon">${this.getCategoryIcon(dataset.category)}</span>
+                                    <h6 class="dataset-name">${CoreModule.escapeHtml(dataset.name)}</h6>
+                                </div>
+                                ${dataset.is_cached ? '<span class="badge bg-success"><i class="fas fa-check"></i> Cached</span>' : '<span class="badge bg-secondary"><i class="fas fa-download"></i> Download</span>'}
+                            </div>
+                            <div class="dataset-meta">
+                                <span class="badge bg-info">${dataset.category}</span>
+                                <span class="text-muted small">${dataset.size}</span>
+                            </div>
+                            <div class="dataset-actions mt-2">
+                                <button class="btn btn-sm btn-primary flex-grow-1 dataset-select-btn" data-path="${escapedPath}" data-name="${escapedName}">
+                                    <i class="fas fa-check"></i> Select
+                                </button>
+                                ${dataset.is_cached ? `
+                                    <button class="btn btn-sm btn-outline-secondary dataset-preview-btn" data-path="${escapedPath}" data-name="${escapedName}">
+                                        <i class="fas fa-eye"></i> Preview
+                                    </button>
+                                ` : ''}
+                            </div>
                         </div>
                     </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
+
+            // Add event listeners to buttons after rendering
+            this.attachDatasetCardListeners();
+        },
+
+        // Attach event listeners to dataset card buttons
+        attachDatasetCardListeners() {
+            // Select buttons
+            document.querySelectorAll('.dataset-select-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const path = e.currentTarget.dataset.path;
+                    const name = e.currentTarget.dataset.name;
+                    this.selectDataset(path, name);
+                });
+            });
+
+            // Preview buttons
+            document.querySelectorAll('.dataset-preview-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const path = e.currentTarget.dataset.path;
+                    const name = e.currentTarget.dataset.name;
+                    this.previewPublicDataset(path, name);
+                });
+            });
         },
 
         // Select a dataset from the catalog
@@ -833,7 +891,7 @@
             }
         },
 
-        // Preview dataset samples
+        // Preview dataset samples (current selection)
         previewDataset() {
             const datasetPath = document.getElementById('dataset-path')?.value;
             if (!datasetPath) {
@@ -856,47 +914,86 @@
             });
         },
 
-        // Show dataset preview modal
-        showDatasetPreview(samples) {
-            const modalId = 'datasetPreviewModal';
-            let modal = document.getElementById(modalId);
+        // Preview a public dataset from catalog
+        previewPublicDataset(datasetPath, datasetName) {
+            console.log('Previewing dataset:', datasetPath);
 
+            // Store the current preview context for "Use This Dataset" button
+            this.currentPreviewDataset = {
+                path: datasetPath,
+                name: datasetName
+            };
+
+            fetch('/api/preview_dataset', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: datasetPath, samples: 5 })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.samples) {
+                    this.showDatasetPreview(data.samples, datasetName);
+                } else {
+                    throw new Error(data.error || 'No samples returned');
+                }
+            })
+            .catch(error => {
+                console.error('Failed to preview dataset:', error);
+                CoreModule.showAlert(`Failed to preview ${datasetName}: ${error.message}`, 'danger');
+            });
+        },
+
+        // Show dataset preview modal
+        showDatasetPreview(samples, datasetName = null) {
+            const modal = document.getElementById('datasetPreviewModal');
             if (!modal) {
-                const modalHtml = `
-                    <div class="modal fade" id="${modalId}" tabindex="-1">
-                        <div class="modal-dialog modal-lg">
-                            <div class="modal-content">
-                                <div class="modal-header">
-                                    <h5 class="modal-title">Dataset Preview</h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                </div>
-                                <div class="modal-body">
-                                    <div id="preview-samples"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                document.body.insertAdjacentHTML('beforeend', modalHtml);
-                modal = document.getElementById(modalId);
+                console.error('Dataset preview modal not found in DOM');
+                return;
             }
 
-            // Populate samples
-            const previewContainer = modal.querySelector('#preview-samples');
-            previewContainer.innerHTML = '';
+            // Update modal title with dataset name if provided
+            const nameDisplay = modal.querySelector('#preview-dataset-name');
+            if (nameDisplay) {
+                nameDisplay.textContent = datasetName || '';
+            }
 
+            // Hide loading, show content
+            const loadingDiv = modal.querySelector('#dataset-preview-loading');
+            const contentDiv = modal.querySelector('#dataset-preview-content');
+            if (loadingDiv) loadingDiv.style.display = 'none';
+            if (contentDiv) contentDiv.style.display = 'block';
+
+            // Populate dataset statistics
+            const statsContainer = modal.querySelector('#dataset-stats');
+            if (statsContainer && samples.length > 0) {
+                const fields = Object.keys(samples[0] || {});
+                const statsHtml = `
+                    <strong>Samples Shown:</strong> ${samples.length}<br>
+                    <strong>Fields:</strong> ${fields.join(', ') || 'N/A'}
+                `;
+                statsContainer.innerHTML = statsHtml;
+            }
+
+            // Populate samples in the existing container
+            const samplesContainer = modal.querySelector('#dataset-samples');
+            if (!samplesContainer) {
+                console.error('dataset-samples container not found');
+                return;
+            }
+
+            samplesContainer.innerHTML = '';
             samples.forEach((sample, index) => {
                 const sampleHtml = `
-                    <div class="card mb-3">
-                        <div class="card-header">
+                    <div class="card mb-3 dataset-preview-card">
+                        <div class="card-header dataset-preview-card-header">
                             Sample ${index + 1}
                         </div>
-                        <div class="card-body">
-                            <pre class="mb-0" style="white-space: pre-wrap;">${CoreModule.escapeHtml(JSON.stringify(sample, null, 2))}</pre>
+                        <div class="card-body dataset-preview-card-body">
+                            <pre class="mb-0 dataset-preview-pre" style="white-space: pre-wrap;">${CoreModule.escapeHtml(JSON.stringify(sample, null, 2))}</pre>
                         </div>
                     </div>
                 `;
-                previewContainer.insertAdjacentHTML('beforeend', sampleHtml);
+                samplesContainer.insertAdjacentHTML('beforeend', sampleHtml);
             });
 
             // Show modal
@@ -1143,7 +1240,8 @@ ${solutionStart}4${solutionEnd}`;
                     break;
             }
 
-            // No AppState persistence - HTML inputs are source of truth
+            // Save dataset type to AppState so training.js can read it
+            AppState.setConfigValue('datasetType', type);
         },
 
         // Restore column mapping UI (session-only, not AppState)
@@ -1160,11 +1258,28 @@ ${solutionStart}4${solutionEnd}`;
         filterDatasets(filter) {
             console.log('Filtering datasets:', filter);
             const datasetItems = document.querySelectorAll('.dataset-item');
-            const searchTerm = filter.toLowerCase();
 
+            // Update active button state
+            document.querySelectorAll('.dataset-filters .btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event?.target?.classList.add('active');
+
+            // Handle 'all' filter - show everything
+            if (filter === 'all') {
+                datasetItems.forEach(item => {
+                    item.style.display = '';
+                });
+                return;
+            }
+
+            // Filter by category class
             datasetItems.forEach(item => {
-                const text = item.textContent.toLowerCase();
-                item.style.display = text.includes(searchTerm) ? '' : 'none';
+                if (item.classList.contains(filter)) {
+                    item.style.display = '';
+                } else {
+                    item.style.display = 'none';
+                }
             });
         },
 
@@ -1223,11 +1338,25 @@ ${solutionStart}4${solutionEnd}`;
 
         // Use dataset from preview modal
         useDatasetFromPreview() {
+            if (!this.currentPreviewDataset) {
+                CoreModule.showAlert('No dataset currently being previewed', 'warning');
+                return;
+            }
+
+            // Select the dataset using the stored preview context
+            this.selectDataset(
+                this.currentPreviewDataset.path,
+                this.currentPreviewDataset.name
+            );
+
+            // Close the modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('datasetPreviewModal'));
             if (modal) {
                 modal.hide();
             }
-            CoreModule.showAlert('Dataset selected', 'success');
+
+            // Clear the preview context
+            this.currentPreviewDataset = null;
         },
 
         // Load available datasets
@@ -1255,13 +1384,6 @@ ${solutionStart}4${solutionEnd}`;
                     <span>${CoreModule.escapeHtml(dataset.name)}</span>
                 </div>
             `).join('');
-        },
-
-        // Select a dataset
-        selectDataset(datasetName) {
-            console.log('Dataset selected:', datasetName);
-            AppState.setConfigValue('selectedDataset', datasetName);
-            CoreModule.showAlert(`Dataset "${datasetName}" selected`, 'success');
         }
     };
 

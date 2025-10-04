@@ -1,6 +1,6 @@
 {
   "name": "RL/GRPO",
-  "description": "Optimal configuration for reinforcement learning tasks. Based on 'LoRA without Regret' paper findings.",
+  "description": "Optimal configuration for reinforcement learning tasks.",
   "source": "https://thinkingmachines.ai/blog/lora/",
   "lora_r": 1,
   "lora_alpha": 32,

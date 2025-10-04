@@ -1013,6 +1013,16 @@ class DatasetHandler:
             field_coverage=field_coverage
         )
 
+    def get_dataset_size(self) -> int:
+        """Get the total number of samples in the dataset.
+
+        Returns:
+            Number of samples, or 0 if dataset not loaded
+        """
+        if not self.dataset:
+            return 0
+        return len(self.dataset)
+
     def get_preview(self, num_samples: int = 5) -> List[Dict[str, Any]]:
         """Get preview of dataset samples.
 

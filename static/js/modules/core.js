@@ -200,20 +200,42 @@
         // Show confirmation modal
         showConfirmModal(title, message, onConfirm, confirmBtnClass = 'btn-danger') {
             const modalId = 'confirmModal-' + Date.now();
+            const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+
+            // Synthwave dark mode styles
+            const darkStyles = {
+                modalContent: 'border: 2px solid rgba(168, 85, 247, 0.5); box-shadow: 0 10px 40px rgba(0,0,0,0.6), 0 0 30px rgba(168, 85, 247, 0.4); background: #1e293b;',
+                modalHeader: 'background: linear-gradient(135deg, #7e22ce, #9333ea); color: #f1f5f9; border-bottom: 1px solid rgba(168, 85, 247, 0.3);',
+                modalBody: 'padding: 2rem; background: #1e293b; border: 1px solid rgba(168, 85, 247, 0.2); border-left: none; border-right: none; font-size: 1.1rem;',
+                messageColor: '#cbd5e1',
+                modalFooter: 'padding: 1.5rem; background: #1e293b; border-top: 1px solid rgba(168, 85, 247, 0.3); gap: 1rem;'
+            };
+
+            // Light mode styles (original)
+            const lightStyles = {
+                modalContent: 'border: 2px solid #dc3545; box-shadow: 0 10px 40px rgba(0,0,0,0.3);',
+                modalHeader: 'background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border-bottom: none;',
+                modalBody: 'padding: 2rem; background-color: #fff3cd; font-size: 1.1rem;',
+                messageColor: '#856404',
+                modalFooter: 'padding: 1.5rem; border-top: none; gap: 1rem;'
+            };
+
+            const styles = isDarkMode ? darkStyles : lightStyles;
+
             const modalHtml = `
                 <div class="modal fade" id="${modalId}" tabindex="-1">
                     <div class="modal-dialog modal-dialog-centered">
-                        <div class="modal-content" style="border: 2px solid #dc3545; box-shadow: 0 10px 40px rgba(0,0,0,0.3);">
-                            <div class="modal-header" style="background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border-bottom: none;">
+                        <div class="modal-content" style="${styles.modalContent}">
+                            <div class="modal-header" style="${styles.modalHeader}">
                                 <h5 class="modal-title" style="font-size: 1.5rem; font-weight: 600;">
                                     <i class="fas fa-exclamation-triangle me-2"></i>${this.escapeHtml(title)}
                                 </h5>
-                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                <button type="button" class="btn-close ${isDarkMode ? 'btn-close-white' : ''}" data-bs-dismiss="modal"></button>
                             </div>
-                            <div class="modal-body" style="padding: 2rem; background-color: #fff3cd; font-size: 1.1rem;">
-                                <p class="mb-0" style="color: #856404;">${this.escapeHtml(message)}</p>
+                            <div class="modal-body" style="${styles.modalBody}">
+                                <p class="mb-0" style="color: ${styles.messageColor};">${this.escapeHtml(message)}</p>
                             </div>
-                            <div class="modal-footer" style="padding: 1.5rem; border-top: none; gap: 1rem;">
+                            <div class="modal-footer" style="${styles.modalFooter}">
                                 <button type="button" class="btn btn-secondary btn-lg" data-bs-dismiss="modal" style="min-width: 100px;">Cancel</button>
                                 <button type="button" class="btn ${confirmBtnClass} btn-lg" id="${modalId}-confirm" style="min-width: 100px;">Confirm</button>
                             </div>

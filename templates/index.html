@@ -249,30 +249,6 @@
                                         </button>
                                     </div>
                                 </div>
-
-                                <div class="row">
-                                    <div class="col-md-4">
-                                        <div class="form-group">
-                                            <label class="form-label">Rank (r) <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Paper recommends: 1-32 for RL/GRPO, 256 for large-scale SFT"></i></label>
-                                            <input type="range" class="form-range" id="lora-rank-slider" min="1" max="256" value="1" onchange="updateValue('lora-rank', this.value); updateConfigSummary();">
-                                            <input type="number" class="form-control" id="lora-rank" value="1" min="1" max="256">
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="form-group">
-                                            <label class="form-label">Alpha <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Scaling factor. Paper uses 32 regardless of rank (rank-independent)"></i></label>
-                                            <input type="range" class="form-range" id="lora-alpha-slider" min="8" max="256" value="32" onchange="updateValue('lora-alpha', this.value); updateConfigSummary();">
-                                            <input type="number" class="form-control" id="lora-alpha" value="32" min="8" max="256">
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="form-group">
-                                            <label class="form-label">Dropout <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Paper uses 0.0 for best performance"></i></label>
-                                            <input type="range" class="form-range" id="lora-dropout-slider" min="0" max="0.5" step="0.05" value="0" onchange="updateValue('lora-dropout', this.value); updateConfigSummary();">
-                                            <input type="number" class="form-control" id="lora-dropout" value="0" min="0" max="0.5" step="0.05">
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
 
                             <!-- Advanced Configuration (Hidden by default) -->
@@ -291,52 +267,6 @@
                                     </div>
                                 </div>
 
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <div class="form-group">
-                                            <label class="form-label">Attention Modules</label>
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" id="target-q-proj" checked>
-                                                <label class="form-check-label" for="target-q-proj">q_proj</label>
-                                            </div>
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" id="target-v-proj" checked>
-                                                <label class="form-check-label" for="target-v-proj">v_proj</label>
-                                            </div>
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" id="target-k-proj" checked>
-                                                <label class="form-check-label" for="target-k-proj">k_proj</label>
-                                            </div>
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" id="target-o-proj" checked>
-                                                <label class="form-check-label" for="target-o-proj">o_proj</label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="form-group">
-                                            <label class="form-label">MLP Modules
-                                                <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Paper shows 15-25% improvement with MLP modules included"></i>
-                                            </label>
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" id="target-gate-proj" checked>
-                                                <label class="form-check-label" for="target-gate-proj">gate_proj</label>
-                                            </div>
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" id="target-up-proj" checked>
-                                                <label class="form-check-label" for="target-up-proj">up_proj</label>
-                                            </div>
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" id="target-down-proj" checked>
-                                                <label class="form-check-label" for="target-down-proj">down_proj</label>
-                                            </div>
-                                            <button type="button" class="btn btn-sm btn-outline-success mt-2" onclick="ModelsModule.selectAllLinearModules()">
-                                                <i class="fas fa-check-double"></i> All-Linear (Recommended)
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-
                                 <div class="row mt-2">
                                     <div class="col-md-12">
                                         <div class="form-group">
@@ -346,14 +276,6 @@
                                                 <option value="f16">Half Precision (F16)</option>
                                                 <option value="q8_0" selected>8-bit Quantization (Q8_0)</option>
                                                 <option value="auto">Auto (Let converter decide)</option>
-                                            </select>
-                                        </div>
-                                        <div class="form-group mt-3">
-                                            <label class="form-label">LoRA Bias</label>
-                                            <select class="form-select" id="lora-bias">
-                                                <option value="none" selected>None</option>
-                                                <option value="all">All</option>
-                                                <option value="lora_only">LoRA Only</option>
                                             </select>
                                         </div>
                                     </div>
@@ -1131,6 +1053,85 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                 </div>
                             </div>
 
+                            <!-- LoRA Configuration -->
+                            <div class="config-section mt-4 collapsible">
+                                <h5 class="section-title" onclick="toggleSection('lora-settings')">
+                                    <i class="fas fa-layer-group"></i> LoRA Configuration
+                                    <i class="fas fa-chevron-down float-end"></i>
+                                </h5>
+                                <div id="lora-settings" class="section-content">
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <div class="form-group">
+                                                <label class="form-label">Rank (r) <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Recommended 1-32 for RL/GRPO, 256 for large-scale SFT"></i></label>
+                                                <input type="range" class="form-range" id="lora-rank-slider" min="1" max="256" value="1" onchange="updateValue('lora-rank', this.value);">
+                                                <input type="number" class="form-control" id="lora-rank" value="1" min="1" max="256">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-group">
+                                                <label class="form-label">Alpha <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Scaling factor. Uses 32 regardless of rank (rank-independent)"></i></label>
+                                                <input type="range" class="form-range" id="lora-alpha-slider" min="8" max="256" value="32" onchange="updateValue('lora-alpha', this.value);">
+                                                <input type="number" class="form-control" id="lora-alpha" value="32" min="8" max="256">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-group">
+                                                <label class="form-label">Dropout <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="0.0 for best performance"></i></label>
+                                                <input type="range" class="form-range" id="lora-dropout-slider" min="0" max="0.5" step="0.05" value="0" onchange="updateValue('lora-dropout', this.value);">
+                                                <input type="number" class="form-control" id="lora-dropout" value="0" min="0" max="0.5" step="0.05">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="row mt-3">
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label class="form-label">Attention Modules</label>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="target-q-proj" checked>
+                                                    <label class="form-check-label" for="target-q-proj">q_proj</label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="target-v-proj" checked>
+                                                    <label class="form-check-label" for="target-v-proj">v_proj</label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="target-k-proj" checked>
+                                                    <label class="form-check-label" for="target-k-proj">k_proj</label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="target-o-proj" checked>
+                                                    <label class="form-check-label" for="target-o-proj">o_proj</label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label class="form-label">MLP Modules
+                                                    <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Possible 15-25% improvement with MLP modules included"></i>
+                                                </label>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="target-gate-proj" checked>
+                                                    <label class="form-check-label" for="target-gate-proj">gate_proj</label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="target-up-proj" checked>
+                                                    <label class="form-check-label" for="target-up-proj">up_proj</label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="target-down-proj" checked>
+                                                    <label class="form-check-label" for="target-down-proj">down_proj</label>
+                                                </div>
+                                                <button type="button" class="btn btn-sm btn-outline-success mt-2" onclick="TrainingModule.selectAllLinearModules()">
+                                                    <i class="fas fa-check-double"></i> All-Linear (Recommended)
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- GRPO Settings -->
                             <div class="config-section mt-4 collapsible">
                                 <h5 class="section-title" onclick="toggleSection('grpo-settings')">
@@ -1499,11 +1500,21 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                 <div class="row mb-4">
                                     <div class="col-md-6">
                                         <div class="chart-container">
+                                            <div class="chart-header">
+                                                <button class="btn btn-sm btn-outline-secondary chart-reset-btn" onclick="resetChartZoom('reward')" data-bs-toggle="tooltip" title="Reset zoom (Ctrl+drag to pan, scroll to zoom)">
+                                                    <i class="fas fa-search-minus"></i> Reset
+                                                </button>
+                                            </div>
                                             <canvas id="reward-chart"></canvas>
                                         </div>
                                     </div>
                                     <div class="col-md-6">
                                         <div class="chart-container">
+                                            <div class="chart-header">
+                                                <button class="btn btn-sm btn-outline-secondary chart-reset-btn" onclick="resetChartZoom('loss')" data-bs-toggle="tooltip" title="Reset zoom (Ctrl+drag to pan, scroll to zoom)">
+                                                    <i class="fas fa-search-minus"></i> Reset
+                                                </button>
+                                            </div>
                                             <canvas id="loss-chart"></canvas>
                                         </div>
                                     </div>
@@ -1513,11 +1524,21 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                 <div class="row mb-4">
                                     <div class="col-md-6">
                                         <div class="chart-container">
+                                            <div class="chart-header">
+                                                <button class="btn btn-sm btn-outline-secondary chart-reset-btn" onclick="resetChartZoom('klEntropy')" data-bs-toggle="tooltip" title="Reset zoom (Ctrl+drag to pan, scroll to zoom)">
+                                                    <i class="fas fa-search-minus"></i> Reset
+                                                </button>
+                                            </div>
                                             <canvas id="kl-entropy-chart"></canvas>
                                         </div>
                                     </div>
                                     <div class="col-md-6">
                                         <div class="chart-container">
+                                            <div class="chart-header">
+                                                <button class="btn btn-sm btn-outline-secondary chart-reset-btn" onclick="resetChartZoom('completionStats')" data-bs-toggle="tooltip" title="Reset zoom (Ctrl+drag to pan, scroll to zoom)">
+                                                    <i class="fas fa-search-minus"></i> Reset
+                                                </button>
+                                            </div>
                                             <canvas id="completion-stats-chart"></canvas>
                                         </div>
                                     </div>
@@ -1527,11 +1548,21 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                 <div class="row mb-4">
                                     <div class="col-md-6">
                                         <div class="chart-container">
+                                            <div class="chart-header">
+                                                <button class="btn btn-sm btn-outline-secondary chart-reset-btn" onclick="resetChartZoom('clipRatio')" data-bs-toggle="tooltip" title="Reset zoom (Ctrl+drag to pan, scroll to zoom)">
+                                                    <i class="fas fa-search-minus"></i> Reset
+                                                </button>
+                                            </div>
                                             <canvas id="clip-ratio-chart"></canvas>
                                         </div>
                                     </div>
                                     <div class="col-md-6">
                                         <div class="chart-container">
+                                            <div class="chart-header">
+                                                <button class="btn btn-sm btn-outline-secondary chart-reset-btn" onclick="resetChartZoom('lr')" data-bs-toggle="tooltip" title="Reset zoom (Ctrl+drag to pan, scroll to zoom)">
+                                                    <i class="fas fa-search-minus"></i> Reset
+                                                </button>
+                                            </div>
                                             <canvas id="lr-chart"></canvas>
                                         </div>
                                     </div>
@@ -2719,6 +2750,7 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 
     <!-- Modular JavaScript Architecture -->
     <!-- Core modules loaded first -->

@@ -521,11 +521,12 @@ def run_training(session_id: str, config: Dict[str, Any]):
         q.put(('log', f"Initializing training for session {session_id}"))
 
         # Unpack nested config structure from frontend
-        # Frontend sends: {model: {...}, dataset: {...}, training: {...}, template: {...}}
+        # Frontend sends: {model: {...}, dataset: {...}, training: {...}, lora: {...}, template: {...}}
         # Backend expects flat structure for GRPOTrainingConfig
         model_config = config.get('model', {})
         dataset_config = config.get('dataset', {})
         training_config = config.get('training', {})
+        lora_config = config.get('lora', {})
         grpo_config_data = config.get('grpo', {})
         template_config = config.get('template', {})
         pre_training_config = config.get('pre_training', {})
@@ -550,11 +551,11 @@ def run_training(session_id: str, config: Dict[str, Any]):
             # Model configuration
             model_name=model_name,
 
-            # LoRA configuration (from nested model config or top-level for backward compatibility)
-            lora_r=model_config.get('loraRank') or config.get('lora_rank', 16),
-            lora_alpha=model_config.get('loraAlpha') or config.get('lora_alpha', 32),
-            lora_dropout=model_config.get('loraDropout') or config.get('lora_dropout', 0.0),
-            lora_target_modules=model_config.get('targetModules') or config.get('lora_target_modules', None),
+            # LoRA configuration (from lora config or old model config for backward compatibility)
+            lora_r=lora_config.get('rank') or model_config.get('loraRank') or config.get('lora_rank', 16),
+            lora_alpha=lora_config.get('alpha') or model_config.get('loraAlpha') or config.get('lora_alpha', 32),
+            lora_dropout=lora_config.get('dropout') or model_config.get('loraDropout') or config.get('lora_dropout', 0.0),
+            lora_target_modules=lora_config.get('target_modules') or model_config.get('targetModules') or config.get('lora_target_modules', None),
             lora_bias=config.get('lora_bias', 'none'),
 
             # Training configuration (from nested training config or top-level for backward compatibility)
@@ -673,13 +674,42 @@ def run_training(session_id: str, config: Dict[str, Any]):
 
         # Determine source type based on dataset_path (from nested dataset config or top-level)
         dataset_path = dataset_config.get('path') or config.get('dataset_path', 'tatsu-lab/alpaca')
-        source_type = config.get('dataset_source', 'huggingface')
 
-        # Check if this is an uploaded file
-        if dataset_path and (dataset_path.startswith(app.config['UPLOAD_FOLDER']) or
-                            '\\uploads\\' in dataset_path or '/uploads/' in dataset_path):
-            source_type = 'local'
-            q.put(('log', f"Using uploaded dataset file: {os.path.basename(dataset_path)}"))
+        # Normalize dataset path - preserve forward slashes for HuggingFace datasets
+        # This is critical on Windows where paths may have backslashes
+        if dataset_path and '/' in dataset_path:
+            # Check if this looks like a HuggingFace dataset (not a local path)
+            if not any(dataset_path.startswith(prefix) for prefix in ('.', 'C:', '/', 'uploads')) and '\\uploads\\' not in dataset_path:
+                # Replace backslashes with forward slashes for HuggingFace dataset names
+                original_path = dataset_path
+                dataset_path = dataset_path.replace('\\', '/')
+                if original_path != dataset_path:
+                    logger.info(f"Normalized HuggingFace dataset path: {original_path} -> {dataset_path}")
+                    q.put(('log', f"Normalized dataset path to: {dataset_path}"))
+
+        # Get source type from either the nested dataset config or top-level
+        # Nested format (from saved configs): config.dataset.source
+        # Flat format (from live frontend): config.dataset_source
+        source_type = (dataset_config.get('source') or
+                      config.get('dataset_source', 'huggingface'))
+
+        # Safety check: Override source_type based on dataset_path characteristics
+        if dataset_path:
+            # Check if this is an uploaded file
+            if (dataset_path.startswith(app.config['UPLOAD_FOLDER']) or
+                '\\uploads\\' in dataset_path or '/uploads/' in dataset_path):
+                source_type = 'local'
+                q.put(('log', f"Using uploaded dataset file: {os.path.basename(dataset_path)}"))
+            # Check if this looks like a HuggingFace dataset (contains '/' but no file extension)
+            elif '/' in dataset_path and not any(dataset_path.endswith(ext) for ext in ['.json', '.jsonl', '.csv', '.parquet', '.txt']):
+                # This looks like a HuggingFace dataset (e.g., 'tatsu-lab/alpaca')
+                if source_type != 'huggingface':
+                    logger.info(f"Overriding source_type from '{source_type}' to 'huggingface' based on path pattern: {dataset_path}")
+                    q.put(('log', f"Detected HuggingFace dataset pattern, using source: huggingface"))
+                source_type = 'huggingface'
+
+        logger.info(f"Dataset source type: {source_type}, path: {dataset_path}")
+        q.put(('log', f"Dataset source: {source_type}, path: {dataset_path}"))
 
         # Get sample size from nested dataset config or top-level
         dataset_sample_size = dataset_config.get('sample_size') or config.get('max_samples')
@@ -1237,6 +1267,17 @@ def start_training():
     """Start a new training session."""
     try:
         config = request.json
+
+        # Normalize dataset path - preserve forward slashes for HuggingFace datasets
+        dataset_path = config.get('dataset_path', '')
+        if dataset_path:
+            # Check if this is a HuggingFace dataset (not a local file path)
+            # HuggingFace datasets don't start with . / C: or contain uploads
+            if not any(dataset_path.startswith(prefix) for prefix in ('.', '/', 'C:', 'uploads')) and '\\uploads\\' not in dataset_path:
+                # This looks like a HuggingFace dataset (e.g., 'tatsu-lab/alpaca')
+                # Ensure forward slashes are preserved (Windows may convert them)
+                config['dataset_path'] = dataset_path.replace('\\', '/')
+                logger.info(f"Normalized HuggingFace dataset path: {config['dataset_path']}")
 
         # Validate configuration
         valid, errors = validate_training_config(config)
@@ -1857,8 +1898,25 @@ def get_dataset_info():
         if not dataset_path:
             return jsonify({'error': 'Dataset path required'}), 400
 
+        # Determine source type from path
+        if 'uploads' in dataset_path or dataset_path.endswith(('.json', '.jsonl', '.csv', '.parquet', '.txt')):
+            source_type = 'local'
+        else:
+            # Assume HuggingFace dataset (contains '/' like 'tatsu-lab/alpaca')
+            source_type = 'huggingface'
+
         # Use DatasetHandler to get info
-        handler = DatasetHandler(DatasetConfig(dataset_path=dataset_path))
+        handler = DatasetHandler(DatasetConfig(
+            source_type=source_type,
+            source_path=dataset_path
+        ))
+
+        # Load dataset to get statistics
+        try:
+            handler.load()
+        except Exception as e:
+            logger.error(f"Failed to load dataset for info: {e}")
+            return jsonify({'error': f'Failed to load dataset: {str(e)}'}), 500
 
         # Get dataset statistics
         info = {
@@ -1898,20 +1956,25 @@ def preview_dataset():
         if not dataset_path:
             return jsonify({'error': 'Dataset path required'}), 400
 
-        # Use DatasetHandler to get samples
+        # Determine source type from path
+        if 'uploads' in dataset_path or dataset_path.endswith(('.json', '.jsonl', '.csv', '.parquet', '.txt')):
+            source_type = 'local'
+        else:
+            # Assume HuggingFace dataset (contains '/' like 'tatsu-lab/alpaca')
+            source_type = 'huggingface'
+
+        # Use DatasetHandler to get preview samples
         handler = DatasetHandler(DatasetConfig(
-            dataset_path=dataset_path,
+            source_type=source_type,
+            source_path=dataset_path,
             max_samples=num_samples
         ))
 
-        # Get sample data
-        samples = []
-        dataset = handler.prepare_dataset(split="train")
+        # Load the dataset first
+        handler.load()
 
-        for i, item in enumerate(dataset):
-            if i >= num_samples:
-                break
-            samples.append(item)
+        # Then get preview samples
+        samples = handler.get_preview(num_samples=num_samples)
 
         return jsonify({'samples': samples})
     except Exception as e:
@@ -2306,6 +2369,8 @@ def list_trained_models():
         sessions = session_registry.list_completed_sessions()
 
         trained_models = []
+        sessions_to_cleanup = []
+
         for session in sessions:
             # Handle infinity values in best_reward
             best_reward = session.best_reward
@@ -2340,9 +2405,19 @@ def list_trained_models():
 
                     trained_models.append(model_info)
                 else:
-                    # Checkpoint deleted, remove from registry
-                    logger.warning(f"Checkpoint missing for session {session.session_id}, cleaning up")
-                    # Note: cleanup could be done in a background task
+                    # Mark for cleanup - checkpoint deleted
+                    sessions_to_cleanup.append(session.session_id)
+                    logger.debug(f"Checkpoint missing for session {session.session_id}, marked for cleanup")
+
+        # Batch cleanup invalid sessions
+        if sessions_to_cleanup:
+            logger.warning(f"Found {len(sessions_to_cleanup)} sessions with missing checkpoints, cleaning up")
+            with session_registry._lock:
+                for session_id in sessions_to_cleanup:
+                    if session_id in session_registry.sessions:
+                        del session_registry.sessions[session_id]
+            session_registry.save()
+            logger.info(f"Cleaned up {len(sessions_to_cleanup)} invalid sessions from registry")
 
         return jsonify({
             'models': trained_models,

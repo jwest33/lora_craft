@@ -207,3 +207,6 @@ typing_extensions==4.15.0
 typing-inspection==0.4.1
 tzdata==2025.2
 zipp==3.23.0
+
+
+ python -c "import torch; print('PyTorch:', torch.__version__); print('CUDA:', torch.version.cuda); print('cuDNN:',torch.backends.cudnn.version()); print('Flash Attention 2:', hasattr(torch.nn.functional,'scaled_dot_product_attention')); import transformers; print('Transformers:', transformers.__version__)"

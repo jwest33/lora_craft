@@ -56,6 +56,11 @@
                 return;
             }
 
+            // Check if zoom plugin is available
+            const zoomPluginAvailable = typeof Chart !== 'undefined' &&
+                                       Chart.registry &&
+                                       Chart.registry.plugins.get('zoom');
+
             // Common chart options
             const commonOptions = {
                 responsive: true,
@@ -63,6 +68,14 @@
                 interaction: {
                     mode: 'index',
                     intersect: false,
+                },
+                // Add layout padding to prevent label cutoff
+                layout: {
+                    padding: {
+                        bottom: 10,
+                        left: 5,
+                        right: 5
+                    }
                 },
                 plugins: {
                     legend: {
@@ -78,6 +91,45 @@
                         titleFont: { size: 14, weight: 'bold' },
                         bodyFont: { size: 12 },
                         displayColors: true
+                    },
+                    // Data decimation for performance with large datasets
+                    decimation: {
+                        enabled: true,
+                        algorithm: 'lttb',  // Largest-Triangle-Three-Buckets
+                        samples: 500,  // Target number of samples to display
+                        threshold: 1000  // Only decimate if more than this many points
+                    },
+                    // Zoom plugin configuration (only if plugin is loaded)
+                    zoom: zoomPluginAvailable ? {
+                        pan: {
+                            enabled: true,
+                            mode: 'x',
+                            modifierKey: 'ctrl'
+                        },
+                        zoom: {
+                            wheel: {
+                                enabled: true,
+                                speed: 0.1
+                            },
+                            pinch: {
+                                enabled: true
+                            },
+                            mode: 'x'
+                        },
+                        limits: {
+                            x: { min: 'original', max: 'original' }
+                        }
+                    } : undefined
+                },
+                // Element styling for better visibility
+                elements: {
+                    point: {
+                        radius: 0,  // Hide points by default for cleaner look
+                        hitRadius: 8,  // Larger hit area for tooltips
+                        hoverRadius: 4  // Show small point on hover
+                    },
+                    line: {
+                        borderWidth: 2  // Thinner lines for less overlap
                     }
                 }
             };
@@ -94,7 +146,7 @@
                             data: [],
                             borderColor: 'rgb(251, 146, 60)',
                             backgroundColor: 'rgba(251, 146, 60, 0.1)',
-                            borderWidth: 3,
+                            borderWidth: 2.5,
                             tension: 0.3,
                             fill: false
                         }, {
@@ -102,7 +154,7 @@
                             data: [],
                             borderColor: 'rgb(251, 191, 36)',
                             backgroundColor: 'rgba(251, 191, 36, 0.05)',
-                            borderWidth: 1,
+                            borderWidth: 1.5,
                             borderDash: [5, 5],
                             tension: 0.3,
                             fill: false
@@ -140,7 +192,7 @@
                             data: [],
                             borderColor: 'rgb(147, 51, 234)',
                             backgroundColor: 'rgba(147, 51, 234, 0.1)',
-                            borderWidth: 3,
+                            borderWidth: 2.5,
                             tension: 0.3
                         }, {
                             label: 'Validation Loss',
@@ -223,14 +275,14 @@
                             data: [],
                             borderColor: 'rgb(59, 130, 246)',
                             backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                            borderWidth: 3,
+                            borderWidth: 2.5,
                             tension: 0.3
                         }, {
                             label: 'Min Length',
                             data: [],
                             borderColor: 'rgb(168, 85, 247)',
                             backgroundColor: 'rgba(168, 85, 247, 0.05)',
-                            borderWidth: 1,
+                            borderWidth: 1.5,
                             borderDash: [3, 3],
                             tension: 0.3
                         }, {
@@ -238,7 +290,7 @@
                             data: [],
                             borderColor: 'rgb(236, 72, 153)',
                             backgroundColor: 'rgba(236, 72, 153, 0.05)',
-                            borderWidth: 1,
+                            borderWidth: 1.5,
                             borderDash: [3, 3],
                             tension: 0.3
                         }]
@@ -276,7 +328,7 @@
                             data: [],
                             borderColor: 'rgb(99, 102, 241)',
                             backgroundColor: 'rgba(99, 102, 241, 0.1)',
-                            borderWidth: 3,
+                            borderWidth: 2.5,
                             tension: 0.3
                         }, {
                             label: 'Low Mean',
@@ -328,7 +380,7 @@
                             data: [],
                             borderColor: 'rgb(34, 197, 94)',
                             backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                            borderWidth: 3,
+                            borderWidth: 2.5,
                             tension: 0.3,
                             fill: true
                         }]
@@ -496,7 +548,7 @@
             // Show confirmation modal
             CoreModule.showConfirmModal(
                 'Start Training',
-                `Are you ready to start training with the current configuration?\n\nEstimated time: ${this.estimateTrainingTime(config)}`,
+                `Are you ready to start training with the current configuration?\n\nNote: Training may take some time depending on your dataset size and hardware.`,
                 () => this.executeTraining(config),
                 'btn-primary'
             );
@@ -509,6 +561,14 @@
                 model: (window.ModelsModule && ModelsModule.exportModelConfig)
                     ? ModelsModule.exportModelConfig()
                     : {},
+
+                // LoRA config (from Step 3)
+                lora: {
+                    rank: parseInt(document.getElementById('lora-rank')?.value) || 1,
+                    alpha: parseInt(document.getElementById('lora-alpha')?.value) || 32,
+                    dropout: parseFloat(document.getElementById('lora-dropout')?.value) || 0.0,
+                    target_modules: this.getSelectedTargetModules()
+                },
 
                 // Dataset config
                 dataset: {
@@ -743,8 +803,11 @@
                 }
             };
 
-            // Primary metrics
-            updateMetric('metric-step', data.step || 0);
+            // Primary metrics - show step as "current / total"
+            const stepDisplay = data.total_steps
+                ? `${data.step || 0} / ${data.total_steps}`
+                : (data.step || 0);
+            updateMetric('metric-step', stepDisplay);
             // Display "Pre-training" for negative epochs, otherwise show 1-based epoch number
             const epochValue = data.epoch !== undefined && data.epoch < 0
                 ? 'Pre-training'
@@ -783,6 +846,18 @@
             updateMetric('metric-clip-region', clipRegion, v => (v * 100).toFixed(1) + '%');
         },
 
+        // Adaptive downsampling: returns true if we should keep this data point
+        shouldKeepDataPoint(currentCount) {
+            // Keep all points up to 100
+            if (currentCount < 100) return true;
+            // Keep every 2nd point from 100-500
+            if (currentCount < 500) return currentCount % 2 === 0;
+            // Keep every 5th point from 500-1000
+            if (currentCount < 1000) return currentCount % 5 === 0;
+            // Keep every 10th point beyond 1000
+            return currentCount % 10 === 0;
+        },
+
         // Update charts with new data
         updateCharts(metrics) {
             const step = metrics.step;
@@ -791,36 +866,51 @@
             // Update reward chart (mean + std) with fallbacks
             const rewardValue = metrics.mean_reward ?? metrics.reward ?? metrics['rewards/reward_wrapper/mean'];
             if (AppState.charts.reward && rewardValue !== undefined) {
-                AppState.charts.reward.data.labels.push(step);
-                AppState.charts.reward.data.datasets[0].data.push(rewardValue);
+                const currentCount = AppState.charts.reward.data.labels.length;
+                const shouldKeep = this.shouldKeepDataPoint(currentCount);
 
-                // Add reward std with fallback
-                const rewardStdValue = metrics.reward_std ?? metrics['rewards/reward_wrapper/std'];
-                if (rewardStdValue !== undefined && AppState.charts.reward.data.datasets[1]) {
-                    AppState.charts.reward.data.datasets[1].data.push(rewardStdValue);
+                if (shouldKeep || currentCount < 10) {  // Always keep first 10 points
+                    AppState.charts.reward.data.labels.push(step);
+                    AppState.charts.reward.data.datasets[0].data.push(rewardValue);
+
+                    // Add reward std with fallback
+                    const rewardStdValue = metrics.reward_std ?? metrics['rewards/reward_wrapper/std'];
+                    if (rewardStdValue !== undefined && AppState.charts.reward.data.datasets[1]) {
+                        AppState.charts.reward.data.datasets[1].data.push(rewardStdValue);
+                    }
+
+                    AppState.charts.reward.update('none');
                 }
-
-                AppState.charts.reward.update('none');
             }
 
             // Update loss chart
             if (AppState.charts.loss && metrics.loss !== undefined) {
-                AppState.charts.loss.data.labels.push(step);
-                AppState.charts.loss.data.datasets[0].data.push(metrics.loss);
+                const currentCount = AppState.charts.loss.data.labels.length;
+                const shouldKeep = this.shouldKeepDataPoint(currentCount);
 
-                if (metrics.val_loss !== undefined) {
-                    AppState.charts.loss.data.datasets[1].data.push(metrics.val_loss);
+                if (shouldKeep || currentCount < 10) {
+                    AppState.charts.loss.data.labels.push(step);
+                    AppState.charts.loss.data.datasets[0].data.push(metrics.loss);
+
+                    if (metrics.val_loss !== undefined) {
+                        AppState.charts.loss.data.datasets[1].data.push(metrics.val_loss);
+                    }
+
+                    AppState.charts.loss.update('none');
                 }
-
-                AppState.charts.loss.update('none');
             }
 
             // Update KL Divergence chart
             if (AppState.charts.klEntropy && metrics.kl !== undefined) {
-                AppState.charts.klEntropy.data.labels.push(step);
-                AppState.charts.klEntropy.data.datasets[0].data.push(metrics.kl);
-                AppState.charts.klEntropy.update('none');
-                console.log(`KL chart updated: step=${step}, kl=${metrics.kl}`);
+                const currentCount = AppState.charts.klEntropy.data.labels.length;
+                const shouldKeep = this.shouldKeepDataPoint(currentCount);
+
+                if (shouldKeep || currentCount < 10) {
+                    AppState.charts.klEntropy.data.labels.push(step);
+                    AppState.charts.klEntropy.data.datasets[0].data.push(metrics.kl);
+                    AppState.charts.klEntropy.update('none');
+                    console.log(`KL chart updated: step=${step}, kl=${metrics.kl}`);
+                }
             }
 
             // Update completion statistics chart
@@ -830,15 +920,20 @@
                 const maxLen = metrics['completions/max_length'];
 
                 if (meanLen !== undefined || minLen !== undefined || maxLen !== undefined) {
-                    AppState.charts.completionStats.data.labels.push(step);
+                    const currentCount = AppState.charts.completionStats.data.labels.length;
+                    const shouldKeep = this.shouldKeepDataPoint(currentCount);
 
-                    // Always push to all datasets to keep them synchronized (use null for missing)
-                    AppState.charts.completionStats.data.datasets[0].data.push(meanLen ?? null);
-                    AppState.charts.completionStats.data.datasets[1].data.push(minLen ?? null);
-                    AppState.charts.completionStats.data.datasets[2].data.push(maxLen ?? null);
+                    if (shouldKeep || currentCount < 10) {
+                        AppState.charts.completionStats.data.labels.push(step);
 
-                    AppState.charts.completionStats.update('none');
-                    console.log(`Completion stats chart updated: step=${step}, mean=${meanLen}, min=${minLen}, max=${maxLen}`);
+                        // Always push to all datasets to keep them synchronized (use null for missing)
+                        AppState.charts.completionStats.data.datasets[0].data.push(meanLen ?? null);
+                        AppState.charts.completionStats.data.datasets[1].data.push(minLen ?? null);
+                        AppState.charts.completionStats.data.datasets[2].data.push(maxLen ?? null);
+
+                        AppState.charts.completionStats.update('none');
+                        console.log(`Completion stats chart updated: step=${step}, mean=${meanLen}, min=${minLen}, max=${maxLen}`);
+                    }
                 }
             }
 
@@ -855,23 +950,33 @@
                 const effectiveRegionMean = regionMean ?? clippedRatio;
 
                 if (effectiveRegionMean !== undefined || lowMean !== undefined || highMean !== undefined) {
-                    AppState.charts.clipRatio.data.labels.push(step);
+                    const currentCount = AppState.charts.clipRatio.data.labels.length;
+                    const shouldKeep = this.shouldKeepDataPoint(currentCount);
 
-                    // Push data to all datasets to keep them synchronized
-                    AppState.charts.clipRatio.data.datasets[0].data.push(effectiveRegionMean ?? null);
-                    AppState.charts.clipRatio.data.datasets[1].data.push(lowMean ?? null);
-                    AppState.charts.clipRatio.data.datasets[2].data.push(highMean ?? null);
+                    if (shouldKeep || currentCount < 10) {
+                        AppState.charts.clipRatio.data.labels.push(step);
 
-                    AppState.charts.clipRatio.update('none');
-                    console.log(`Clip ratio chart updated: step=${step}, region=${effectiveRegionMean}, low=${lowMean}, high=${highMean}`);
+                        // Push data to all datasets to keep them synchronized
+                        AppState.charts.clipRatio.data.datasets[0].data.push(effectiveRegionMean ?? null);
+                        AppState.charts.clipRatio.data.datasets[1].data.push(lowMean ?? null);
+                        AppState.charts.clipRatio.data.datasets[2].data.push(highMean ?? null);
+
+                        AppState.charts.clipRatio.update('none');
+                        console.log(`Clip ratio chart updated: step=${step}, region=${effectiveRegionMean}, low=${lowMean}, high=${highMean}`);
+                    }
                 }
             }
 
             // Update learning rate chart
             if (AppState.charts.lr && metrics.learning_rate !== undefined) {
-                AppState.charts.lr.data.labels.push(step);
-                AppState.charts.lr.data.datasets[0].data.push(metrics.learning_rate);
-                AppState.charts.lr.update('none');
+                const currentCount = AppState.charts.lr.data.labels.length;
+                const shouldKeep = this.shouldKeepDataPoint(currentCount);
+
+                if (shouldKeep || currentCount < 10) {
+                    AppState.charts.lr.data.labels.push(step);
+                    AppState.charts.lr.data.datasets[0].data.push(metrics.learning_rate);
+                    AppState.charts.lr.update('none');
+                }
             }
         },
 
@@ -886,83 +991,6 @@
                     chart.update();
                 }
             });
-        },
-
-        // Estimate training time
-        estimateTrainingTime(config) {
-            // GRPO-specific calculation
-            const samples = config.dataset.sample_size || 1000;
-            const epochs = config.training.num_epochs || 1;
-            const batchSize = config.training.batch_size || 4;
-            const numGenerations = config.grpo.num_generations || 2;
-
-            // GRPO step calculation: each step processes batch_size/num_generations prompts
-            // because we generate num_generations completions per prompt
-            const effectivePromptsPerStep = Math.max(1, Math.floor(batchSize / numGenerations));
-            const stepsPerEpoch = Math.ceil(samples / effectivePromptsPerStep);
-            const grpoSteps = stepsPerEpoch * epochs;
-
-            // Add pre-training steps if enabled
-            let preTrainingSteps = 0;
-            if (config.pre_training && config.pre_training.enabled) {
-                const preTrainingSamples = config.pre_training.max_samples || Math.min(samples, 100);
-                const preTrainingEpochs = config.pre_training.epochs || 2;
-                preTrainingSteps = Math.ceil(preTrainingSamples / batchSize) * preTrainingEpochs;
-            }
-
-            const totalSteps = preTrainingSteps + grpoSteps;
-
-            // Realistic time per step for GRPO:
-            // - Generation: 5-15s (depends on model size, sequence length, num_generations)
-            // - Reward computation: 1-2s
-            // - Optimization: 1-2s
-            // Base estimate: 10-20 seconds per step
-
-            // Adjust based on model size (rough heuristic)
-            let timePerStepMin = 10;  // seconds
-            let timePerStepMax = 20;  // seconds
-
-            // For pre-training steps, use faster estimate (no reward computation, simpler)
-            const preTrainingTime = preTrainingSteps * 3; // ~3s per step for SFT
-
-            // GRPO training time
-            const minGrpoTime = grpoSteps * timePerStepMin;
-            const maxGrpoTime = grpoSteps * timePerStepMax;
-
-            const minSeconds = preTrainingTime + minGrpoTime;
-            const maxSeconds = preTrainingTime + maxGrpoTime;
-
-            // Return as range for honesty about uncertainty
-            if (minSeconds === maxSeconds) {
-                return this.formatTime(minSeconds * 1000);
-            } else {
-                return `${this.formatTime(minSeconds * 1000)} - ${this.formatTime(maxSeconds * 1000)}`;
-            }
-        },
-
-        // Format time in milliseconds to human-readable string
-        formatTime(milliseconds) {
-            const totalSeconds = Math.floor(milliseconds / 1000);
-
-            if (totalSeconds < 60) {
-                return `${totalSeconds}s`;
-            }
-
-            const hours = Math.floor(totalSeconds / 3600);
-            const minutes = Math.floor((totalSeconds % 3600) / 60);
-            const seconds = totalSeconds % 60;
-
-            if (hours > 0) {
-                if (minutes > 0) {
-                    return `${hours}h ${minutes}m`;
-                }
-                return `${hours}h`;
-            }
-
-            if (seconds > 0) {
-                return `${minutes}m ${seconds}s`;
-            }
-            return `${minutes}m`;
         },
 
         // Handle LR schedule change
@@ -1063,6 +1091,56 @@
             if (previewElement) {
                 previewElement.textContent = systemPrompt || 'No system prompt configured';
             }
+        },
+
+        // Reset chart zoom
+        resetChartZoom(chartName) {
+            const chart = AppState.charts[chartName];
+            if (chart) {
+                if (typeof chart.resetZoom === 'function') {
+                    chart.resetZoom();
+                    console.log(`Reset zoom for chart: ${chartName}`);
+                } else {
+                    console.warn(`Chart ${chartName} does not have resetZoom method. Zoom plugin may not be loaded.`);
+                }
+            } else {
+                console.warn(`Chart ${chartName} not found in AppState.charts`);
+            }
+        },
+
+        // Get selected target modules for LoRA
+        getSelectedTargetModules() {
+            const modules = [];
+            const moduleIds = [
+                'target-q-proj', 'target-k-proj', 'target-v-proj', 'target-o-proj',
+                'target-gate-proj', 'target-up-proj', 'target-down-proj'
+            ];
+
+            moduleIds.forEach(id => {
+                const checkbox = document.getElementById(id);
+                if (checkbox && checkbox.checked) {
+                    // Extract module name from id (e.g., 'target-q-proj' -> 'q_proj')
+                    const moduleName = id.replace('target-', '').replace(/-/g, '_');
+                    modules.push(moduleName);
+                }
+            });
+
+            return modules.length > 0 ? modules : null;
+        },
+
+        // Select all linear modules (attention + MLP)
+        selectAllLinearModules() {
+            const moduleIds = [
+                'target-q-proj', 'target-k-proj', 'target-v-proj', 'target-o-proj',
+                'target-gate-proj', 'target-up-proj', 'target-down-proj'
+            ];
+
+            moduleIds.forEach(id => {
+                const checkbox = document.getElementById(id);
+                if (checkbox) {
+                    checkbox.checked = true;
+                }
+            });
         }
     };
 
@@ -1072,5 +1150,6 @@
     // Export functions for onclick handlers
     window.startTraining = () => TrainingModule.startTraining();
     window.stopTraining = () => TrainingModule.stopTraining();
+    window.resetChartZoom = (chartName) => TrainingModule.resetChartZoom(chartName);
 
 })(window);

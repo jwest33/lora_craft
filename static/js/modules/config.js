@@ -1393,7 +1393,7 @@
                         }
                     }
 
-                    // Reset LoRA settings (paper-aligned defaults)
+                    // Reset LoRA settings
                     if (document.getElementById('lora-rank')) document.getElementById('lora-rank').value = '1';
                     if (document.getElementById('lora-rank-slider')) document.getElementById('lora-rank-slider').value = '1';
                     if (document.getElementById('lora-alpha')) document.getElementById('lora-alpha').value = '32';
@@ -1407,7 +1407,7 @@
                     if (document.getElementById('sample-size')) document.getElementById('sample-size').value = '';
                     if (document.getElementById('train-split')) document.getElementById('train-split').value = '80';
 
-                    // Reset training settings (paper-aligned defaults)
+                    // Reset training settings
                     if (document.getElementById('num-epochs')) document.getElementById('num-epochs').value = '3';
                     if (document.getElementById('batch-size')) document.getElementById('batch-size').value = '4';
                     if (document.getElementById('gradient-accumulation')) document.getElementById('gradient-accumulation').value = '1';
@@ -1419,7 +1419,7 @@
                     if (document.getElementById('max-new-tokens')) document.getElementById('max-new-tokens').value = '4096';
                     if (document.getElementById('max-samples')) document.getElementById('max-samples').value = '';
 
-                    // Reset GRPO settings (paper-aligned defaults)
+                    // Reset GRPO settings
                     if (document.getElementById('temperature')) document.getElementById('temperature').value = '0.7';
                     if (document.getElementById('top-p')) document.getElementById('top-p').value = '0.95';
                     if (document.getElementById('top-k')) document.getElementById('top-k').value = '50';
@@ -1441,7 +1441,7 @@
                     if (document.getElementById('mixed-precision')) document.getElementById('mixed-precision').checked = true;
                     if (document.getElementById('use-bf16')) document.getElementById('use-bf16').checked = false;
 
-                    // Reset advanced settings (paper-aligned defaults)
+                    // Reset advanced settings
                     if (document.getElementById('lr-scheduler-type')) document.getElementById('lr-scheduler-type').value = 'cosine';
                     if (document.getElementById('optimizer')) document.getElementById('optimizer').value = 'paged_adamw_32bit';
                     if (document.getElementById('logging-steps')) document.getElementById('logging-steps').value = '10';
