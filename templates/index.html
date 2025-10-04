@@ -2043,22 +2043,14 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                         <div class="card">
                                             <div class="card-body">
                                                 <h6 class="card-title mb-3">
-                                                    <i class="fas fa-code"></i> Full Prompt (Including System Prompt)
+                                                    <i class="fas fa-code"></i> Full Prompt Preview
                                                 </h6>
                                                 <div class="alert alert-info mb-2">
-                                                    <small><i class="fas fa-info-circle"></i> This shows exactly what the LLM will receive</small>
+                                                    <small><i class="fas fa-info-circle"></i> This shows exactly what the LLM will receive (system prompt + your query, formatted using the training chat template). Updates automatically as you type.</small>
                                                 </div>
                                                 <div class="mb-3">
-                                                    <label class="form-label fw-bold">System Prompt:</label>
-                                                    <pre class="bg-light p-3 rounded" id="system-prompt-preview" style="white-space: pre-wrap; word-wrap: break-word;">Loading...</pre>
+                                                    <pre class="bg-light p-3 rounded" id="formatted-prompt-preview" style="white-space: pre-wrap; word-wrap: break-word; max-height: 400px; overflow-y: auto;">Select a model and enter a test prompt to see the formatted preview</pre>
                                                 </div>
-                                                <div class="mb-3">
-                                                    <label class="form-label fw-bold">Formatted Full Prompt:</label>
-                                                    <pre class="bg-light p-3 rounded" id="formatted-prompt-preview" style="white-space: pre-wrap; word-wrap: break-word;">Click "Update Preview" to see the formatted prompt</pre>
-                                                </div>
-                                                <button class="btn btn-sm btn-primary" onclick="updatePromptPreview()">
-                                                    <i class="fas fa-sync"></i> Update Preview
-                                                </button>
                                             </div>
                                         </div>
                                     </div>

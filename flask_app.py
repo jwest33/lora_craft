@@ -1002,7 +1002,18 @@ def run_training(session_id: str, config: Dict[str, Any]):
         # Flatten key config values for easier access
         config_copy = config.copy()
         config_copy['model_name'] = model_name
-        config_copy['system_prompt'] = template_config.get('system_prompt', config.get('system_prompt'))
+
+        # Ensure system prompt is properly saved - check multiple sources
+        system_prompt = (
+            template_config.get('system_prompt') or
+            config.get('system_prompt') or
+            config.get('template', {}).get('system_prompt')
+        )
+        config_copy['system_prompt'] = system_prompt
+
+        # Also preserve the full template config for complete chat template information
+        if template_config:
+            config_copy['template'] = template_config
 
         session_info = SessionInfo(
             session_id=session_id,
@@ -3835,13 +3846,41 @@ def get_prompt_preview():
         # Get training config
         training_config = session_info.training_config
 
-        # Get system prompt with fallback for nested structure (old sessions)
-        default_prompt = 'You are given a problem.\nThink about the problem and provide your working out.\nPlace it between <start_working_out> and <end_working_out>.\nThen, provide your solution between <SOLUTION></SOLUTION>'
-        system_prompt = (
-            training_config.get('system_prompt') or
-            training_config.get('template', {}).get('system_prompt') or
-            default_prompt
-        )
+        # Debug logging
+        logger.info(f"Loading prompt preview for session {session_id}")
+        logger.debug(f"Training config exists: {training_config is not None}")
+        if training_config:
+            logger.debug(f"Training config has {len(training_config)} keys")
+            logger.debug(f"Has system_prompt key: {'system_prompt' in training_config}")
+            logger.debug(f"Has template key: {'template' in training_config}")
+
+        # Get system prompt with comprehensive fallback for different config structures
+        # Try multiple locations to ensure we find the system prompt
+        system_prompt = None
+
+        if training_config:
+            # First try: root level system_prompt
+            system_prompt = training_config.get('system_prompt')
+            if system_prompt:
+                logger.debug(f"Found system prompt at root level ({len(system_prompt)} chars)")
+
+            # Second try: nested template structure
+            if not system_prompt:
+                system_prompt = training_config.get('template', {}).get('system_prompt')
+                if system_prompt:
+                    logger.debug(f"Found system prompt in template config ({len(system_prompt)} chars)")
+
+            # Log if we couldn't find a system prompt
+            if not system_prompt:
+                logger.warning(f"No system prompt found in training config for session {session_id}")
+                logger.debug(f"Training config keys: {list(training_config.keys())}")
+                if 'template' in training_config:
+                    logger.debug(f"Template config keys: {list(training_config['template'].keys())}")
+
+        # Fallback to a generic default only if no system prompt was found
+        if not system_prompt:
+            system_prompt = 'You are a helpful AI assistant.'
+            logger.warning(f"Using default system prompt for session {session_id}")
 
         # Get the formatted prompt preview
         formatted_prompt = prompt  # Default to just the prompt
@@ -3871,17 +3910,23 @@ def get_prompt_preview():
                         messages.append({"role": "system", "content": system_prompt})
                     messages.append({"role": "user", "content": prompt})
 
-                    # Get template markers from config
-                    reasoning_start = training_config.get('reasoning_start', '<start_working_out>')
+                    # Get template markers from config (check nested structure too)
+                    # Note: For preview, we may or may not want reasoning_start depending on the template
+                    reasoning_start = (
+                        training_config.get('reasoning_start') or
+                        training_config.get('template', {}).get('reasoning_start') or
+                        ''  # Default to empty for preview
+                    )
                     eos_token = '</s>'  # Common default
 
                     # Render template
+                    # For preview, we show the input format but not necessarily generation prompts
                     formatted_prompt = template.render(
                         messages=messages,
-                        add_generation_prompt=True,
+                        add_generation_prompt=True,  # This adds the assistant prompt start
                         eos_token=eos_token,
                         system_prompt=system_prompt,
-                        reasoning_start=reasoning_start
+                        reasoning_start=''  # Don't include reasoning_start in preview
                     )
                 except Exception as e:
                     logger.warning(f"Failed to apply chat template from config: {e}")
@@ -3892,13 +3937,13 @@ def get_prompt_preview():
                         formatted_prompt = f"User: {prompt}\n\nAssistant:"
             else:
                 # Use template type to format
-                reasoning_start = training_config.get('reasoning_start', '<start_working_out>')
+                # Note: We don't include reasoning_start in preview - it's only for actual inference
                 if chat_template_type == 'grpo':
-                    # GRPO format
+                    # GRPO format - show just system prompt + user input
                     if system_prompt:
-                        formatted_prompt = f"{system_prompt}</s>{prompt}{reasoning_start}"
+                        formatted_prompt = f"{system_prompt}</s>{prompt}"
                     else:
-                        formatted_prompt = f"{prompt}{reasoning_start}"
+                        formatted_prompt = f"{prompt}"
                 elif chat_template_type == 'qwen':
                     # Qwen format
                     if system_prompt:
@@ -4472,11 +4517,11 @@ def run_batch_comparison_background(batch_id, params):
             raise Exception(f'Response column "{response_column}" not found')
 
         # Get checkpoint path from registry
-        session_info = session_registry.get_session(session_id)
-        if not session_info:
+        trained_session_info = session_registry.get_session(session_id)
+        if not trained_session_info:
             raise Exception(f'Session {session_id} not found')
 
-        checkpoint_path = session_info.checkpoint_path
+        checkpoint_path = trained_session_info.checkpoint_path
         if not checkpoint_path or not Path(checkpoint_path).exists():
             raise Exception(f'Checkpoint not found for session {session_id}')
 
@@ -4485,17 +4530,18 @@ def run_batch_comparison_background(batch_id, params):
         if not success:
             raise Exception(f'Failed to load trained model: {error}')
 
-        # Load comparison model
+        # Load comparison model and store session info if it's a trained model
+        comparison_session_info = None
         if compare_mode == 'base':
             success, error = model_tester.load_base_model(base_model)
             if not success:
                 raise Exception(f'Failed to load base model: {error}')
         else:
-            comp_session_info = session_registry.get_session(comparison_session_id)
-            if not comp_session_info:
+            comparison_session_info = session_registry.get_session(comparison_session_id)
+            if not comparison_session_info:
                 raise Exception(f'Comparison session {comparison_session_id} not found')
 
-            comp_checkpoint = comp_session_info.checkpoint_path
+            comp_checkpoint = comparison_session_info.checkpoint_path
             if not comp_checkpoint or not Path(comp_checkpoint).exists():
                 raise Exception(f'Checkpoint not found for comparison session {comparison_session_id}')
 
@@ -4548,17 +4594,19 @@ def run_batch_comparison_background(batch_id, params):
                 'instruction': instruction[:100] if instruction else ''
             })
 
-            # Generate from trained model
+            # Generate from trained model (with session info for correct system prompt)
             trained_response = model_tester.generate_response(
                 prompt=instruction,
                 model_type="trained",
                 model_key=session_id,
                 config=config,
-                use_chat_template=use_chat_template
+                use_chat_template=use_chat_template,
+                session_info=trained_session_info
             )
 
             # Generate from comparison model
             if compare_mode == 'base':
+                # Base model uses default system prompt
                 comparison_response = model_tester.generate_response(
                     prompt=instruction,
                     model_type="base",
@@ -4567,12 +4615,14 @@ def run_batch_comparison_background(batch_id, params):
                     use_chat_template=use_chat_template
                 )
             else:
+                # Comparison trained model uses its own session info for correct system prompt
                 comparison_response = model_tester.generate_response(
                     prompt=instruction,
                     model_type="trained",
                     model_key=comparison_session_id,
                     config=config,
-                    use_chat_template=use_chat_template
+                    use_chat_template=use_chat_template,
+                    session_info=comparison_session_info
                 )
 
             result_item = {

@@ -21,6 +21,19 @@
             this.loadTestHistory();
         },
 
+        // Debounce utility - delays function execution until after wait time has elapsed
+        debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        },
+
         // Setup testing-related event listeners
         setupEventListeners() {
             // Test type change
@@ -63,10 +76,18 @@
                 topPSlider.addEventListener('input', () => this.updateTopPDisplay());
             }
 
-            // Test prompt input
+            // Test prompt input - update counter and preview
             const promptInput = document.getElementById('test-prompt');
             if (promptInput) {
-                promptInput.addEventListener('input', () => this.updatePromptCounter());
+                // Create debounced preview update function
+                const debouncedPreviewUpdate = this.debounce(() => {
+                    this.updateTestPromptPreview();
+                }, 500); // 500ms delay after user stops typing
+
+                promptInput.addEventListener('input', () => {
+                    this.updatePromptCounter();
+                    debouncedPreviewUpdate(); // Auto-update preview
+                });
             }
 
             // Batch comparison mode radio buttons
@@ -2134,29 +2155,29 @@
         updateTestPromptPreview() {
             const modelSelect = document.getElementById('test-model-select');
             const promptInput = document.getElementById('test-prompt');
-            const systemPromptPreview = document.getElementById('system-prompt-preview');
             const formattedPromptPreview = document.getElementById('formatted-prompt-preview');
             const useChatTemplate = document.getElementById('use-chat-template')?.checked ?? true;
 
             if (!modelSelect?.value) {
-                if (systemPromptPreview) {
-                    systemPromptPreview.textContent = 'No model selected';
-                }
                 if (formattedPromptPreview) {
                     formattedPromptPreview.textContent = 'Please select a model first';
                 }
                 return;
             }
 
+            if (!promptInput?.value) {
+                if (formattedPromptPreview) {
+                    formattedPromptPreview.textContent = 'Please enter a test prompt first';
+                }
+                return;
+            }
+
             const sessionId = modelSelect.value;
-            const prompt = promptInput?.value || 'Your test prompt here...';
+            const prompt = promptInput.value;
 
             // Show loading state
-            if (systemPromptPreview) {
-                systemPromptPreview.textContent = 'Loading...';
-            }
             if (formattedPromptPreview) {
-                formattedPromptPreview.textContent = 'Loading...';
+                formattedPromptPreview.textContent = 'Loading formatted prompt...';
             }
 
             // Fetch the prompt preview from backend
@@ -2175,21 +2196,18 @@
                     throw new Error(data.error);
                 }
 
-                // Update system prompt preview
-                if (systemPromptPreview) {
-                    systemPromptPreview.textContent = data.system_prompt || 'No system prompt configured';
-                }
-
-                // Update formatted prompt preview
+                // Update formatted prompt preview with the complete formatted prompt
                 if (formattedPromptPreview) {
-                    formattedPromptPreview.textContent = data.formatted_prompt || prompt;
+                    if (data.formatted_prompt) {
+                        formattedPromptPreview.textContent = data.formatted_prompt;
+                    } else {
+                        formattedPromptPreview.textContent = 'Error: No formatted prompt received from server';
+                        console.error('Response data:', data);
+                    }
                 }
             })
             .catch(error => {
                 console.error('Failed to load prompt preview:', error);
-                if (systemPromptPreview) {
-                    systemPromptPreview.textContent = `Error: ${error.message}`;
-                }
                 if (formattedPromptPreview) {
                     formattedPromptPreview.textContent = `Error loading preview: ${error.message}`;
                 }
