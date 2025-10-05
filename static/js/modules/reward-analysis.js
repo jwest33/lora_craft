@@ -8,10 +8,34 @@
     const RewardAnalysisModule = {
         samples: [],
         maxSamples: 20,  // Keep last 20 samples
+        refreshInterval: null,
+        isTraining: false,
 
         init() {
             console.log('Reward Analysis Module initialized');
             this.samples = [];
+        },
+
+        startAutoRefresh() {
+            // Refresh display every 5 seconds during training
+            if (!this.refreshInterval) {
+                this.isTraining = true;
+                this.refreshInterval = setInterval(() => {
+                    if (this.samples.length > 0) {
+                        this.renderSamples();
+                    }
+                }, 5000);
+                console.log('Reward Analysis auto-refresh started');
+            }
+        },
+
+        stopAutoRefresh() {
+            if (this.refreshInterval) {
+                clearInterval(this.refreshInterval);
+                this.refreshInterval = null;
+                this.isTraining = false;
+                console.log('Reward Analysis auto-refresh stopped');
+            }
         },
 
         addSample(data) {
@@ -23,7 +47,13 @@
                 this.samples = this.samples.slice(0, this.maxSamples);
             }
 
+            // Render immediately when sample arrives
             this.renderSamples();
+
+            // Start auto-refresh if not already running (training has started)
+            if (!this.isTraining) {
+                this.startAutoRefresh();
+            }
         },
 
         renderSamples() {
@@ -125,6 +155,7 @@
 
         clear() {
             this.samples = [];
+            this.stopAutoRefresh();
             this.renderSamples();
         }
     };

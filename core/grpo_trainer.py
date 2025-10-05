@@ -123,10 +123,17 @@ class GRPOTrainingConfig:
     seed: int = 42
 
     # Pre-training configuration
-    pre_training_epochs: int = 2  # Default: 2 epochs (matches official GRPO notebook)
+    pre_training_epochs: int = 3  # Default: 3 epochs for better format learning
     pre_training_max_samples: Optional[int] = 500  # We default to 500 for format learning
     pre_training_filter_by_length: bool = False  # Filter pre-training samples by length
     pre_training_max_length_ratio: float = 0.5  # Max length as ratio of max_sequence_length
+    pre_training_learning_rate: float = 5e-5  # Higher LR for supervised pre-training vs RL (configurable)
+
+    # Adaptive pre-training configuration
+    adaptive_pre_training: bool = True  # Enable adaptive pre-training with validation
+    pre_training_min_success_rate: float = 0.8  # Minimum format compliance rate (80%)
+    pre_training_max_additional_epochs: int = 3  # Maximum additional epochs if validation fails
+    pre_training_validation_samples: int = 20  # Number of samples to validate format learning (increased from 5 for reliability)
 
     # GRPO/GSPO specific
     loss_type: str = "grpo"  # Always use "grpo" for TRL compatibility
@@ -445,6 +452,26 @@ class GRPOModelTrainer:
             template.setup_for_unsloth(self.tokenizer)
             logger.info(f"Applied chat template: {template.config.model_type}")
 
+            # Log full system prompt and chat template for verification
+            logger.info("=" * 80)
+            logger.info("PRE-FINE-TUNING - SYSTEM PROMPT AND CHAT TEMPLATE")
+            logger.info("=" * 80)
+
+            # Log system prompt
+            system_prompt = template.config.system_prompt or ''
+            logger.info(f"System Prompt ({len(system_prompt)} chars):")
+            logger.info("-" * 80)
+            logger.info(system_prompt)
+            logger.info("-" * 80)
+
+            # Log full chat template
+            chat_template = self.tokenizer.chat_template if hasattr(self.tokenizer, 'chat_template') else 'Not available'
+            logger.info(f"Chat Template ({len(chat_template) if isinstance(chat_template, str) else 0} chars):")
+            logger.info("-" * 80)
+            logger.info(chat_template)
+            logger.info("-" * 80)
+            logger.info("=" * 80)
+
         # Set padding side to 'right' for training (required by DataCollatorForLanguageModeling)
         self.tokenizer.padding_side = 'right'
 
@@ -480,9 +507,9 @@ class GRPOModelTrainer:
 
                     # If no markers at all, add the configured template markers
                     # CRITICAL: Preserve the actual response content instead of using placeholder text
+                    # IMPORTANT: Don't add reasoning_start since the prompt already ends with it (from add_generation_prompt)
                     if not has_reasoning_markers and not has_solution_markers:
                         # Use the template's configured markers (not hardcoded defaults)
-                        reasoning_start = template.config.reasoning_start_marker
                         reasoning_end = template.config.reasoning_end_marker
                         solution_start = template.config.solution_start_marker
                         solution_end = template.config.solution_end_marker
@@ -498,8 +525,8 @@ class GRPOModelTrainer:
                         if len(response_stripped.split()) <= 3 and len(response_stripped) < 50:
                             # Short response: likely a label/classification
                             # Put it in the solution section, add placeholder reasoning
-                            response = (f"{reasoning_start}\n"
-                                      f"Based on the provided technical indicators and analysis.\n"
+                            # NOTE: No reasoning_start because prompt already has it
+                            response = (f"Based on the provided technical indicators and analysis.\n"
                                       f"{reasoning_end}\n"
                                       f"{solution_start}\n"
                                       f"{response_stripped}\n"
@@ -507,8 +534,8 @@ class GRPOModelTrainer:
                         else:
                             # Longer response: use the full response content in both sections
                             # This teaches the model to generate properly formatted outputs
-                            response = (f"{reasoning_start}\n"
-                                      f"{response_stripped}\n"
+                            # NOTE: No reasoning_start because prompt already has it
+                            response = (f"{response_stripped}\n"
                                       f"{reasoning_end}\n"
                                       f"{solution_start}\n"
                                       f"{response_stripped}\n"
@@ -517,17 +544,34 @@ class GRPOModelTrainer:
                 # Combine prompt and response for training
                 formatted = prompt + response
 
-                # Add EOS token if needed
-                if hasattr(template, 'config') and template.config.model_type == 'grpo':
-                    if not formatted.endswith('</s>'):
-                        formatted += '</s>'
+                # Add EOS token if needed (critical for preventing infinite generation)
+                # Add for all templates, not just model_type=='grpo'
+                if self.tokenizer and self.tokenizer.eos_token:
+                    eos = self.tokenizer.eos_token
+                    if not formatted.endswith(eos):
+                        formatted += eos
+                elif not formatted.endswith('</s>'):
+                    # Fallback to </s> if tokenizer doesn't have eos_token
+                    formatted += '</s>'
             else:
                 # Fallback for non-standard format
                 formatted = template.apply(example, mode='training')
 
             # Log sample format for debugging (only first example)
             if not hasattr(apply_template, 'logged'):
-                logger.info(f"Pre-training format sample (first 1000 chars): {formatted[:1000]}")
+                logger.info("=" * 80)
+                logger.info("PRE-TRAINING FORMAT SAMPLE (First Training Example)")
+                logger.info("=" * 80)
+                # Show where prompt ends and response begins
+                if prompt in formatted:
+                    prompt_end_idx = len(prompt)
+                    logger.info(f"PROMPT (last 200 chars): ...{formatted[max(0, prompt_end_idx-200):prompt_end_idx]}")
+                    logger.info(f"RESPONSE: {formatted[prompt_end_idx:min(len(formatted), prompt_end_idx+500)]}")
+                    if len(formatted) > prompt_end_idx + 500:
+                        logger.info(f"... ({len(formatted) - prompt_end_idx - 500} more chars)")
+                else:
+                    logger.info(f"Full formatted sample (first 1000 chars): {formatted[:1000]}")
+                logger.info("=" * 80)
                 apply_template.logged = True
 
             return {'text': formatted}
@@ -620,7 +664,7 @@ class GRPOModelTrainer:
             warmup_steps=self.config.warmup_steps,
             logging_steps=self.config.logging_steps,
             save_steps=self.config.save_steps,
-            learning_rate=5e-5,  # Higher LR for supervised pre-training (not RL like main GRPO training)
+            learning_rate=self.config.pre_training_learning_rate,  # Higher LR for supervised pre-training (not RL like main GRPO training)
             weight_decay=self.config.weight_decay,
             fp16=use_fp16,
             bf16=use_bf16,
@@ -652,6 +696,13 @@ class GRPOModelTrainer:
         pre_trained_path = Path(self.config.checkpoint_dir) / "pre_trained"
         trainer.save_model(pre_trained_path)
 
+        # CRITICAL: Update self.model with the trained model from trainer
+        # The trainer may wrap the model, so we get the underlying model
+        # This ensures validation and subsequent GRPO training use the trained weights
+        if hasattr(trainer, 'model'):
+            self.model = trainer.model
+            logger.info("Updated self.model with trained weights from trainer")
+
         # Restore original tokenizer configuration for generation
         if original_padding_side is not None:
             self.tokenizer.padding_side = original_padding_side
@@ -672,6 +723,302 @@ class GRPOModelTrainer:
         logger.info(f"Pre-fine-tuning completed. Model saved to {pre_trained_path}")
 
         return train_result.metrics
+
+    def validate_format_learning(
+        self,
+        dataset: Dataset,
+        template: PromptTemplate,
+        num_samples: Optional[int] = None
+    ) -> Tuple[float, Dict[str, Any]]:
+        """Validate that the model has learned the expected format.
+
+        Args:
+            dataset: Dataset to sample from for validation
+            template: Prompt template with expected markers
+            num_samples: Number of samples to test (defaults to config)
+
+        Returns:
+            Tuple of (success_rate, detailed_results)
+                success_rate: Float 0.0-1.0 indicating % of samples with correct format
+                detailed_results: Dict with breakdown of validation results
+        """
+        if num_samples is None:
+            num_samples = self.config.pre_training_validation_samples
+
+        logger.info("=" * 80)
+        logger.info(f"VALIDATING FORMAT LEARNING ({num_samples} samples)")
+        logger.info("=" * 80)
+
+        # Ensure model is in eval mode
+        self.model.eval()
+
+        # Sample random examples from dataset with fixed seed for reproducibility
+        import random
+        random.seed(self.config.seed)
+        sample_indices = random.sample(range(len(dataset)), min(num_samples, len(dataset)))
+
+        results = {
+            'total_samples': num_samples,
+            'passed': 0,
+            'failed': 0,
+            'missing_reasoning': 0,
+            'missing_solution': 0,
+            'wrong_order': 0,
+            'samples': []
+        }
+
+        for idx in sample_indices:
+            test_sample = dataset[idx]
+
+            # Get instruction
+            instruction = test_sample.get('instruction', test_sample.get('input', ''))
+            if not instruction:
+                logger.warning(f"Sample {idx} has no instruction, skipping")
+                continue
+
+            # Combine instruction and input if needed
+            combined_instruction = self._combine_instruction_and_input(
+                test_sample.get('instruction', ''),
+                test_sample.get('input', '')
+            )
+
+            try:
+                # Format prompt using template
+                messages = [{'role': 'user', 'content': combined_instruction}]
+                formatted_prompt = template.apply(messages, mode='inference')
+
+                # Tokenize - use config max_sequence_length for consistency
+                inputs = self.tokenizer(
+                    formatted_prompt,
+                    return_tensors="pt",
+                    truncation=True,
+                    max_length=self.config.max_sequence_length
+                ).to(self.model.device)
+
+                # Generate response - use deterministic sampling for consistent validation
+                # Use full config max_new_tokens (don't cap - model needs room for both sections)
+                with torch.no_grad():
+                    outputs = self.model.generate(
+                        **inputs,
+                        max_new_tokens=self.config.max_new_tokens,
+                        do_sample=False,  # Deterministic for consistent validation
+                        temperature=None,  # Explicitly override model's generation_config
+                        top_p=None,  # Explicitly override model's generation_config
+                        top_k=None,  # Explicitly override model's generation_config
+                        pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id
+                    )
+
+                # Decode
+                generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+                # Extract response (everything after prompt)
+                if formatted_prompt in generated_text:
+                    response = generated_text[len(formatted_prompt):].strip()
+                else:
+                    # Fallback: look for reasoning marker
+                    if template.config.reasoning_start_marker in generated_text:
+                        response = generated_text[generated_text.index(template.config.reasoning_start_marker):].strip()
+                    else:
+                        response = generated_text
+                        logger.debug(f"Sample {idx}: Could not find prompt in generated text, using full output as response")
+
+                # Validate format
+                is_valid, validation_info = template.validate_grpo_format(response)
+
+                # Log detailed information for failed samples (use INFO for visibility)
+                if not is_valid:
+                    logger.info(f"Sample {idx} VALIDATION FAILURE DETAILS:")
+                    logger.info(f"  Generated text length: {len(generated_text)} chars")
+                    logger.info(f"  Response length: {len(response)} chars")
+                    logger.info(f"  Has reasoning: {validation_info['has_reasoning']}")
+                    logger.info(f"  Has solution: {validation_info['has_solution']}")
+                    logger.info(f"  Errors: {validation_info['errors']}")
+                    logger.info(f"  Looking for: reasoning_start='{template.config.reasoning_start_marker}', reasoning_end='{template.config.reasoning_end_marker}'")
+                    logger.info(f"               solution_start='{template.config.solution_start_marker}', solution_end='{template.config.solution_end_marker}'")
+                    logger.info(f"  Response preview (first 300 chars): {response[:300]}")
+                    if len(response) > 300:
+                        logger.info(f"  Response end (last 300 chars): ...{response[-300:]}")
+                    else:
+                        logger.info(f"  Full response: {response}")
+
+                sample_result = {
+                    'instruction': combined_instruction[:100] + '...' if len(combined_instruction) > 100 else combined_instruction,
+                    'response': response[:200] + '...' if len(response) > 200 else response,
+                    'valid': is_valid,
+                    'has_reasoning': validation_info['has_reasoning'],
+                    'has_solution': validation_info['has_solution'],
+                    'errors': validation_info['errors']
+                }
+
+                results['samples'].append(sample_result)
+
+                if is_valid:
+                    results['passed'] += 1
+                    logger.info(f"✓ Sample {idx}: PASS")
+                    # Log first successful sample for comparison
+                    if results['passed'] == 1:
+                        logger.debug(f"Sample {idx} SUCCESS (first pass):")
+                        logger.debug(f"  Response length: {len(response)} chars")
+                        logger.debug(f"  Response: {response}")
+
+                else:
+                    results['failed'] += 1
+                    logger.warning(f"✗ Sample {idx}: FAIL - {', '.join(validation_info['errors'])}")
+
+                    # For first failure, log even more detail to help diagnose
+                    if results['failed'] == 1:
+                        logger.info(f"FIRST FAILURE - Full generated text for debugging:")
+                        logger.info(f"  Formatted prompt (last 200 chars): ...{formatted_prompt[-200:]}")
+                        logger.info(f"  Generated text: {generated_text}")
+
+                    if not validation_info['has_reasoning']:
+                        results['missing_reasoning'] += 1
+                    if not validation_info['has_solution']:
+                        results['missing_solution'] += 1
+
+            except Exception as e:
+                logger.error(f"Validation error for sample {idx}: {e}")
+                results['failed'] += 1
+                results['samples'].append({
+                    'instruction': combined_instruction[:100],
+                    'response': f"ERROR: {str(e)}",
+                    'valid': False,
+                    'has_reasoning': False,
+                    'has_solution': False,
+                    'errors': [str(e)]
+                })
+
+        # Calculate success rate
+        total_tested = results['passed'] + results['failed']
+        success_rate = results['passed'] / total_tested if total_tested > 0 else 0.0
+
+        # Log summary
+        logger.info("=" * 80)
+        logger.info("VALIDATION SUMMARY")
+        logger.info("=" * 80)
+        logger.info(f"Samples tested: {total_tested}")
+        logger.info(f"Passed: {results['passed']} ({success_rate*100:.1f}%)")
+        logger.info(f"Failed: {results['failed']}")
+        logger.info(f"Missing reasoning markers: {results['missing_reasoning']}")
+        logger.info(f"Missing solution markers: {results['missing_solution']}")
+        logger.info(f"Success rate: {success_rate*100:.1f}%")
+        logger.info("=" * 80)
+
+        return success_rate, results
+
+    def adaptive_pre_fine_tune(
+        self,
+        dataset: Dataset,
+        template: PromptTemplate
+    ) -> Dict[str, Any]:
+        """Adaptive pre-fine-tuning with automatic format validation and correction.
+
+        This method runs pre-fine-tuning and validates format learning. If the model
+        hasn't learned the format well enough, it automatically adds more epochs
+        until the success rate threshold is met or max additional epochs is reached.
+
+        Args:
+            dataset: Training dataset
+            template: Prompt template
+
+        Returns:
+            Training metrics including validation results
+        """
+        if not self.config.adaptive_pre_training:
+            # Adaptive mode disabled, just run normal pre-training
+            logger.info("Adaptive pre-training disabled, running standard pre-training")
+            return self.pre_fine_tune(dataset, template)
+
+        logger.info("=" * 80)
+        logger.info("STARTING ADAPTIVE PRE-FINE-TUNING")
+        logger.info("=" * 80)
+        logger.info(f"Initial epochs: {self.config.pre_training_epochs}")
+        logger.info(f"Target success rate: {self.config.pre_training_min_success_rate*100:.0f}%")
+        logger.info(f"Max additional epochs: {self.config.pre_training_max_additional_epochs}")
+        logger.info(f"Validation samples: {self.config.pre_training_validation_samples}")
+        logger.info("=" * 80)
+
+        # Run initial pre-training
+        logger.info(f"\nPhase 1: Initial pre-training ({self.config.pre_training_epochs} epochs)")
+        initial_metrics = self.pre_fine_tune(dataset, template, epochs=self.config.pre_training_epochs)
+
+        # Validate format learning
+        logger.info("\nPhase 2: Validating format learning...")
+        success_rate, validation_results = self.validate_format_learning(dataset, template)
+
+        all_validation_results = [
+            {
+                'epoch': self.config.pre_training_epochs,
+                'success_rate': success_rate,
+                'results': validation_results
+            }
+        ]
+
+        additional_epochs = 0
+        total_epochs = self.config.pre_training_epochs
+
+        # Adaptive loop: add more epochs if needed
+        while (success_rate < self.config.pre_training_min_success_rate and
+               additional_epochs < self.config.pre_training_max_additional_epochs):
+
+            additional_epochs += 1
+            total_epochs += 1
+
+            logger.info("=" * 80)
+            logger.info(f"VALIDATION FAILED ({success_rate*100:.1f}% < {self.config.pre_training_min_success_rate*100:.0f}%)")
+            logger.info(f"Adding 1 more epoch (total: {total_epochs}, additional: {additional_epochs}/{self.config.pre_training_max_additional_epochs})")
+            logger.info("=" * 80)
+
+            # Log diagnostic information
+            if validation_results['missing_reasoning'] > 0:
+                logger.info(f"  Issue: {validation_results['missing_reasoning']} samples missing reasoning markers")
+            if validation_results['missing_solution'] > 0:
+                logger.info(f"  Issue: {validation_results['missing_solution']} samples missing solution markers")
+
+            # Run one more epoch of pre-training
+            logger.info(f"\nRunning additional epoch {additional_epochs}...")
+            self.pre_fine_tune(dataset, template, epochs=1)
+
+            # Re-validate
+            logger.info("\nRe-validating format learning...")
+            success_rate, validation_results = self.validate_format_learning(dataset, template)
+
+            all_validation_results.append({
+                'epoch': total_epochs,
+                'success_rate': success_rate,
+                'results': validation_results
+            })
+
+        # Final summary
+        logger.info("=" * 80)
+        logger.info("ADAPTIVE PRE-TRAINING COMPLETE")
+        logger.info("=" * 80)
+        logger.info(f"Total epochs: {total_epochs}")
+        logger.info(f"Additional epochs needed: {additional_epochs}")
+        logger.info(f"Final success rate: {success_rate*100:.1f}%")
+
+        if success_rate >= self.config.pre_training_min_success_rate:
+            logger.info("✅ SUCCESS: Model has learned the format!")
+        else:
+            logger.warning(f"⚠️  WARNING: Success rate {success_rate*100:.1f}% below target {self.config.pre_training_min_success_rate*100:.0f}%")
+            logger.warning("   Consider:")
+            logger.warning("   - Increasing pre_training_epochs")
+            logger.warning("   - Increasing pre_training_max_additional_epochs")
+            logger.warning("   - Using shorter/simpler examples")
+            logger.warning("   - Checking dataset quality")
+
+        logger.info("=" * 80)
+
+        # Compile comprehensive metrics
+        return {
+            'initial_metrics': initial_metrics,
+            'total_epochs': total_epochs,
+            'additional_epochs': additional_epochs,
+            'final_success_rate': success_rate,
+            'validation_history': all_validation_results,
+            'target_success_rate': self.config.pre_training_min_success_rate,
+            'success': success_rate >= self.config.pre_training_min_success_rate
+        }
 
     def _format_dataset_for_trl(self, dataset: Dataset, template: PromptTemplate) -> Dataset:
         """Format dataset for TRL's expected format.
@@ -879,6 +1226,26 @@ class GRPOModelTrainer:
             template.setup_for_unsloth(self.tokenizer)
             self.tokenizer._template_applied = True  # Mark as applied
             logger.info(f"Applied chat template for GRPO training: {template.config.model_type}")
+
+            # Log full system prompt and chat template for verification
+            logger.info("=" * 80)
+            logger.info("GRPO TRAINING - SYSTEM PROMPT AND CHAT TEMPLATE")
+            logger.info("=" * 80)
+
+            # Log system prompt
+            system_prompt = template.config.system_prompt or ''
+            logger.info(f"System Prompt ({len(system_prompt)} chars):")
+            logger.info("-" * 80)
+            logger.info(system_prompt)
+            logger.info("-" * 80)
+
+            # Log full chat template
+            chat_template = self.tokenizer.chat_template if hasattr(self.tokenizer, 'chat_template') else 'Not available'
+            logger.info(f"Chat Template ({len(chat_template) if isinstance(chat_template, str) else 0} chars):")
+            logger.info("-" * 80)
+            logger.info(chat_template)
+            logger.info("-" * 80)
+            logger.info("=" * 80)
 
         # Format dataset for TRL's GRPOTrainer
         formatted_dataset = self._format_dataset_for_trl(dataset, template)

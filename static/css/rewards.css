@@ -329,6 +329,32 @@
     }
 }
 
+/* Component Item - Fix spacing issues */
+.component-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.component-item .d-flex {
+    margin-bottom: 0.25rem;
+}
+
+.component-item .component-description {
+    margin-top: 0.25rem;
+    margin-bottom: 0.5rem;
+}
+
+.component-item .progress {
+    margin-bottom: 0.5rem;
+}
+
+.component-item .component-params {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border-color);
+}
+
 #reward-components-advanced .card {
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);

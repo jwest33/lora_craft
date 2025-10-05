@@ -356,6 +356,11 @@ function displayPresetComponents(details) {
                         displayValue = value.length > 0 ? value.join(', ') : 'None';
                     } else if (typeof value === 'boolean') {
                         displayValue = value ? 'Yes' : 'No';
+                    } else if (typeof value === 'number') {
+                        // Check for NaN
+                        displayValue = isNaN(value) ? 'Not set' : value;
+                    } else if (value === '') {
+                        displayValue = 'Not set';
                     }
                     paramHtml += `<div><strong>${key.replace(/_/g, ' ')}:</strong> ${displayValue}</div>`;
                 }
@@ -676,6 +681,11 @@ function displayCustomComponents(components) {
                         displayValue = value.length > 0 ? value.join(', ') : 'None';
                     } else if (typeof value === 'boolean') {
                         displayValue = value ? 'Yes' : 'No';
+                    } else if (typeof value === 'number') {
+                        // Check for NaN
+                        displayValue = isNaN(value) ? 'Not set' : value;
+                    } else if (value === '') {
+                        displayValue = 'Not set';
                     }
                     paramHtml += `<div><strong>${key.replace(/_/g, ' ')}:</strong> ${displayValue}</div>`;
                 }
@@ -2037,8 +2047,168 @@ function restoreOriginalGenerated() {
 // Export Functions Globally for App.js Integration
 // ============================================================================
 
+// Restore custom reward configuration from saved config
+function restoreCustomReward(rewardConfig) {
+    console.log('Restoring custom reward:', rewardConfig);
+
+    if (!rewardConfig || !rewardConfig.components || rewardConfig.components.length === 0) {
+        console.warn('No custom reward components to restore');
+        return;
+    }
+
+    // Switch to custom tab
+    const customTab = document.querySelector('[data-bs-target="#reward-custom-tab"]');
+    if (customTab) {
+        const tab = new bootstrap.Tab(customTab);
+        tab.show();
+    }
+
+    // Clear existing components
+    const componentsDiv = document.getElementById('reward-components-advanced');
+    if (!componentsDiv) {
+        console.error('reward-components-advanced container not found');
+        return;
+    }
+    componentsDiv.innerHTML = '';
+
+    // Rebuild each component
+    rewardConfig.components.forEach((comp, index) => {
+        const componentId = `adv-component-restored-${index}`;
+
+        // Create component card
+        const componentHtml = `
+            <div class="card mb-3" id="${componentId}">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label class="form-label">Component Type</label>
+                            <select class="form-select" onchange="updateAdvancedComponentType('${componentId}', this.value)">
+                                <option value="binary" ${comp.type === 'binary' ? 'selected' : ''}>Binary Match</option>
+                                <option value="numerical" ${comp.type === 'numerical' ? 'selected' : ''}>Numerical</option>
+                                <option value="length" ${comp.type === 'length' ? 'selected' : ''}>Length</option>
+                                <option value="format" ${comp.type === 'format' ? 'selected' : ''}>Format</option>
+                                <option value="template" ${comp.type === 'template' ? 'selected' : ''}>Template Validation</option>
+                                <option value="multi_choice" ${comp.type === 'multi_choice' ? 'selected' : ''}>Multi-Choice</option>
+                                <option value="section_content" ${comp.type === 'section_content' ? 'selected' : ''}>Section Content</option>
+                                <option value="sequential" ${comp.type === 'sequential' ? 'selected' : ''}>Sequential Pattern</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6" id="${componentId}-params">
+                            <!-- Parameters will be populated by updateAdvancedComponentType -->
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Weight</label>
+                            <input type="number" class="form-control" value="${comp.weight || 1.0}" step="0.1" min="0">
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label">&nbsp;</label>
+                            <button class="btn btn-danger btn-sm form-control" onclick="removeComponent('${componentId}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-12" id="${componentId}-help">
+                            <small class="text-muted">Component restored from configuration</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        componentsDiv.insertAdjacentHTML('beforeend', componentHtml);
+
+        // Trigger updateAdvancedComponentType to create proper parameter inputs
+        updateAdvancedComponentType(componentId, comp.type);
+
+        // Now populate the parameters with saved values
+        setTimeout(() => {
+            const paramsDiv = document.getElementById(`${componentId}-params`);
+            if (paramsDiv) {
+                const inputs = paramsDiv.querySelectorAll('input, textarea');
+                inputs.forEach(input => {
+                    const param = input.dataset.param;
+                    // Parameters are stored directly on the component object, not in a nested 'parameters' object
+                    if (param && comp[param] !== undefined) {
+                        if (input.type === 'checkbox') {
+                            input.checked = comp[param];
+                        } else {
+                            input.value = comp[param];
+                        }
+                    }
+                });
+            }
+        }, 50);
+    });
+
+    // Update the global config
+    window.selectedRewardConfig = rewardConfig;
+    selectedRewardName = 'Custom Configuration';
+    selectedRewardType = 'custom';
+
+    console.log('Custom reward restored successfully');
+}
+
+// Show custom reward as selected (summary view, not full builder)
+function showCustomRewardAsSelected(rewardConfig) {
+    console.log('Showing custom reward as selected:', rewardConfig);
+
+    if (!rewardConfig || !rewardConfig.components || rewardConfig.components.length === 0) {
+        console.warn('No custom reward components to display');
+        return;
+    }
+
+    // Update the global config
+    window.selectedRewardConfig = rewardConfig;
+    selectedRewardName = 'Custom Configuration';
+    selectedRewardType = 'custom';
+
+    // Sync with AppState
+    if (window.AppState && AppState.setConfigValue) {
+        AppState.setConfigValue('rewardConfig', rewardConfig);
+    }
+
+    // Clear any preset selections
+    document.querySelectorAll('.preset-card, .template-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+
+    // Update the reward display panel to show summary
+    const nameElement = document.getElementById('selected-reward-name');
+    const descElement = document.getElementById('selected-reward-description');
+
+    if (nameElement) {
+        nameElement.textContent = 'Custom Reward Configuration';
+    }
+
+    if (descElement) {
+        // Create component summary
+        const componentsSummary = rewardConfig.components.map((comp, i) => {
+            const typeName = comp.type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+            return `${i + 1}. ${comp.name || typeName} (weight: ${comp.weight || 1.0})`;
+        }).join('<br>');
+
+        descElement.innerHTML = `
+            <p class="mb-2"><strong>Components:</strong></p>
+            <div class="small text-muted">${componentsSummary}</div>
+            <div class="mt-3">
+                <button class="btn btn-sm btn-primary" onclick="restoreCustomReward(window.selectedRewardConfig)">
+                    <i class="fas fa-edit"></i> Edit Components
+                </button>
+                <button class="btn btn-sm btn-outline-secondary ms-2" onclick="testSelectedReward()">
+                    <i class="fas fa-flask"></i> Test Reward
+                </button>
+            </div>
+        `;
+    }
+
+    console.log('Custom reward displayed as selected (summary mode)');
+}
+
 // Export all reward functions to window object for global access
 window.gatherRewardConfig = gatherRewardConfig;
+window.restoreCustomReward = restoreCustomReward;
+window.showCustomRewardAsSelected = showCustomRewardAsSelected;
 window.selectRewardType = selectRewardType;
 window.addRewardComponent = addRewardComponent;
 window.removeRewardComponent = removeRewardComponent;

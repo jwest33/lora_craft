@@ -93,6 +93,10 @@
                     if (window.TrainingModule) {
                         window.TrainingModule.handleComplete(data);
                     }
+                    // Stop reward analysis auto-refresh
+                    if (window.RewardAnalysisModule) {
+                        window.RewardAnalysisModule.stopAutoRefresh();
+                    }
                 }
             });
 
@@ -101,6 +105,10 @@
                     console.error('Training error:', data);
                     if (window.TrainingModule) {
                         window.TrainingModule.handleError(data);
+                    }
+                    // Stop reward analysis auto-refresh on error
+                    if (window.RewardAnalysisModule) {
+                        window.RewardAnalysisModule.stopAutoRefresh();
                     }
                 }
             });

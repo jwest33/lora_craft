@@ -497,25 +497,41 @@
             if (config.reasoning_start) {
                 const reasoningStartElement = document.getElementById('custom-reasoning-start');
                 const reasoningStartHidden = document.getElementById('reasoning-start');
-                if (reasoningStartElement) reasoningStartElement.value = config.reasoning_start;
+                if (reasoningStartElement) {
+                    reasoningStartElement.value = config.reasoning_start;
+                    reasoningStartElement.readOnly = false;
+                    reasoningStartElement.disabled = false;
+                }
                 if (reasoningStartHidden) reasoningStartHidden.value = config.reasoning_start;
             }
             if (config.reasoning_end) {
                 const reasoningEndElement = document.getElementById('custom-reasoning-end');
                 const reasoningEndHidden = document.getElementById('reasoning-end');
-                if (reasoningEndElement) reasoningEndElement.value = config.reasoning_end;
+                if (reasoningEndElement) {
+                    reasoningEndElement.value = config.reasoning_end;
+                    reasoningEndElement.readOnly = false;
+                    reasoningEndElement.disabled = false;
+                }
                 if (reasoningEndHidden) reasoningEndHidden.value = config.reasoning_end;
             }
             if (config.solution_start) {
                 const solutionStartElement = document.getElementById('custom-solution-start');
                 const solutionStartHidden = document.getElementById('solution-start');
-                if (solutionStartElement) solutionStartElement.value = config.solution_start;
+                if (solutionStartElement) {
+                    solutionStartElement.value = config.solution_start;
+                    solutionStartElement.readOnly = false;
+                    solutionStartElement.disabled = false;
+                }
                 if (solutionStartHidden) solutionStartHidden.value = config.solution_start;
             }
             if (config.solution_end) {
                 const solutionEndElement = document.getElementById('custom-solution-end');
                 const solutionEndHidden = document.getElementById('solution-end');
-                if (solutionEndElement) solutionEndElement.value = config.solution_end;
+                if (solutionEndElement) {
+                    solutionEndElement.value = config.solution_end;
+                    solutionEndElement.readOnly = false;
+                    solutionEndElement.disabled = false;
+                }
                 if (solutionEndHidden) solutionEndHidden.value = config.solution_end;
             }
 
@@ -523,7 +539,13 @@
             if (config.system_prompt) {
                 const systemPromptElement = document.getElementById('custom-system-prompt');
                 const systemPromptHidden = document.getElementById('system-prompt');
-                if (systemPromptElement) systemPromptElement.value = config.system_prompt;
+                if (systemPromptElement) {
+                    systemPromptElement.value = config.system_prompt;
+                    // Ensure system prompt is always editable when loading config
+                    systemPromptElement.readOnly = false;
+                    systemPromptElement.disabled = false;
+                    console.log('[Templates] Restored system prompt and ensured it is editable');
+                }
                 if (systemPromptHidden) systemPromptHidden.value = config.system_prompt;
             }
 
@@ -531,7 +553,12 @@
             if (config.chat_template) {
                 const chatTemplateElement = document.getElementById('custom-chat-template');
                 const chatTemplateHidden = document.getElementById('chat-template');
-                if (chatTemplateElement) chatTemplateElement.value = config.chat_template;
+                if (chatTemplateElement) {
+                    chatTemplateElement.value = config.chat_template;
+                    // Ensure chat template is editable
+                    chatTemplateElement.readOnly = false;
+                    chatTemplateElement.disabled = false;
+                }
                 if (chatTemplateHidden) chatTemplateHidden.value = config.chat_template;
             }
 

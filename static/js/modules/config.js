@@ -47,6 +47,21 @@
             }
         },
 
+        // Centralized pending dataset state management
+        clearPendingDatasetState() {
+            AppState.setConfigValue('pendingDatasetType', null);
+            AppState.setConfigValue('pendingUploadedDataset', null);
+            console.log('[Config] Cleared pending dataset state');
+        },
+
+        setPendingDatasetState(type, uploadData = null) {
+            AppState.setConfigValue('pendingDatasetType', type);
+            if (uploadData) {
+                AppState.setConfigValue('pendingUploadedDataset', uploadData);
+            }
+            console.log('[Config] Set pending dataset state:', type, uploadData ? 'with upload data' : 'no upload');
+        },
+
         // Load saved configurations list
         loadConfigList() {
             fetch('/api/configurations')
@@ -368,6 +383,9 @@
         applyConfiguration(config) {
             console.log('Applying configuration:', config);
 
+            // Clear any pending dataset state from previous config loads
+            this.clearPendingDatasetState();
+
             // Apply setup mode first
             if (config.setupMode) {
                 const setupModeRadio = document.getElementById(config.setupMode);
@@ -428,19 +446,23 @@
                         const uiType = sourceTypeMap[actualSource] || actualSource;
 
                         // Store pending dataset type to apply when navigating to Step 2
-                        AppState.setConfigValue('pendingDatasetType', uiType);
+                        // Use centralized function to set pending state
+                        const uploadData = (actualSource === 'upload' && config.dataset.path) ? {
+                            path: config.dataset.path,
+                            config: config.dataset
+                        } : null;
 
-                        // For uploaded datasets, store the info for later restoration
-                        if (actualSource === 'upload' && config.dataset.path) {
-                            AppState.setConfigValue('pendingUploadedDataset', {
-                                path: config.dataset.path,
-                                config: config.dataset
-                            });
-                        }
+                        this.setPendingDatasetState(uiType, uploadData);
                     } else {
                         console.warn('dataset-source element not found');
                     }
                 }
+                // REMOVED: Don't set pending state to 'popular' if no dataset config
+                // This was causing pollution - let the user choose their own dataset
+            }
+
+            // Continue with other dataset fields if present
+            if (config.dataset) {
                 if (config.dataset.type) {
                     const datasetTypeElement = document.getElementById('dataset-type');
                     if (datasetTypeElement) {
@@ -659,10 +681,19 @@
                         }, 500);
                     }
                 } else if (config.reward.type === 'custom' && config.reward.components) {
-                    // Custom reward - restore components
-                    if (typeof restoreCustomReward === 'function') {
-                        restoreCustomReward(config.reward);
-                    }
+                    // Custom reward - show in selection mode (not full builder)
+                    // Store the config and display as a "selected" custom reward
+                    setTimeout(() => {
+                        if (typeof showCustomRewardAsSelected === 'function') {
+                            // Use new display function that shows summary, not builder
+                            showCustomRewardAsSelected(config.reward);
+                        } else {
+                            // Fallback: Use existing function but user can still edit
+                            if (typeof restoreCustomReward === 'function') {
+                                restoreCustomReward(config.reward);
+                            }
+                        }
+                    }, 500);
                 }
 
                 // Update reward display if available
@@ -1424,6 +1455,9 @@
                 'Reset Configuration',
                 'Are you sure you want to reset all settings to their default values? This cannot be undone.',
                 () => {
+                    // Clear pending dataset state from any previous config loads
+                    this.clearPendingDatasetState();
+
                     // Clear localStorage items
                     localStorage.removeItem('selectedReward');
                     localStorage.removeItem('selectedConfigId');
@@ -1538,5 +1572,6 @@
     // Export functions for compatibility layer
     window.loadConfigListLegacy = () => ConfigModule.loadConfigList();
     window.resetConfiguration = () => ConfigModule.resetConfiguration();
+    window.clearPendingDatasetState = () => ConfigModule.clearPendingDatasetState();
 
 })(window);

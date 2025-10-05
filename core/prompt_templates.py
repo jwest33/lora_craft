@@ -955,8 +955,10 @@ class PromptTemplate:
             'errors': []
         }
 
-        # Check for reasoning markers
-        reasoning_pattern = re.escape(self.config.reasoning_start_marker) + r"(.*?)" + re.escape(self.config.reasoning_end_marker)
+        # Check for reasoning markers - strip spaces from markers for flexible matching
+        reasoning_start = self.config.reasoning_start_marker.strip()
+        reasoning_end = self.config.reasoning_end_marker.strip()
+        reasoning_pattern = re.escape(reasoning_start) + r"(.*?)" + re.escape(reasoning_end)
         reasoning_match = re.search(reasoning_pattern, text, re.DOTALL)
 
         if reasoning_match:
@@ -965,8 +967,10 @@ class PromptTemplate:
         else:
             info['errors'].append("Missing reasoning section")
 
-        # Check for solution markers
-        solution_pattern = re.escape(self.config.solution_start_marker) + r"(.*?)" + re.escape(self.config.solution_end_marker)
+        # Check for solution markers - strip spaces from markers for flexible matching
+        solution_start = self.config.solution_start_marker.strip()
+        solution_end = self.config.solution_end_marker.strip()
+        solution_pattern = re.escape(solution_start) + r"(.*?)" + re.escape(solution_end)
         solution_match = re.search(solution_pattern, text, re.DOTALL)
 
         if solution_match:
@@ -975,10 +979,10 @@ class PromptTemplate:
         else:
             info['errors'].append("Missing solution section")
 
-        # Check order (reasoning should come before solution)
+        # Check order (reasoning should come before solution) - use stripped markers
         if info['has_reasoning'] and info['has_solution']:
-            reasoning_pos = text.find(self.config.reasoning_end_marker)
-            solution_pos = text.find(self.config.solution_start_marker)
+            reasoning_pos = text.find(reasoning_end)
+            solution_pos = text.find(solution_start)
             if reasoning_pos > solution_pos:
                 info['errors'].append("Solution appears before reasoning end")
 

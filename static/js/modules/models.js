@@ -403,8 +403,30 @@
             const config = {
                 modelName: document.getElementById('model-name')?.value,
                 customModelPath: document.getElementById('custom-model-path')?.value || '',
-                quantization: document.getElementById('quantization')?.value || 'q8_0'
+                quantization: document.getElementById('quantization')?.value || 'q8_0',
+                // LoRA configuration
+                loraRank: parseInt(document.getElementById('lora-rank')?.value) || 8,
+                loraAlpha: parseInt(document.getElementById('lora-alpha')?.value) || 32,
+                loraDropout: parseFloat(document.getElementById('lora-dropout')?.value) || 0.0
             };
+
+            // Collect checked target modules
+            const targetModulesArray = [];
+            const targetCheckboxes = [
+                'target-q-proj', 'target-v-proj', 'target-k-proj', 'target-o-proj',
+                'target-gate-proj', 'target-up-proj', 'target-down-proj'
+            ];
+            targetCheckboxes.forEach(id => {
+                const checkbox = document.getElementById(id);
+                if (checkbox && checkbox.checked) {
+                    // Convert checkbox ID back to module name (e.g., 'target-q-proj' -> 'q_proj')
+                    const moduleName = id.replace('target-', '').replace('-', '_');
+                    targetModulesArray.push(moduleName);
+                }
+            });
+            if (targetModulesArray.length > 0) {
+                config.targetModulesArray = targetModulesArray;
+            }
 
             return config;
         },

@@ -1,12 +1,24 @@
 {
-  "name": "technical_analysis.2025.10.5.5",
+  "name": "technical_analysis.2025.10.5.10",
   "description": "",
   "config": {
     "setupMode": "setup-recommended",
     "model": {
-      "modelName": "unsloth/Qwen3-1.7B",
+      "modelName": "unsloth/Qwen3-4B",
       "customModelPath": "",
       "quantization": "q8_0",
+      "loraRank": 8,
+      "loraAlpha": 16,
+      "loraDropout": 0,
+      "targetModulesArray": [
+        "q_proj",
+        "v_proj",
+        "k_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj"
+      ],
       "family": "qwen"
     },
     "dataset": {
@@ -35,7 +47,7 @@
     },
     "training": {
       "num_epochs": 3,
-      "batch_size": 8,
+      "batch_size": 12,
       "gradient_accumulation": 1,
       "learning_rate": 1e-05,
       "lr_schedule": "cosine",
@@ -75,7 +87,7 @@
     "pre_training": {
       "enabled": true,
       "epochs": 2,
-      "max_samples": 150,
+      "max_samples": 500,
       "filter_by_length": false,
       "validate_format": true
     },
@@ -117,7 +129,7 @@
           "name": "response_length",
           "weight": 0.05,
           "parameters": {
-            "max_length": 1024,
+            "max_length": 900,
             "min_length": 10,
             "optimal_length": null
           }
@@ -125,5 +137,5 @@
       ]
     }
   },
-  "timestamp": 1759672272524
+  "timestamp": 1759680713121
 }

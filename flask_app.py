@@ -634,6 +634,18 @@ def run_training(session_id: str, config: Dict[str, Any]):
             pre_training_filter_by_length=(config.get('pre_training', {}).get('filter_by_length') or
                                           config.get('pre_training_filter_by_length', False)),
             pre_training_max_length_ratio=config.get('pre_training_max_length_ratio', 0.5),
+            pre_training_learning_rate=(config.get('pre_training', {}).get('learning_rate') or
+                                       config.get('pre_training_learning_rate', 5e-5)),
+
+            # Adaptive pre-training configuration
+            adaptive_pre_training=(config.get('pre_training', {}).get('adaptive') or
+                                  config.get('adaptive_pre_training', True)),
+            pre_training_min_success_rate=(config.get('pre_training', {}).get('min_success_rate') or
+                                          config.get('pre_training_min_success_rate', 0.8)),
+            pre_training_max_additional_epochs=(config.get('pre_training', {}).get('max_additional_epochs') or
+                                               config.get('pre_training_max_additional_epochs', 3)),
+            pre_training_validation_samples=(config.get('pre_training', {}).get('validation_samples') or
+                                            config.get('pre_training_validation_samples', 20)),
 
             # Paths
             output_dir=f"./outputs/{session_id}",
@@ -926,12 +938,31 @@ def run_training(session_id: str, config: Dict[str, Any]):
                 template.setup_for_unsloth(trainer.tokenizer)
                 q.put(('log', f"Applied {config.get('chat_template_type', 'grpo')} chat template to tokenizer"))
 
-            # Run pre-fine-tuning (epochs defaults to config.pre_training_epochs)
-            pre_metrics = trainer.pre_fine_tune(dataset, template)
-            q.put(('log', f"Pre-training completed (see logs above for sample count and epochs)"))
+            # Run adaptive or standard pre-fine-tuning
+            # Adaptive mode is now the default and handles validation automatically
+            adaptive_enabled = config.get('pre_training', {}).get('adaptive', True) if 'pre_training' in config else True
 
-            # Validate format compliance if requested
-            if validate_format:
+            if adaptive_enabled:
+                q.put(('log', "Using adaptive pre-training with automatic format validation"))
+                pre_metrics = trainer.adaptive_pre_fine_tune(dataset, template)
+
+                # Report adaptive training results
+                if isinstance(pre_metrics, dict) and 'final_success_rate' in pre_metrics:
+                    q.put(('log', f"Pre-training completed:"))
+                    q.put(('log', f"  Total epochs: {pre_metrics.get('total_epochs', '?')}"))
+                    q.put(('log', f"  Additional epochs: {pre_metrics.get('additional_epochs', 0)}"))
+                    q.put(('log', f"  Final success rate: {pre_metrics.get('final_success_rate', 0)*100:.1f}%"))
+                    if pre_metrics.get('success'):
+                        q.put(('log', "  ✅ Model successfully learned the format!"))
+                    else:
+                        q.put(('log', "  ⚠️  Warning: Format learning below target threshold"))
+            else:
+                q.put(('log', "Using standard pre-training (adaptive mode disabled)"))
+                pre_metrics = trainer.pre_fine_tune(dataset, template)
+                q.put(('log', f"Pre-training completed (see logs above for sample count and epochs)"))
+
+            # Legacy validation code (only runs if adaptive is disabled AND validate_format is true)
+            if not adaptive_enabled and validate_format:
                 q.put(('log', "=" * 60))
                 q.put(('log', "POST-PRETRAINING FORMAT VALIDATION TEST"))
                 q.put(('log', "=" * 60))

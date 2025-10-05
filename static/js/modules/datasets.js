@@ -1406,6 +1406,14 @@ ${solutionStart}4${solutionEnd}`;
         // Load uploaded dataset when restoring from config
         loadUploadedDatasetFromConfig(datasetPath, datasetConfig) {
             console.log('[Config Load] Loading uploaded dataset:', datasetPath);
+            console.log('[Config Load] Dataset config:', datasetConfig);
+
+            // Update dataset-path field immediately for visual feedback
+            const datasetPathElement = document.getElementById('dataset-path');
+            if (datasetPathElement) {
+                datasetPathElement.value = datasetPath;
+                console.log('[Config Load] Set dataset-path field to:', datasetPath);
+            }
 
             // Fetch dataset info from backend
             fetch('/api/upload_dataset_info', {
@@ -1418,9 +1426,14 @@ ${solutionStart}4${solutionEnd}`;
             .then(response => response.json())
             .then(data => {
                 if (data.error) {
-                    console.error('Failed to load dataset:', data.error);
+                    console.error('[Config Load] Failed to load dataset:', data.error);
+                    if (window.CoreModule && CoreModule.showAlert) {
+                        CoreModule.showAlert(`Could not load uploaded dataset: ${data.error}. The file may have been deleted.`, 'warning');
+                    }
                     return;
                 }
+
+                console.log('[Config Load] Dataset info loaded successfully:', data);
 
                 // Store dataset info
                 this.currentUploadData = {
@@ -1458,14 +1471,31 @@ ${solutionStart}4${solutionEnd}`;
                 // Update hidden fields
                 const datasetPathInput = document.getElementById('dataset-path');
                 const datasetSourceInput = document.getElementById('dataset-source');
-                if (datasetPathInput) datasetPathInput.value = datasetPath;
-                if (datasetSourceInput) datasetSourceInput.value = 'upload';
+                if (datasetPathInput) {
+                    datasetPathInput.value = datasetPath;
+                    console.log('[Config Load] Updated dataset-path to:', datasetPath);
+                }
+                if (datasetSourceInput) {
+                    datasetSourceInput.value = 'upload';
+                    console.log('[Config Load] Set dataset-source to: upload');
+                }
 
                 // Reload uploaded files list to show selection
                 this.loadUploadedDatasets();
+
+                // Show success message
+                if (window.CoreModule && CoreModule.showAlert) {
+                    const filename = datasetPath.split('/').pop();
+                    CoreModule.showAlert(`Loaded uploaded dataset: ${filename}`, 'success');
+                }
+
+                console.log('[Config Load] Dataset restoration complete');
             })
             .catch(error => {
-                console.error('Error loading uploaded dataset:', error);
+                console.error('[Config Load] Error loading uploaded dataset:', error);
+                if (window.CoreModule && CoreModule.showAlert) {
+                    CoreModule.showAlert(`Error loading uploaded dataset: ${error.message}`, 'danger');
+                }
             });
         }
     };
