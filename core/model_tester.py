@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, Tuple, List
 from dataclasses import dataclass
 from datetime import datetime
+import gc
 
 # Disable torch.compile/dynamo to avoid FX tracing issues
 os.environ["TORCHDYNAMO_DISABLE"] = "1"
@@ -741,7 +742,6 @@ You are a helpful AI assistant.
         Args:
             model_key: Specific model to clear, or None for all
         """
-        import gc
 
         if model_key:
             if model_key in self.loaded_models:

@@ -2202,6 +2202,9 @@ function showCustomRewardAsSelected(rewardConfig) {
         `;
     }
 
+    // Display detailed component view with all parameters
+    displayCustomComponents(rewardConfig.components);
+
     console.log('Custom reward displayed as selected (summary mode)');
 }
 

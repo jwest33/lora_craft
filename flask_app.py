@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from dataclasses import asdict
 import psutil
+import gc
 
 from flask import Flask, render_template, request, jsonify, session, Response, send_file
 from flask_cors import CORS
@@ -361,7 +362,6 @@ def process_training_queue(session_id: str):
                     # Clean up training models from memory
                     try:
                         # Clear any Unsloth models that might be in GPU memory
-                        import gc
                         gc.collect()
                         if torch.cuda.is_available():
                             torch.cuda.empty_cache()
@@ -1175,7 +1175,6 @@ def run_training(session_id: str, config: Dict[str, Any]):
                     session_obj.trainer = None
 
             # Force garbage collection and CUDA cache clearing
-            import gc
             gc.collect()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -1404,7 +1403,6 @@ def start_training():
 
         # Clean up any stale training sessions before starting new one
         # This helps prevent the hanging issue when training multiple models
-        import gc
         for sid, session in list(training_sessions.items()):
             if session.status in ['completed', 'error', 'stopped']:
                 # Clean up trainer if it exists

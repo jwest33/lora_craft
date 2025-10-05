@@ -424,17 +424,33 @@ class GRPOModelTrainer:
             max_length = int(self.config.max_sequence_length * self.config.pre_training_max_length_ratio)
             logger.info(f"Filtering pre-training dataset by length (max: {max_length} tokens)")
 
-            # Tokenize to get lengths
-            def get_length(example):
-                if 'instruction' in example:
-                    text = str(example.get('instruction', '')) + str(example.get('response', example.get('output', '')))
+            # Tokenize to get lengths (batched for memory efficiency)
+            def get_length(examples):
+                # Process batch of examples
+                lengths = []
+                for i in range(len(examples.get('instruction', examples.get('text', [])))):
+                    if 'instruction' in examples:
+                        text = str(examples['instruction'][i]) + str(examples.get('response', examples.get('output', ['']))[i])
+                    else:
+                        text = str(examples.get('text', [''])[i])
                     tokens = self.tokenizer(text, truncation=False)
-                    return {'length': len(tokens['input_ids'])}
-                return {'length': 0}
+                    lengths.append(len(tokens['input_ids']))
+                return {'length': lengths}
 
-            dataset_with_lengths = pre_train_dataset.map(get_length)
+            dataset_with_lengths = pre_train_dataset.map(
+                get_length,
+                batched=True,
+                batch_size=1000,
+                load_from_cache_file=False,  # Don't cache intermediate results
+                desc="Computing sequence lengths"
+            )
             pre_train_dataset = dataset_with_lengths.filter(lambda x: x['length'] <= max_length)
             logger.info(f"Filtered dataset from {original_size} to {len(pre_train_dataset)} samples by length")
+
+            # Free memory from intermediate dataset
+            del dataset_with_lengths
+            gc.collect()
+            logger.info("Freed memory from length filtering")
 
         # Apply sample limit if configured (separate from main training max_samples)
         if self.config.pre_training_max_samples:
@@ -578,8 +594,14 @@ class GRPOModelTrainer:
 
         formatted_dataset = pre_train_dataset.map(
             apply_template,
-            remove_columns=pre_train_dataset.column_names  # Remove original columns, keep only text
+            remove_columns=pre_train_dataset.column_names,  # Remove original columns, keep only text
+            load_from_cache_file=False,  # Don't cache to reduce memory usage
+            desc="Applying chat template"
         )
+
+        # Clean up pre_train_dataset to free memory
+        del pre_train_dataset
+        gc.collect()
 
         # Tokenize the dataset
         def tokenize_function(examples):
@@ -594,8 +616,13 @@ class GRPOModelTrainer:
         tokenized_dataset = formatted_dataset.map(
             tokenize_function,
             batched=True,
-            remove_columns=['text']  # Remove text, keep only tokenized data
+            remove_columns=['text'],  # Remove text, keep only tokenized data
+            load_from_cache_file=False  # Don't cache to reduce memory usage
         )
+
+        # Clean up formatted_dataset to free memory
+        del formatted_dataset
+        gc.collect()
 
         # Setup data collator with matching dtype
         # Detect the model's actual dtype (critical for Unsloth models which may not match config flags)
@@ -805,6 +832,7 @@ class GRPOModelTrainer:
                         temperature=None,  # Explicitly override model's generation_config
                         top_p=None,  # Explicitly override model's generation_config
                         top_k=None,  # Explicitly override model's generation_config
+                        repetition_penalty=self.config.repetition_penalty,  # Prevent infinite loops
                         pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id
                     )
 
@@ -887,6 +915,10 @@ class GRPOModelTrainer:
                     'has_solution': False,
                     'errors': [str(e)]
                 })
+
+            # Clear GPU cache after each validation sample to prevent memory buildup
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
         # Calculate success rate
         total_tested = results['passed'] + results['failed']
