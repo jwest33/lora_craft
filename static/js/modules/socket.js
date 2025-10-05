@@ -58,6 +58,15 @@
                 }
             });
 
+            socket.on('reward_sample', (data) => {
+                if (data.session_id === AppState.currentSessionId) {
+                    console.log('Reward sample received:', data);
+                    if (window.RewardAnalysisModule) {
+                        window.RewardAnalysisModule.addSample(data);
+                    }
+                }
+            });
+
             socket.on('reset_metrics', (data) => {
                 if (data.session_id === AppState.currentSessionId) {
                     console.log('Resetting metrics for phase:', data.phase);

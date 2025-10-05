@@ -923,27 +923,84 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
 
                                     <!-- Test Reward Tab -->
                                     <div class="tab-pane fade" id="reward-test-tab" role="tabpanel">
+                                        <!-- Test Mode Selector -->
+                                        <div class="alert alert-info mb-3">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="use-model-generation" onchange="toggleTestMode(this.checked)">
+                                                <label class="form-check-label" for="use-model-generation">
+                                                    <i class="fas fa-robot"></i> <strong>Use Model to Generate Response</strong>
+                                                    <small class="d-block text-muted">Uses the base model selected in Step 1 to generate the response and see how it scores</small>
+                                                </label>
+                                            </div>
+                                        </div>
+
                                         <div class="row">
                                             <div class="col-md-6">
                                                 <h6>Test Input</h6>
+
+                                                <!-- Generation Settings (shown when model generation is enabled) -->
+                                                <div class="mb-3" id="generation-settings-panel" style="display: none;">
+                                                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#generation-params">
+                                                        <i class="fas fa-cog"></i> Generation Settings
+                                                    </button>
+                                                    <div class="collapse mt-2" id="generation-params">
+                                                        <div class="card card-body">
+                                                            <div class="row">
+                                                                <div class="col-md-6 mb-2">
+                                                                    <label class="form-label small">Temperature</label>
+                                                                    <input type="number" class="form-control form-control-sm" id="gen-temperature" value="0.7" step="0.1" min="0" max="2">
+                                                                </div>
+                                                                <div class="col-md-6 mb-2">
+                                                                    <label class="form-label small">Max Tokens</label>
+                                                                    <input type="number" class="form-control form-control-sm" id="gen-max-tokens" value="512" step="64" min="64" max="2048">
+                                                                </div>
+                                                                <div class="col-md-6 mb-2">
+                                                                    <label class="form-label small">Top P</label>
+                                                                    <input type="number" class="form-control form-control-sm" id="gen-top-p" value="0.95" step="0.05" min="0" max="1">
+                                                                </div>
+                                                                <div class="col-md-6 mb-2">
+                                                                    <label class="form-label small">Top K</label>
+                                                                    <input type="number" class="form-control form-control-sm" id="gen-top-k" value="50" step="10" min="0" max="100">
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
                                                 <div class="mb-3">
-                                                    <label class="form-label">Instruction</label>
+                                                    <label class="form-label">Input / Query</label>
                                                     <textarea class="form-control" id="test-instruction" rows="2"
-                                                              placeholder="e.g., Solve: 2x + 5 = 13"></textarea>
+                                                              placeholder="Enter your input or query here..."></textarea>
                                                 </div>
                                                 <div class="mb-3">
-                                                    <label class="form-label">Generated Response</label>
-                                                    <textarea class="form-control" id="test-generated" rows="3"
-                                                              placeholder="e.g., x = 4"></textarea>
+                                                    <label class="form-label">
+                                                        Generated Response
+                                                        <span class="badge bg-secondary ms-2" id="edit-mode-badge" style="display: none;">
+                                                            <i class="fas fa-edit"></i> Editable - scores update live
+                                                        </span>
+                                                    </label>
+                                                    <textarea class="form-control" id="test-generated" rows="4"
+                                                              placeholder="e.g., x = 4" oninput="onGeneratedTextEdit()"></textarea>
+                                                    <div class="mt-2" id="generated-actions" style="display: none;">
+                                                        <button class="btn btn-sm btn-outline-primary" onclick="restoreOriginalGenerated()">
+                                                            <i class="fas fa-undo"></i> Restore Original
+                                                        </button>
+                                                        <small class="text-muted ms-2" id="edit-status"></small>
+                                                    </div>
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label">Reference (Optional)</label>
                                                     <textarea class="form-control" id="test-reference" rows="3"
                                                               placeholder="e.g., To solve: 2x = 8, x = 4\n\\boxed{4}"></textarea>
                                                 </div>
-                                                <button class="btn btn-primary" onclick="testReward()">
-                                                    <i class="fas fa-play"></i> Test Reward
-                                                </button>
+                                                <div class="d-flex gap-2">
+                                                    <button class="btn btn-primary" onclick="testRewardWithOrWithoutModel()" id="test-reward-btn">
+                                                        <i class="fas fa-play"></i> Test Reward
+                                                    </button>
+                                                    <button class="btn btn-success" onclick="testRewardWithModel()" id="generate-and-test-btn" style="display: none;">
+                                                        <i class="fas fa-robot"></i> Generate & Score
+                                                    </button>
+                                                </div>
                                             </div>
                                             <div class="col-md-6">
                                                 <h6>Test Results</h6>
@@ -960,15 +1017,16 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
 
                                 <!-- Enhanced Selected Reward Display Panel -->
                                 <div class="selected-reward-panel">
-                                    <div class="selected-reward-header">
+                                    <div class="selected-reward-header" onclick="toggleRewardPanel()" style="cursor: pointer;">
                                         <i class="fas fa-check-circle text-success"></i>
                                         <strong>Currently Selected:</strong>
+                                        <i class="fas fa-chevron-up ms-auto" id="reward-panel-chevron"></i>
                                     </div>
-                                    <div class="selected-reward-content">
-                                        <h5 id="selected-reward-name">Mathematical Problem Solving</h5>
-                                        <p id="selected-reward-description" class="text-muted small">
-                                            Rewards accurate numerical answers with proper formatting (e.g., \boxed{} notation)
-                                        </p>
+                                    <h5 id="selected-reward-name" class="mt-2 mb-1">Mathematical Problem Solving</h5>
+                                    <p id="selected-reward-description" class="text-muted small mb-2">
+                                        Rewards accurate numerical answers with proper formatting (e.g., \boxed{} notation)
+                                    </p>
+                                    <div class="selected-reward-content collapse show" id="selected-reward-display">
                                         <div class="selected-reward-actions">
                                             <button class="btn btn-sm btn-outline-primary" onclick="viewRewardDetails()">
                                                 <i class="fas fa-info-circle"></i> View Details
@@ -1564,6 +1622,22 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                                 </button>
                                             </div>
                                             <canvas id="lr-chart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Reward Analysis Panel -->
+                                <div class="reward-analysis-panel mt-4">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6 class="mb-0">
+                                                <i class="fas fa-trophy"></i> Reward Analysis - Live Samples
+                                            </h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="reward-samples-container">
+                                                <p class="text-muted">No reward samples yet. Samples will appear during training...</p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -2760,7 +2834,7 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
     <script src="{{ url_for('static', filename='js/modules/config.js') }}"></script>
     <script src="{{ url_for('static', filename='js/modules/export.js') }}"></script>
     <script src="{{ url_for('static', filename='js/modules/testing.js') }}"></script>
-
+    <script src="{{ url_for('static', filename='js/modules/reward-analysis.js') }}"></script>
     <script src="{{ url_for('static', filename='js/modules/rewards.js') }}"></script>
 
     <!-- Global function exports for onclick handlers -->

@@ -249,6 +249,14 @@
     color: var(--text-primary);
 }
 
+.upload-zone i {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .upload-zone i {
+    color: var(--primary);
+}
+
 /* Uploaded Dataset Card Styles */
 .uploaded-dataset-card {
     background: var(--bg-card);
@@ -2725,6 +2733,93 @@ body {
     background: linear-gradient(90deg, var(--primary), var(--primary-light));
 }
 
+/* Dark mode styling for component display */
+[data-theme="dark"] #preset-component-display .card {
+    background: var(--bg-card);
+    border-color: var(--primary-light);
+}
+
+[data-theme="dark"] #preset-component-display .card-header {
+    background: rgba(168, 85, 247, 0.2) !important;
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .component-item {
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .weight-input {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .component-params {
+    color: var(--text-muted);
+}
+
+[data-theme="dark"] .component-item strong {
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .component-description {
+    color: var(--text-secondary);
+}
+
+/* Dark mode for labels and badges in component items */
+[data-theme="dark"] .component-item .form-label {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .component-item .badge.bg-secondary {
+    background-color: rgba(148, 163, 184, 0.2) !important;
+    color: var(--text-primary);
+}
+
+/* Dark mode for buttons in component display */
+[data-theme="dark"] #preset-component-display .btn-light {
+    background-color: rgba(241, 245, 249, 0.1);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] #preset-component-display .btn-light:hover {
+    background-color: rgba(241, 245, 249, 0.2);
+    border-color: var(--primary-light);
+}
+
+[data-theme="dark"] #preset-component-display .btn-secondary {
+    background-color: rgba(100, 116, 139, 0.3);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] #preset-component-display .btn-secondary:hover {
+    background-color: rgba(100, 116, 139, 0.5);
+}
+
+[data-theme="dark"] #preset-component-display .btn-success {
+    background-color: rgba(34, 197, 94, 0.3);
+    border-color: var(--success);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] #preset-component-display .btn-success:hover {
+    background-color: rgba(34, 197, 94, 0.5);
+}
+
+/* Dark mode for weight total badge */
+[data-theme="dark"] #weight-total-display.badge.bg-light {
+    background-color: rgba(241, 245, 249, 0.15) !important;
+    color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] #weight-total-display.badge.bg-warning {
+    background-color: rgba(251, 191, 36, 0.3) !important;
+    color: var(--text-primary) !important;
+}
+
 .example-box {
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
@@ -3798,4 +3893,372 @@ body {
 @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
+}
+
+/* ============================================================================ */
+/* Reward Analysis Panel Styles                                                */
+/* ============================================================================ */
+
+/* Reward Analysis Panel Container */
+.reward-analysis-panel {
+    margin-top: 2rem;
+}
+
+.reward-analysis-panel .card-header {
+    background: var(--bg-secondary);
+    border-bottom: 2px solid var(--primary);
+    padding: 1rem;
+}
+
+.reward-analysis-panel .card-body {
+    background: var(--bg-card);
+    max-height: 600px;
+    overflow-y: auto;
+    padding: 1.5rem;
+}
+
+/* Reward Sample Card */
+.reward-sample-card {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.reward-sample-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Reward Sample Header */
+.reward-sample-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.reward-sample-meta {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.reward-sample-step {
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.reward-sample-timestamp {
+    color: var(--text-muted);
+}
+
+/* Reward Score Badge */
+.reward-score {
+    font-size: 1.25rem;
+    font-weight: 700;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    min-width: 80px;
+    text-align: center;
+}
+
+.reward-score.reward-high {
+    background: linear-gradient(135deg, var(--success) 0%, #10b981 100%);
+    color: white;
+}
+
+.reward-score.reward-medium {
+    background: linear-gradient(135deg, var(--warning) 0%, #fb923c 100%);
+    color: white;
+}
+
+.reward-score.reward-low {
+    background: linear-gradient(135deg, var(--danger) 0%, #f87171 100%);
+    color: white;
+}
+
+/* Reward Sample Content */
+.reward-sample-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.reward-section {
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    padding: 1rem;
+}
+
+.reward-section-title {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.75rem;
+}
+
+.reward-text {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 0.875rem;
+    font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+/* Component Breakdown */
+.reward-components {
+    margin-top: 0.5rem;
+}
+
+.component-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.component-item {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 2rem;
+    align-items: start;
+}
+
+.component-content {
+    min-width: 0; /* Prevents grid blowout */
+}
+
+.component-weight {
+    min-width: 120px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.component-weight .weight-input {
+    width: 100%;
+}
+
+.component-name {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.component-bar-container {
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    height: 24px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+
+.component-bar {
+    height: 100%;
+    transition: width 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.component-bar.reward-high {
+    background: linear-gradient(90deg, var(--success) 0%, #10b981 100%);
+}
+
+.component-bar.reward-medium {
+    background: linear-gradient(90deg, var(--warning) 0%, #fb923c 100%);
+}
+
+.component-bar.reward-low {
+    background: linear-gradient(90deg, var(--danger) 0%, #f87171 100%);
+}
+
+.component-score {
+    text-align: right;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Dark Mode Adjustments */
+[data-theme="dark"] .reward-sample-card {
+    background: var(--bg-card);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .reward-sample-card:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .reward-section {
+    background: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .reward-text {
+    background: var(--bg-secondary);
+}
+
+[data-theme="dark"] .component-bar-container {
+    background: var(--bg-secondary);
+}
+
+/* Scrollbar Styling */
+.reward-analysis-panel .card-body::-webkit-scrollbar,
+.reward-text::-webkit-scrollbar {
+    width: 8px;
+}
+
+.reward-analysis-panel .card-body::-webkit-scrollbar-track,
+.reward-text::-webkit-scrollbar-track {
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+}
+
+.reward-analysis-panel .card-body::-webkit-scrollbar-thumb,
+.reward-text::-webkit-scrollbar-thumb {
+    background: var(--primary);
+    border-radius: 4px;
+}
+
+.reward-analysis-panel .card-body::-webkit-scrollbar-thumb:hover,
+.reward-text::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-dark);
+}
+
+/* ============================================================================ */
+/* Reward Component Customization Layout                                       */
+/* ============================================================================ */
+
+/* Component description styling */
+.component-description {
+    display: block !important;
+    line-height: 1.5;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    margin-bottom: 1rem;
+}
+
+/* Expandable Parameters Section */
+.parameters-expandable {
+    margin-top: 1rem;
+}
+
+.parameters-toggle {
+    text-align: left;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.parameters-toggle:hover {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.parameters-toggle i {
+    transition: transform 0.3s ease;
+}
+
+.parameters-content {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    padding: 1rem;
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Parameter input grid */
+.parameters-content .row {
+    margin-left: -0.5rem;
+    margin-right: -0.5rem;
+}
+
+.parameters-content .row > [class*="col-"] {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+}
+
+/* Parameter labels and inputs */
+.parameters-content .form-label {
+    color: var(--text-primary);
+    margin-bottom: 0.35rem;
+    font-size: 0.875rem;
+}
+
+.parameters-content .form-control {
+    background: var(--bg-primary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+.parameters-content .form-control:focus {
+    background: var(--bg-primary);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 0.2rem rgba(147, 51, 234, 0.25);
+}
+
+.parameters-content .form-check-label {
+    color: var(--text-primary);
+}
+
+/* Dark mode adjustments */
+[data-theme="dark"] .parameters-content {
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .parameters-content .form-control {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .parameters-content .form-control:focus {
+    background: var(--bg-secondary);
+    border-color: var(--primary);
+}
+
+[data-theme="dark"] .parameters-toggle {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .parameters-toggle:hover {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
 }

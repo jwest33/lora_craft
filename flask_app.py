@@ -340,6 +340,14 @@ def process_training_queue(session_id: str):
                     })
                     logger.debug(f"Emitted training_metrics event for session {session_id}")
 
+                elif msg_type == 'reward_sample':
+                    # Emit reward sample for real-time analysis
+                    emit_to_session(session_id, 'reward_sample', {
+                        **msg_data,
+                        'session_id': session_id
+                    })
+                    logger.debug(f"Emitted reward_sample event for session {session_id}")
+
                 elif msg_type == 'log':
                     if session_obj:
                         session_obj.logs.append(msg_data)
@@ -641,8 +649,14 @@ def run_training(session_id: str, config: Dict[str, Any]):
             q.put(('progress', progress))
 
         def metrics_callback(metrics):
-            logger.debug(f"Metrics callback invoked for session {session_id}: step={metrics.get('step', 'N/A')}, loss={metrics.get('loss', 'N/A')}, reward={metrics.get('mean_reward', 'N/A')}")
-            q.put(('metrics', metrics))
+            # Check if this is a reward sample (has 'type' == 'reward_sample')
+            if metrics.get('type') == 'reward_sample':
+                logger.debug(f"Reward sample callback for session {session_id}: step={metrics.get('step', 'N/A')}, reward={metrics.get('total_reward', 'N/A')}")
+                q.put(('reward_sample', metrics))
+            else:
+                # Regular metrics
+                logger.debug(f"Metrics callback invoked for session {session_id}: step={metrics.get('step', 'N/A')}, loss={metrics.get('loss', 'N/A')}, reward={metrics.get('mean_reward', 'N/A')}")
+                q.put(('metrics', metrics))
 
         def log_callback(log_entry):
             # Send log to frontend via queue
@@ -767,61 +781,123 @@ def run_training(session_id: str, config: Dict[str, Any]):
         )
         template = PromptTemplate(template_config_obj)
 
+        # Debug: Log reward configuration
+        logger.info(f"=== REWARD CONFIG DEBUG ===")
+        logger.info(f"reward_config from config: {config.get('reward_config')}")
+        logger.info(f"reward from config: {config.get('reward')}")
+        logger.info(f"All config keys: {list(config.keys())}")
+        q.put(('log', "Setting up reward function..."))
+
         # Setup reward function based on configuration
+        # Support both 'reward_config' (new) and 'reward' (legacy from config.js) for backward compatibility
         reward_builder = CustomRewardBuilder()
-        reward_config = config.get('reward_config', {'type': 'preset', 'preset': 'math'})
+        reward_config = config.get('reward_config') or config.get('reward') or {'type': 'preset', 'preset_name': 'math'}
+
+        logger.info(f"Resolved reward_config: {reward_config}")
+        q.put(('log', f"Reward config type: {reward_config.get('type')}"))
 
         if reward_config.get('type') == 'preset':
-            preset = reward_config.get('preset', 'math')
-            if preset == 'math':
-                # Mathematical problems reward
+            # Use RewardPresetLibrary for consistency with other endpoints
+            library = RewardPresetLibrary()
+            preset_name = reward_config.get('preset_name', 'math')
+            logger.info(f"Looking up preset: {preset_name}")
+            q.put(('log', f"Loading reward preset: {preset_name}"))
+            preset = library.get_preset(preset_name)
+
+            if preset:
+                reward_builder = preset.create_builder()
+                q.put(('log', f"Using reward preset: {preset_name}"))
+            else:
+                # Fallback to math preset if preset not found
+                q.put(('log', f"Warning: Preset '{preset_name}' not found, falling back to math preset"))
                 reward_builder.add_numerical_reward("numerical_accuracy", tolerance=1e-6, weight=0.7)
                 reward_builder.add_format_reward("answer_format",
                     pattern=r"\\boxed\{[^}]+\}|Final Answer:.*|Answer:.*", weight=0.2)
                 reward_builder.add_length_reward("length", min_length=10, max_length=500,
                     optimal_length=100, weight=0.1)
-            elif preset == 'code':
-                # Code generation reward
-                reward_builder.add_format_reward("code_block",
-                    pattern=r"```[\w]*\n.*?\n```", weight=0.3)
-                reward_builder.add_format_reward("function_def",
-                    pattern=r"def\s+\w+\s*\(|function\s+\w+\s*\(|const\s+\w+\s*=", weight=0.3)
-                reward_builder.add_format_reward("comments",
-                    pattern=r"#.*|//.*|/\*.*?\*/", weight=0.2)
-                reward_builder.add_length_reward("length", min_length=20, max_length=1000,
-                    optimal_length=200, weight=0.2)
-            elif preset == 'binary':
-                reward_builder.add_binary_reward("exact_match", weight=1.0)
-            elif preset == 'numerical':
-                reward_builder.add_numerical_reward("numerical", tolerance=1e-6, weight=1.0)
-            elif preset == 'length':
-                reward_builder.add_length_reward("length", min_length=50, max_length=500, weight=1.0)
-            elif preset == 'format':
-                reward_builder.add_format_reward("format", pattern=r".*", weight=1.0)
         else:
             # Custom reward configuration
+            q.put(('log', f"Loading custom reward with {len(reward_config.get('components', []))} components"))
             components = reward_config.get('components', [])
-            for comp in components:
+            for idx, comp in enumerate(components):
                 comp_type = comp.get('type')
+                comp_name = comp.get('name', f"{comp_type}_{idx}")
                 weight = comp.get('weight', 1.0)
+                parameters = comp.get('parameters', {})
 
-                if comp_type == 'binary':
-                    pattern = comp.get('pattern')
-                    reward_builder.add_binary_reward(f"binary_{len(components)}",
-                        regex_pattern=pattern, weight=weight)
+                logger.info(f"Adding custom component: {comp_name} (type={comp_type}, weight={weight}, params={list(parameters.keys())})")
+                q.put(('log', f"  - {comp_name} ({comp_type}): weight={weight:.2f}"))
+
+                # Smart detection based on component name and parameters
+                # Priority: name-based > parameter-based > type-based fallback
+
+                # 1. Detect signal_accuracy by name or unique parameters
+                if (comp_name == 'signal_accuracy' or
+                    'valid_signals' in parameters or
+                    'direction_match_score' in parameters):
+                    valid_signals = parameters.get('valid_signals', [])
+                    direction_match_score = parameters.get('direction_match_score', 0.70)
+                    logger.info(f"  → Using add_signal_accuracy with {len(valid_signals)} signals, direction_score={direction_match_score}")
+                    reward_builder.add_signal_accuracy(
+                        comp_name,
+                        valid_signals=valid_signals,
+                        direction_match_score=direction_match_score,
+                        weight=weight
+                    )
+
+                # 2. Detect template_validation by name or unique parameters
+                elif (comp_name in ['template_structure', 'template_validation'] or
+                      'section_tags' in parameters or
+                      'required_sections' in parameters):
+                    section_tags = parameters.get('section_tags', [])
+                    required_sections = parameters.get('required_sections', section_tags)
+                    order_matters = parameters.get('order_matters', False)
+                    logger.info(f"  → Using add_template_validation with tags={section_tags}, required={required_sections}")
+                    reward_builder.add_template_validation(
+                        comp_name,
+                        section_tags=section_tags,
+                        required_sections=required_sections,
+                        order_matters=order_matters,
+                        weight=weight
+                    )
+
+                # 3. Standard binary reward
+                elif comp_type == 'binary':
+                    pattern = parameters.get('pattern') or comp.get('pattern')
+                    logger.info(f"  → Using add_binary_reward with pattern")
+                    reward_builder.add_binary_reward(comp_name, regex_pattern=pattern, weight=weight)
+
+                # 4. Numerical reward
                 elif comp_type == 'numerical':
-                    tolerance = comp.get('tolerance', 1e-6)
-                    reward_builder.add_numerical_reward(f"numerical_{len(components)}",
-                        tolerance=tolerance, weight=weight)
-                elif comp_type == 'length':
-                    min_len = comp.get('min_length')
-                    max_len = comp.get('max_length')
-                    reward_builder.add_length_reward(f"length_{len(components)}",
-                        min_length=min_len, max_length=max_len, weight=weight)
+                    tolerance = parameters.get('tolerance', 1e-6)
+                    logger.info(f"  → Using add_numerical_reward with tolerance={tolerance}")
+                    reward_builder.add_numerical_reward(comp_name, tolerance=tolerance, weight=weight)
+
+                # 5. Continuous/length reward
+                elif comp_type in ['continuous', 'length']:
+                    min_len = parameters.get('min_length')
+                    max_len = parameters.get('max_length')
+                    optimal_len = parameters.get('optimal_length')
+                    if min_len is not None or max_len is not None:
+                        logger.info(f"  → Using add_length_reward: min={min_len}, max={max_len}, optimal={optimal_len}")
+                        reward_builder.add_length_reward(
+                            comp_name,
+                            min_length=min_len,
+                            max_length=max_len,
+                            optimal_length=optimal_len,
+                            weight=weight
+                        )
+                    else:
+                        logger.warning(f"  → Continuous component '{comp_name}' has no length parameters - skipping")
+
+                # 6. Format reward
                 elif comp_type == 'format':
-                    pattern = comp.get('pattern', r".*")
-                    reward_builder.add_format_reward(f"format_{len(components)}",
-                        pattern=pattern, weight=weight)
+                    pattern = parameters.get('pattern') or comp.get('pattern', r".*")
+                    logger.info(f"  → Using add_format_reward")
+                    reward_builder.add_format_reward(comp_name, pattern=pattern, weight=weight)
+
+                else:
+                    logger.warning(f"  → Unknown component type '{comp_type}' for '{comp_name}' - skipping")
 
         # Log algorithm selection based on importance_sampling_level
         importance_level = config.get('importance_sampling_level', 'token')
@@ -5051,6 +5127,127 @@ def test_reward():
 
     except Exception as e:
         logger.error(f"Failed to test reward: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/rewards/test-with-model', methods=['POST'])
+def test_reward_with_model():
+    """Test reward function by generating a response with a model and scoring it."""
+    try:
+        data = request.get_json()
+        reward_config = data.get('reward_config')
+        instruction = data.get('instruction')
+        reference = data.get('reference')
+        model_type = data.get('model_type', 'trained')  # 'trained' or 'base'
+        model_key = data.get('model_key')  # session_id for trained, model_name for base
+        generation_config = data.get('generation_config', {})
+        system_prompt = data.get('system_prompt', '')  # Get configured system prompt
+
+        if not reward_config or not instruction or not model_key:
+            return jsonify({'error': 'Missing required parameters (reward_config, instruction, model_key)'}), 400
+
+        # Build the reward from configuration
+        reward_builder = CustomRewardBuilder()
+
+        if reward_config.get('type') == 'preset':
+            # Use preset
+            library = RewardPresetLibrary()
+            preset_name = reward_config.get('preset_name')
+            preset = library.get_preset(preset_name)
+
+            if not preset:
+                return jsonify({'error': f'Unknown preset: {preset_name}'}), 400
+
+            reward_builder = preset.create_builder()
+        else:
+            # Build custom reward
+            components = reward_config.get('components', [])
+
+            for comp in components:
+                comp_type = comp.get('type')
+                weight = comp.get('weight', 1.0)
+
+                if comp_type == 'binary':
+                    pattern = comp.get('pattern')
+                    reward_builder.add_binary_reward(
+                        f"binary_{len(components)}",
+                        regex_pattern=pattern,
+                        weight=weight
+                    )
+                elif comp_type == 'numerical':
+                    tolerance = comp.get('tolerance', 1e-6)
+                    reward_builder.add_numerical_reward(
+                        f"numerical_{len(components)}",
+                        tolerance=tolerance,
+                        weight=weight
+                    )
+                elif comp_type == 'length':
+                    min_len = comp.get('min_length')
+                    max_len = comp.get('max_length')
+                    optimal_len = comp.get('optimal_length')
+                    reward_builder.add_length_reward(
+                        f"length_{len(components)}",
+                        min_length=min_len,
+                        max_length=max_len,
+                        optimal_length=optimal_len,
+                        weight=weight
+                    )
+                elif comp_type == 'format':
+                    pattern = comp.get('pattern', r".*")
+                    reward_builder.add_format_reward(
+                        f"format_{len(components)}",
+                        pattern=pattern,
+                        weight=weight
+                    )
+
+        # Get session info if testing trained model
+        session_info = None
+        if model_type == 'trained':
+            session_info = session_registry.get_session(model_key)
+
+        # Create tester and test with model
+        tester = RewardTester(reward_builder)
+
+        # Create model tester instance
+        model_tester = ModelTester()
+
+        # Load the appropriate model
+        if model_type == 'trained':
+            # Load trained model from checkpoint
+            checkpoint_path = session_registry.get_checkpoint_path(model_key)
+            if not checkpoint_path:
+                return jsonify({'error': f'No checkpoint found for session {model_key}'}), 404
+
+            success, error = model_tester.load_trained_model(checkpoint_path, model_key)
+            if not success:
+                return jsonify({'error': f'Failed to load model: {error}'}), 500
+        else:
+            # Load base model
+            success, error = model_tester.load_base_model(model_key)
+            if not success:
+                return jsonify({'error': f'Failed to load model: {error}'}), 500
+
+        # Test with the loaded model
+        result = tester.test_with_model(
+            instruction=instruction,
+            reference=reference,
+            model_tester=model_tester,
+            model_type=model_type,
+            model_key=model_key,
+            generation_config=generation_config,
+            session_info=session_info,
+            system_prompt=system_prompt  # Pass the configured system prompt
+        )
+
+        if not result.get('success', False):
+            return jsonify({'error': result.get('error', 'Unknown error')}), 500
+
+        return jsonify(result)
+
+    except Exception as e:
+        logger.error(f"Failed to test reward with model: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 

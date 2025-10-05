@@ -632,7 +632,12 @@
                     name: document.getElementById('output-name')?.value || `lora_${Date.now()}`,
                     save_steps: parseInt(document.getElementById('save-steps')?.value) || 100,
                     eval_steps: parseInt(document.getElementById('eval-steps')?.value) || 100
-                }
+                },
+
+                // Reward configuration
+                reward_config: (typeof gatherRewardConfig === 'function')
+                    ? gatherRewardConfig()
+                    : (AppState.getConfigValue('rewardConfig') || window.selectedRewardConfig || null)
             };
         },
 

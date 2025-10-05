@@ -225,6 +225,52 @@
                 if (window.DatasetModule && typeof DatasetModule.updateSavedTemplatesList === 'function') {
                     setTimeout(() => DatasetModule.updateSavedTemplatesList(), 100);
                 }
+
+                // Apply pending dataset type from config load
+                const pendingType = AppState.getConfigValue('pendingDatasetType');
+                const pendingUpload = AppState.getConfigValue('pendingUploadedDataset');
+
+                if (pendingType && DatasetModule) {
+                    setTimeout(() => {
+                        // For uploads: select type FIRST, then load dataset data
+                        // This prepares the UI before async data loading
+                        if (pendingUpload && DatasetModule.loadUploadedDatasetFromConfig) {
+                            // First, select the upload tab to show the upload section
+                            console.log('Applying pending dataset type:', pendingType);
+                            if (DatasetModule.selectDatasetType) {
+                                DatasetModule.selectDatasetType(pendingType);
+                            }
+
+                            // Then load the uploaded dataset data (async)
+                            setTimeout(() => {
+                                console.log('Loading pending uploaded dataset:', pendingUpload.path);
+                                DatasetModule.loadUploadedDatasetFromConfig(
+                                    pendingUpload.path,
+                                    pendingUpload.config
+                                );
+                                // Clear pending flags after initiating load
+                                AppState.setConfigValue('pendingDatasetType', null);
+                                AppState.setConfigValue('pendingUploadedDataset', null);
+                            }, 100);
+                        } else {
+                            // For non-uploads: just select the type
+                            console.log('Applying pending dataset type:', pendingType);
+                            if (DatasetModule.selectDatasetType) {
+                                DatasetModule.selectDatasetType(pendingType);
+                            }
+                            AppState.setConfigValue('pendingDatasetType', null);
+                        }
+                    }, 200);
+                }
+            } else if (stepNum === 3) {
+                // Scroll to training algorithm selection (top of step 3) after collapse animation
+                setTimeout(() => {
+                    const algorithmSection = document.querySelector('#step-3-content .algorithm-selection') ||
+                                            document.getElementById('step-3');
+                    if (algorithmSection) {
+                        algorithmSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                }, 400); // Wait for Bootstrap collapse animation
             } else if (stepNum === 4) {
                 // Update configuration summary when navigating to Train & Review step
                 if (typeof window.updateConfigSummary === 'function') {

@@ -46,6 +46,10 @@ document.addEventListener('DOMContentLoaded', function() {
             TestingModule.init();
         }
 
+        if (window.RewardAnalysisModule) {
+            RewardAnalysisModule.init();
+        }
+
         // Check for any running sessions
         checkForRunningSessions();
 

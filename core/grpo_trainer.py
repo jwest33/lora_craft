@@ -236,6 +236,29 @@ class GRPOModelTrainer:
             dataset_logger = logging.getLogger('grpo_gui.core.dataset_handler')
             dataset_logger.addHandler(handler)
 
+    def _combine_instruction_and_input(self, instruction: str, input_text: str) -> str:
+        """Combine instruction and input fields for prompt.
+
+        This follows the Alpaca/Stanford format where instruction and input
+        are separate fields that need to be combined for the actual prompt.
+
+        Args:
+            instruction: The instruction/question
+            input_text: Additional context/input data
+
+        Returns:
+            Combined prompt text
+        """
+        if not input_text or input_text.strip() == '':
+            return instruction
+
+        # If instruction ends with punctuation, add double newline for separation
+        # Otherwise, add single space
+        if instruction and instruction[-1] in '.!?':
+            return f"{instruction}\n\n{input_text}"
+        else:
+            return f"{instruction} {input_text}"
+
     def setup_model(self,
                    model_name: Optional[str] = None,
                    use_unsloth: bool = True) -> Tuple[Any, Any]:
@@ -430,9 +453,15 @@ class GRPOModelTrainer:
         def apply_template(example):
             # Format the prompt exactly as GRPO will see it
             if 'instruction' in example:
+                # Combine instruction and input fields (Alpaca format)
+                combined_prompt = self._combine_instruction_and_input(
+                    example.get('instruction', ''),
+                    example.get('input', '')
+                )
+
                 # Get the prompt format (what GRPO will use)
                 prompt_messages = [
-                    {'role': 'user', 'content': example.get('instruction', '')}
+                    {'role': 'user', 'content': combined_prompt}
                 ]
                 # Use inference mode to get the prompt format without response
                 prompt = template.apply(prompt_messages, mode='inference')
@@ -668,10 +697,16 @@ class GRPOModelTrainer:
                 logger.info(f"GRPO prompt format sample (first 1000 chars): {prompt[:1000]}")
                 first_logged = True
 
+            # Combine instruction and input fields (Alpaca format)
+            combined_prompt = self._combine_instruction_and_input(
+                item.get('instruction', ''),
+                item.get('input', '')
+            )
+
             # TRL expects a specific format with prompt field
             formatted_item = {
                 "prompt": [
-                    {"role": "user", "content": item.get('instruction', '')}
+                    {"role": "user", "content": combined_prompt}
                 ],
             }
 
@@ -705,11 +740,12 @@ class GRPOModelTrainer:
 
         return Dataset.from_list(formatted_items)
 
-    def _create_trl_reward_funcs(self, reward_builder: CustomRewardBuilder) -> List[Callable]:
+    def _create_trl_reward_funcs(self, reward_builder: CustomRewardBuilder, trainer=None) -> List[Callable]:
         """Convert our reward builder to TRL's expected format.
 
         Args:
             reward_builder: Our custom reward builder
+            trainer: TRL GRPOTrainer instance (optional, for accessing state)
 
         Returns:
             List of reward functions for TRL
@@ -718,11 +754,21 @@ class GRPOModelTrainer:
         model_dtype = self.model.dtype if hasattr(self.model, 'dtype') else torch.float32
         model_device = self.model.device if hasattr(self.model, 'device') else 'cpu'
 
+        # Counter for sampling (shared across calls via closure)
+        sample_counter = {'count': 0}
+        # Store trainer reference for accessing step
+        trainer_ref = {'instance': trainer}
+
         def reward_wrapper(prompts, completions, **kwargs):
             """Wrapper to adapt our reward function to TRL's format."""
             scores = []
 
-            for prompt, completion in zip(prompts, completions):
+            # Sample every 10th batch (adjustable)
+            should_sample = (sample_counter['count'] % 10 == 0)
+            logger.debug(f"Reward wrapper called: batch_count={sample_counter['count']}, should_sample={should_sample}, num_prompts={len(prompts)}")
+            sample_counter['count'] += 1
+
+            for idx, (prompt, completion) in enumerate(zip(prompts, completions)):
                 # Extract text from completion format
                 if isinstance(completion, list) and len(completion) > 0:
                     response_text = completion[0].get('content', '')
@@ -739,11 +785,34 @@ class GRPOModelTrainer:
                 reward, reward_components = reward_builder.compute_total_reward(
                     instruction=sample['instruction'],
                     generated=response_text,
-                    reference=None
+                    reference=None,
+                    tokenizer=self.tokenizer
                 )
 
                 # Use the total reward directly
                 scores.append(reward)
+
+                # Sample first 2 examples from sampled batches
+                if should_sample and idx < 2 and self.metrics_callback:
+                    # Try to get current step from trainer state if available
+                    # Otherwise use batch count as approximate step (incremented before this check)
+                    current_step = sample_counter['count']
+                    if trainer_ref['instance'] and hasattr(trainer_ref['instance'], 'state'):
+                        current_step = trainer_ref['instance'].state.global_step
+                    elif self.global_step > 0:
+                        current_step = self.global_step
+
+                    reward_sample = {
+                        'type': 'reward_sample',
+                        'instruction': sample['instruction'],
+                        'generated': response_text,
+                        'total_reward': float(reward),
+                        'components': {k: float(v) for k, v in reward_components.items()},
+                        'step': current_step,
+                        'timestamp': time.time()
+                    }
+                    logger.debug(f"Emitting reward sample: step={current_step}, batch_count={sample_counter['count']}, idx={idx}, reward={reward:.4f}")
+                    self.metrics_callback(reward_sample)
 
             # Convert scores to tensor with model's dtype to avoid dtype mismatch
             return torch.tensor(scores, dtype=model_dtype, device=model_device)
@@ -1079,21 +1148,25 @@ class GRPOModelTrainer:
                     actual_loss = float(logs.get('loss', logs.get('train_loss', logs.get('train/loss', 0.0))))
 
                     # Try multiple possible key names for reward (TRL uses different keys)
-                    # Use 'or' operator to properly check multiple keys in sequence
+                    # Use proper None checks to handle 0.0 as a valid reward value
                     actual_reward = float(
-                        logs.get('rewards/reward_wrapper/mean') or  # TRL's primary key
-                        logs.get('reward') or                        # TRL's secondary key
-                        logs.get('rewards/mean') or                  # Alternative
-                        logs.get('mean_reward') or                   # Our own key
-                        0.0
+                        logs.get('rewards/reward_wrapper/mean')
+                        if logs.get('rewards/reward_wrapper/mean') is not None  # TRL's primary key
+                        else logs.get('reward')
+                        if logs.get('reward') is not None                        # TRL's secondary key
+                        else logs.get('rewards/mean')
+                        if logs.get('rewards/mean') is not None                  # Alternative
+                        else logs.get('mean_reward', 0.0)                        # Our own key with fallback
                     )
 
                     # Extract reward std with fallbacks
+                    # Use proper None checks to handle 0.0 as a valid std value
                     actual_reward_std = float(
-                        logs.get('rewards/reward_wrapper/std') or   # TRL's primary key
-                        logs.get('reward_std') or                    # TRL's secondary key
-                        logs.get('rewards/std') or                   # Alternative
-                        0.0
+                        logs.get('rewards/reward_wrapper/std')
+                        if logs.get('rewards/reward_wrapper/std') is not None   # TRL's primary key
+                        else logs.get('reward_std')
+                        if logs.get('reward_std') is not None                    # TRL's secondary key
+                        else logs.get('rewards/std', 0.0)                        # Alternative with fallback
                     )
 
                     grad_norm = float(logs.get('grad_norm', 0.0))
@@ -1105,6 +1178,10 @@ class GRPOModelTrainer:
                     # If we don't have it yet, get it now
                     if current_step is None:
                         current_step = trainer.state.global_step if hasattr(trainer, 'state') else 0
+
+                    # Update global_step in real-time for reward sampling
+                    # This ensures reward samples emitted during training have correct step numbers
+                    parent.global_step = current_step
 
                     # Calculate epoch based on step and total steps
                     if parent.training_phase == 'pre-training':

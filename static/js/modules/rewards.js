@@ -226,7 +226,7 @@ function filterPresetsByCategory(category) {
                                     <i class="fas fa-eye"></i> Example
                                 </button>
                                 <button class="btn btn-sm btn-outline-success"
-                                        onclick="event.stopPropagation(); selectPresetByName('${name}', true); setTimeout(() => showFieldMappingForCurrentReward(), 300);">
+                                        onclick="event.stopPropagation(); showFieldMappingForPreset('${name}');">
                                     <i class="fas fa-link"></i> Map Fields
                                 </button>
                             </div>
@@ -398,13 +398,339 @@ function displayPresetComponents(details) {
             <div class="card-header bg-primary text-white">
                 <div class="d-flex justify-content-between align-items-center">
                     <span><i class="fas fa-puzzle-piece"></i> Reward Components</span>
-                    ${weightStatus}
+                    <div>
+                        ${weightStatus}
+                        <button class="btn btn-sm btn-light ms-2" onclick='makePresetEditable(${JSON.stringify(details).replace(/'/g, "&#39;")})'>
+                            <i class="fas fa-edit"></i> Customize
+                        </button>
+                    </div>
                 </div>
             </div>
             <div class="card-body">
-                <div class="components-list">
+                <div class="components-list" id="components-list">
                     ${componentsHtml}
                 </div>
+            </div>
+        </div>
+    `;
+}
+
+// Store original preset details for reset functionality
+let originalPresetDetails = null;
+
+function makePresetEditable(details) {
+    // Store original for reset
+    originalPresetDetails = JSON.parse(JSON.stringify(details));
+
+    const componentsList = document.getElementById('components-list');
+    if (!componentsList) return;
+
+    // Generate editable component HTML
+    const editableComponentsHtml = details.components.map((comp, index) => {
+        const icon = {
+            'binary': 'fas fa-toggle-on',
+            'continuous': 'fas fa-sliders-h',
+            'format': 'fas fa-code',
+            'numerical': 'fas fa-calculator',
+            'length': 'fas fa-ruler',
+            'template': 'fas fa-file-alt',
+            'choice': 'fas fa-list-ul',
+            'content': 'fas fa-paragraph',
+            'pattern': 'fas fa-search'
+        }[comp.type.toLowerCase()] || 'fas fa-cog';
+
+        // Generate editable parameter inputs with improved layout
+        let paramInputsHtml = '';
+        let paramCount = 0;
+
+        if (comp.parameters && Object.keys(comp.parameters).length > 0) {
+            const paramFields = [];
+
+            for (const [key, value] of Object.entries(comp.parameters)) {
+                if (value !== null && value !== undefined) {
+                    paramCount++;
+                    const inputId = `param-${index}-${key}`;
+                    let inputHtml = '';
+
+                    if (typeof value === 'boolean') {
+                        inputHtml = `
+                            <div class="param-field">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="${inputId}" ${value ? 'checked' : ''}>
+                                    <label class="form-check-label" for="${inputId}">${key.replace(/_/g, ' ')}</label>
+                                </div>
+                            </div>
+                        `;
+                    } else if (typeof value === 'number') {
+                        inputHtml = `
+                            <div class="param-field">
+                                <label class="form-label small fw-bold">${key.replace(/_/g, ' ')}</label>
+                                <input type="number" class="form-control" id="${inputId}" value="${value}" step="any">
+                            </div>
+                        `;
+                    } else if (Array.isArray(value)) {
+                        inputHtml = `
+                            <div class="param-field">
+                                <label class="form-label small fw-bold">${key.replace(/_/g, ' ')}</label>
+                                <input type="text" class="form-control" id="${inputId}" value="${value.join(', ')}" placeholder="Comma-separated values">
+                            </div>
+                        `;
+                    } else {
+                        inputHtml = `
+                            <div class="param-field">
+                                <label class="form-label small fw-bold">${key.replace(/_/g, ' ')}</label>
+                                <input type="text" class="form-control" id="${inputId}" value="${value}">
+                            </div>
+                        `;
+                    }
+                    paramFields.push(inputHtml);
+                }
+            }
+
+            if (paramCount > 0) {
+                paramInputsHtml = `
+                    <div class="params-grid mt-3">
+                        ${paramFields.join('')}
+                    </div>
+                `;
+            }
+        }
+
+        return `
+            <div class="component-item mb-3 p-3 border rounded" data-index="${index}">
+                <div class="component-content">
+                    <!-- Component Name -->
+                    <div class="d-flex align-items-center mb-2">
+                        <i class="${icon} me-2 text-primary"></i>
+                        <strong>${comp.name}</strong>
+                    </div>
+
+                    <!-- Description -->
+                    <div class="component-description small text-muted mb-3">
+                        ${comp.description}
+                    </div>
+
+                    <!-- Parameters -->
+                    ${paramInputsHtml}
+                </div>
+
+                <!-- Weight Input -->
+                <div class="component-weight">
+                    <label class="form-label small fw-bold">Weight:</label>
+                    <input type="number" class="form-control weight-input"
+                           value="${comp.weight}"
+                           step="0.1"
+                           min="0"
+                           data-index="${index}"
+                           onchange="updateWeightTotal()">
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    componentsList.innerHTML = editableComponentsHtml;
+
+    // Update header with action buttons
+    const cardHeader = componentsList.closest('.card').querySelector('.card-header');
+    cardHeader.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+            <span><i class="fas fa-edit"></i> Customize Reward</span>
+            <div>
+                <span id="weight-total-display" class="badge bg-light text-dark me-2"></span>
+                <button class="btn btn-sm btn-secondary me-1" onclick="resetPresetToOriginal()">
+                    <i class="fas fa-undo"></i> Reset
+                </button>
+                <button class="btn btn-sm btn-success" onclick="saveCustomizedPreset()">
+                    <i class="fas fa-check"></i> Apply Changes
+                </button>
+            </div>
+        </div>
+    `;
+
+    // Initial weight total update
+    updateWeightTotal();
+}
+
+function updateWeightTotal() {
+    const weightInputs = document.querySelectorAll('.weight-input');
+    let total = 0;
+    weightInputs.forEach(input => {
+        total += parseFloat(input.value) || 0;
+    });
+
+    const display = document.getElementById('weight-total-display');
+    if (display) {
+        const isValid = Math.abs(total - 1.0) < 0.001;
+        display.className = `badge ${isValid ? 'bg-success' : 'bg-warning'} text-white me-2`;
+        display.innerHTML = `Total: ${total.toFixed(3)} ${isValid ? '✓' : ''}`;
+    }
+}
+
+function resetPresetToOriginal() {
+    if (originalPresetDetails) {
+        displayPresetComponents(originalPresetDetails);
+        originalPresetDetails = null;
+    }
+}
+
+function saveCustomizedPreset() {
+    const components = [];
+    const componentItems = document.querySelectorAll('.component-item');
+
+    componentItems.forEach((item, index) => {
+        const weightInput = item.querySelector('.weight-input');
+        const originalComp = originalPresetDetails.components[index];
+
+        // Gather parameters
+        const parameters = {};
+        if (originalComp.parameters) {
+            for (const key of Object.keys(originalComp.parameters)) {
+                const inputId = `param-${index}-${key}`;
+                const input = document.getElementById(inputId);
+
+                if (input) {
+                    if (input.type === 'checkbox') {
+                        parameters[key] = input.checked;
+                    } else if (input.type === 'number') {
+                        parameters[key] = parseFloat(input.value);
+                    } else if (originalComp.parameters[key] !== null && Array.isArray(originalComp.parameters[key])) {
+                        parameters[key] = input.value.split(',').map(v => v.trim()).filter(v => v);
+                    } else {
+                        parameters[key] = input.value;
+                    }
+                }
+            }
+        }
+
+        components.push({
+            type: originalComp.type,
+            name: originalComp.name,
+            weight: parseFloat(weightInput.value) || 0,
+            parameters: parameters
+        });
+    });
+
+    // Check weight total
+    const totalWeight = components.reduce((sum, c) => sum + c.weight, 0);
+    if (Math.abs(totalWeight - 1.0) > 0.001) {
+        if (!confirm(`Weight total is ${totalWeight.toFixed(3)}, not 1.0. Continue anyway?`)) {
+            return;
+        }
+    }
+
+    // Update global reward config
+    window.selectedRewardConfig = {
+        type: 'custom',
+        components: components
+    };
+
+    selectedRewardName = `Customized ${originalPresetDetails.name}`;
+    selectedRewardType = 'custom';
+
+    // Update display
+    const nameElement = document.getElementById('selected-reward-name');
+    const descElement = document.getElementById('selected-reward-description');
+    if (nameElement) nameElement.textContent = selectedRewardName;
+    if (descElement) descElement.textContent = 'Custom configuration based on ' + originalPresetDetails.name;
+
+    // Show success notification
+    showNotification('✓ Customized reward applied!', 'success');
+
+    // Clear original details
+    originalPresetDetails = null;
+
+    // Optionally display as read-only again
+    displayCustomComponents(components);
+}
+
+function displayCustomComponents(components) {
+    const componentsList = document.getElementById('components-list');
+    if (!componentsList) return;
+
+    const totalWeight = components.reduce((sum, c) => sum + c.weight, 0);
+    const weightPercentages = components.map(c => ({
+        ...c,
+        weight_percentage: (c.weight / totalWeight) * 100
+    }));
+
+    const componentsHtml = weightPercentages.map(comp => {
+        const icon = {
+            'binary': 'fas fa-toggle-on',
+            'continuous': 'fas fa-sliders-h',
+            'format': 'fas fa-code',
+            'numerical': 'fas fa-calculator',
+            'length': 'fas fa-ruler',
+            'template': 'fas fa-file-alt',
+            'choice': 'fas fa-list-ul',
+            'content': 'fas fa-paragraph',
+            'pattern': 'fas fa-search'
+        }[comp.type.toLowerCase()] || 'fas fa-cog';
+
+        let paramHtml = '';
+        if (comp.parameters && Object.keys(comp.parameters).length > 0) {
+            paramHtml = '<div class="component-params mt-2 small text-muted">';
+            for (const [key, value] of Object.entries(comp.parameters)) {
+                if (value !== null && value !== undefined) {
+                    let displayValue = value;
+                    if (Array.isArray(value)) {
+                        displayValue = value.length > 0 ? value.join(', ') : 'None';
+                    } else if (typeof value === 'boolean') {
+                        displayValue = value ? 'Yes' : 'No';
+                    }
+                    paramHtml += `<div><strong>${key.replace(/_/g, ' ')}:</strong> ${displayValue}</div>`;
+                }
+            }
+            paramHtml += '</div>';
+        }
+
+        const weightPercentage = comp.weight_percentage.toFixed(1);
+        const barWidth = Math.max(5, comp.weight_percentage);
+
+        return `
+            <div class="component-item mb-3 p-3 border rounded">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <div class="d-flex align-items-center">
+                        <i class="${icon} me-2 text-primary"></i>
+                        <strong>${comp.name}</strong>
+                    </div>
+                    <span class="badge bg-secondary">${weightPercentage}% (${comp.weight.toFixed(2)})</span>
+                </div>
+                <div class="progress mb-2" style="height: 8px;">
+                    <div class="progress-bar bg-primary" role="progressbar"
+                         style="width: ${barWidth}%"
+                         aria-valuenow="${comp.weight_percentage}"
+                         aria-valuemin="0"
+                         aria-valuemax="100">
+                    </div>
+                </div>
+                ${paramHtml}
+            </div>
+        `;
+    }).join('');
+
+    componentsList.innerHTML = componentsHtml;
+
+    // Update header
+    const cardHeader = componentsList.closest('.card').querySelector('.card-header');
+    const isValid = Math.abs(totalWeight - 1.0) < 0.001;
+    const weightStatus = isValid
+        ? '<span class="badge bg-success"><i class="fas fa-check"></i> Weight Valid (1.0)</span>'
+        : `<span class="badge bg-warning text-dark"><i class="fas fa-exclamation-triangle"></i> Total: ${totalWeight.toFixed(3)}</span>`;
+
+    // Create details object for re-editing
+    const details = {
+        name: 'Custom Reward',
+        components: components
+    };
+
+    cardHeader.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+            <span><i class="fas fa-puzzle-piece"></i> Custom Reward Components</span>
+            <div>
+                ${weightStatus}
+                <button class="btn btn-sm btn-light ms-2" onclick='makePresetEditable(${JSON.stringify(details).replace(/'/g, "&#39;")})'>
+                    <i class="fas fa-edit"></i> Customize
+                </button>
             </div>
         </div>
     `;
@@ -837,12 +1163,14 @@ function updateAdvancedComponentType(componentId, type) {
         case 'template':
             paramsHtml = `
                 <div class="mb-2">
-                    <label class="form-label">Section Tags (comma-separated)</label>
+                    <label class="form-label">All Sections to Check (comma-separated)</label>
                     <input type="text" class="form-control" placeholder="e.g., analysis,signal,confidence" data-param="section_tags">
+                    <small class="form-text text-muted">All possible XML tags to validate (e.g., &lt;analysis&gt;, &lt;signal&gt;)</small>
                 </div>
                 <div class="mb-2">
-                    <label class="form-label">Required Sections (comma-separated)</label>
-                    <input type="text" class="form-control" placeholder="e.g., analysis,signal" data-param="required_sections">
+                    <label class="form-label">Mandatory Sections (comma-separated)</label>
+                    <input type="text" class="form-control" placeholder="e.g., signal" data-param="required_sections">
+                    <small class="form-text text-muted">Subset of sections above that must be present (leave empty if all are optional)</small>
                 </div>
                 <div class="form-check">
                     <input type="checkbox" class="form-check-input" id="${componentId}-order" data-param="order_matters">
@@ -971,7 +1299,20 @@ function displayTestResults(result) {
 
     if (!resultsDiv) return;
 
-    const testResult = result.results[0];
+    // Handle both formats: direct result or nested in results array
+    let testResult;
+    if (result.results && result.results.length > 0) {
+        // Format from /api/rewards/test (has results array)
+        testResult = result.results[0];
+    } else if (result.total_reward !== undefined) {
+        // Direct format from /api/rewards/test-with-model
+        testResult = result;
+    } else {
+        resultsDiv.innerHTML = '<p class="text-danger">Invalid result format</p>';
+        console.error('Invalid result format:', result);
+        return;
+    }
+
     const totalReward = testResult.total_reward.toFixed(3);
     const components = testResult.components;
 
@@ -1419,6 +1760,280 @@ function gatherRewardConfig() {
 }
 
 // ============================================================================
+// Model-Based Testing Functions
+// ============================================================================
+
+// Store original generated text for restoration
+let originalGeneratedText = '';
+let currentTestResult = null;
+let scoreUpdateDebounceTimer = null;
+
+// Toggle between manual and model-based testing
+function toggleTestMode(useModel) {
+    const generationPanel = document.getElementById('generation-settings-panel');
+    const testBtn = document.getElementById('test-reward-btn');
+    const generateBtn = document.getElementById('generate-and-test-btn');
+    const editBadge = document.getElementById('edit-mode-badge');
+
+    if (useModel) {
+        if (generationPanel) generationPanel.style.display = 'block';
+        if (testBtn) testBtn.style.display = 'none';
+        if (generateBtn) generateBtn.style.display = 'block';
+        if (editBadge) editBadge.style.display = 'inline-block';
+
+        // Verify base model is selected
+        const baseModel = getSelectedBaseModel();
+        if (!baseModel || baseModel === 'unsloth/Qwen2.5-1.5B-Instruct') {
+            showNotification('Using default base model. Select a model in Step 1 to use a different one.', 'info');
+        }
+    } else {
+        if (generationPanel) generationPanel.style.display = 'none';
+        if (testBtn) testBtn.style.display = 'block';
+        if (generateBtn) generateBtn.style.display = 'none';
+        if (editBadge) editBadge.style.display = 'none';
+    }
+}
+
+// Get the selected base model from Step 1
+function getSelectedBaseModel() {
+    // Try multiple possible element IDs where base model might be stored
+    const modelName = document.getElementById('model-name')?.value ||
+                     document.getElementById('base-model')?.value ||
+                     document.getElementById('selected-model')?.value;
+
+    if (!modelName) {
+        console.warn('No base model found, using default');
+        return 'unsloth/Qwen2.5-1.5B-Instruct'; // Default fallback
+    }
+
+    return modelName;
+}
+
+// Load available trained models (kept for backward compatibility but not used in test panel)
+async function loadAvailableModels() {
+    try {
+        const response = await fetch('/api/sessions/list');
+        const data = await response.json();
+
+        const modelSelect = document.getElementById('test-model-select');
+        if (!modelSelect) return; // Element might have been removed
+
+        modelSelect.innerHTML = '<option value="">-- Select a trained model --</option>';
+
+        if (data.sessions && data.sessions.length > 0) {
+            data.sessions.forEach(session => {
+                if (session.status === 'completed') {
+                    const option = document.createElement('option');
+                    option.value = session.session_id;
+                    option.textContent = `${session.session_id} (${session.model_name})`;
+                    modelSelect.appendChild(option);
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Failed to load models:', error);
+        showNotification('Failed to load available models', 'error');
+    }
+}
+
+// Test reward with model generation
+async function testRewardWithModel() {
+    const instruction = document.getElementById('test-instruction').value;
+    const reference = document.getElementById('test-reference').value;
+
+    if (!instruction) {
+        showNotification('Please provide an instruction', 'warning');
+        return;
+    }
+
+    // Get the base model from Step 1
+    const baseModel = getSelectedBaseModel();
+
+    if (!baseModel) {
+        showNotification('Please select a base model in Step 1', 'warning');
+        return;
+    }
+
+    // Get generation config
+    const generationConfig = {
+        temperature: parseFloat(document.getElementById('gen-temperature').value),
+        max_new_tokens: parseInt(document.getElementById('gen-max-tokens').value),
+        top_p: parseFloat(document.getElementById('gen-top-p').value),
+        top_k: parseInt(document.getElementById('gen-top-k').value)
+    };
+
+    // Get current reward config
+    const rewardConfig = gatherRewardConfig();
+
+    // Get system prompt from dataset section (if configured)
+    const systemPrompt = document.getElementById('custom-system-prompt')?.value ||
+                        document.getElementById('system-prompt')?.value || '';
+
+    const requestData = {
+        reward_config: rewardConfig,
+        instruction: instruction,
+        reference: reference || null,
+        model_type: 'base',  // Use base model instead of trained
+        model_key: baseModel,  // Base model name from Step 1
+        generation_config: generationConfig,
+        system_prompt: systemPrompt  // Include configured system prompt
+    };
+
+    try {
+        // Show loading state
+        const generateBtn = document.getElementById('generate-and-test-btn');
+        const originalText = generateBtn.innerHTML;
+        generateBtn.disabled = true;
+        generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+
+        const response = await fetch('/api/rewards/test-with-model', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestData)
+        });
+
+        const result = await response.json();
+
+        if (result.error) {
+            showNotification(`Error: ${result.error}`, 'error');
+            generateBtn.disabled = false;
+            generateBtn.innerHTML = originalText;
+            return;
+        }
+
+        // Store original generated text
+        originalGeneratedText = result.generated;
+
+        // Populate the generated textarea
+        document.getElementById('test-generated').value = result.generated;
+
+        // Display results
+        currentTestResult = result;
+        displayTestResults(result);
+
+        // Show restore button
+        document.getElementById('generated-actions').style.display = 'block';
+        document.getElementById('edit-status').textContent = 'Original model output';
+
+        showNotification('✓ Model generated response and scored successfully', 'success');
+
+        // Restore button
+        generateBtn.disabled = false;
+        generateBtn.innerHTML = originalText;
+
+    } catch (error) {
+        console.error('Test error:', error);
+        showNotification('Failed to test with model', 'error');
+        const generateBtn = document.getElementById('generate-and-test-btn');
+        generateBtn.disabled = false;
+        generateBtn.innerHTML = '<i class="fas fa-robot"></i> Generate & Score';
+    }
+}
+
+// Test reward with or without model (based on mode)
+function testRewardWithOrWithoutModel() {
+    const useModel = document.getElementById('use-model-generation').checked;
+    if (useModel) {
+        testRewardWithModel();
+    } else {
+        testReward();
+    }
+}
+
+// Handle edits to generated text
+function onGeneratedTextEdit() {
+    const currentText = document.getElementById('test-generated').value;
+
+    // Only proceed if we have an original text to compare against
+    if (!originalGeneratedText) {
+        return;
+    }
+
+    // Update edit status
+    const editStatus = document.getElementById('edit-status');
+    if (currentText === originalGeneratedText) {
+        editStatus.textContent = 'Original model output';
+        editStatus.className = 'text-muted ms-2';
+    } else {
+        editStatus.textContent = 'Modified (scores updating...)';
+        editStatus.className = 'text-warning ms-2';
+    }
+
+    // Debounce the score update
+    clearTimeout(scoreUpdateDebounceTimer);
+    scoreUpdateDebounceTimer = setTimeout(() => {
+        updateScoreForEditedText(currentText);
+    }, 500); // Wait 500ms after user stops typing
+}
+
+// Update score for edited text
+async function updateScoreForEditedText(editedText) {
+    const instruction = document.getElementById('test-instruction').value;
+    const reference = document.getElementById('test-reference').value;
+    const rewardConfig = gatherRewardConfig();
+
+    const testData = {
+        reward_config: rewardConfig,
+        test_cases: [{
+            instruction: instruction,
+            generated: editedText,
+            reference: reference || null
+        }]
+    };
+
+    try {
+        const response = await fetch('/api/rewards/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(testData)
+        });
+
+        const result = await response.json();
+
+        if (result.error) {
+            console.error('Score update error:', result.error);
+            return;
+        }
+
+        // Update the display with new scores
+        const testResult = result.results[0];
+        displayTestResults(testResult);
+
+        // Update edit status
+        const editStatus = document.getElementById('edit-status');
+        if (editedText === originalGeneratedText) {
+            editStatus.textContent = 'Original model output';
+            editStatus.className = 'text-muted ms-2';
+        } else {
+            // Compare scores
+            const scoreDiff = testResult.total_reward - (currentTestResult?.total_reward || 0);
+            if (scoreDiff > 0) {
+                editStatus.textContent = `Improved score: +${scoreDiff.toFixed(3)}`;
+                editStatus.className = 'text-success ms-2';
+            } else if (scoreDiff < 0) {
+                editStatus.textContent = `Lower score: ${scoreDiff.toFixed(3)}`;
+                editStatus.className = 'text-danger ms-2';
+            } else {
+                editStatus.textContent = 'Same score';
+                editStatus.className = 'text-muted ms-2';
+            }
+        }
+
+    } catch (error) {
+        console.error('Failed to update score:', error);
+    }
+}
+
+// Restore original generated text
+function restoreOriginalGenerated() {
+    if (originalGeneratedText) {
+        document.getElementById('test-generated').value = originalGeneratedText;
+        onGeneratedTextEdit(); // Trigger score update
+        showNotification('✓ Restored original model output', 'info');
+    }
+}
+
+// ============================================================================
 // Export Functions Globally for App.js Integration
 // ============================================================================
 
@@ -1440,6 +2055,57 @@ window.confirmPresetSelection = confirmPresetSelection;
 window.loadSavedSelection = loadSavedSelection;
 window.filterPresetsByCategory = filterPresetsByCategory;
 
+// Export new model-based testing functions
+window.toggleTestMode = toggleTestMode;
+window.loadAvailableModels = loadAvailableModels;
+window.testRewardWithModel = testRewardWithModel;
+window.testRewardWithOrWithoutModel = testRewardWithOrWithoutModel;
+window.onGeneratedTextEdit = onGeneratedTextEdit;
+window.restoreOriginalGenerated = restoreOriginalGenerated;
+
+// Export preset customization functions
+window.makePresetEditable = makePresetEditable;
+window.updateWeightTotal = updateWeightTotal;
+window.resetPresetToOriginal = resetPresetToOriginal;
+window.saveCustomizedPreset = saveCustomizedPreset;
+window.toggleParameters = toggleParameters;
+
+// Toggle function for expandable parameters
+function toggleParameters(index) {
+    const content = document.getElementById(`params-${index}`);
+    const icon = document.getElementById(`param-icon-${index}`);
+
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-up');
+    } else {
+        content.style.display = 'none';
+        icon.classList.remove('fa-chevron-up');
+        icon.classList.add('fa-chevron-down');
+    }
+}
+
+// Toggle reward panel collapse
+function toggleRewardPanel() {
+    const content = document.getElementById('selected-reward-display');
+    const chevron = document.getElementById('reward-panel-chevron');
+
+    if (content && chevron) {
+        if (content.classList.contains('show')) {
+            content.classList.remove('show');
+            chevron.classList.remove('fa-chevron-up');
+            chevron.classList.add('fa-chevron-down');
+        } else {
+            content.classList.add('show');
+            chevron.classList.remove('fa-chevron-down');
+            chevron.classList.add('fa-chevron-up');
+        }
+    }
+}
+
+window.toggleRewardPanel = toggleRewardPanel;
+
 // ============================================================================
 // Field Mapping Functions
 // ============================================================================
@@ -1456,6 +2122,16 @@ async function showFieldMappingModal(presetName, datasetColumns) {
     }
 
     try {
+        // Get current field mappings from dataset step
+        const currentDatasetMapping = {
+            instruction: document.getElementById('instruction-field')?.value || '',
+            response: document.getElementById('response-field')?.value || '',
+            reasoning: document.getElementById('reasoning-field')?.value || ''
+        };
+
+        // Merge with any existing window.currentFieldMapping
+        const currentMapping = { ...window.currentFieldMapping, ...currentDatasetMapping };
+
         // Call validation API to get suggestions
         const response = await fetch('/api/rewards/validate-fields', {
             method: 'POST',
@@ -1463,7 +2139,7 @@ async function showFieldMappingModal(presetName, datasetColumns) {
             body: JSON.stringify({
                 reward_preset: presetName,
                 dataset_columns: datasetColumns,
-                current_mapping: window.currentFieldMapping
+                current_mapping: currentMapping
             })
         });
 
@@ -1693,8 +2369,13 @@ function validateCurrentMapping() {
     const requiredFields = [];
     document.querySelectorAll('.field-status-badge.mapped').forEach(badge => {
         const fieldBox = badge.closest('.field-box');
-        const fieldName = fieldBox.querySelector('.field-box-content').textContent.trim();
-        requiredFields.push(fieldName);
+        if (fieldBox) {  // Add null check to prevent error
+            const fieldNameElement = fieldBox.querySelector('.field-box-content');
+            if (fieldNameElement) {
+                const fieldName = fieldNameElement.textContent.trim();
+                requiredFields.push(fieldName);
+            }
+        }
     });
 
     // Check if all required fields are mapped
@@ -1824,6 +2505,21 @@ function updateRewardMappingStatus(presetName, mapping) {
     componentDisplay.insertAdjacentHTML('beforeend', `<div class="field-mapping-status">${mappingStatusHtml}</div>`);
 }
 
+// Function to show field mapping for a specific preset (without selecting it first)
+function showFieldMappingForPreset(presetName) {
+    if (!window.currentDatasetColumns || window.currentDatasetColumns.length === 0) {
+        showNotification('Please load a dataset first to map fields', 'warning');
+        return;
+    }
+
+    if (!rewardPresets[presetName]) {
+        showNotification('Invalid reward preset', 'error');
+        return;
+    }
+
+    showFieldMappingModal(presetName, window.currentDatasetColumns);
+}
+
 // Show field mapping for current reward and dataset
 function showFieldMappingForCurrentReward() {
     if (!selectedRewardName || !window.currentDatasetColumns) {
@@ -1842,6 +2538,7 @@ function showFieldMappingForCurrentReward() {
 
 // Export field mapping functions
 window.showFieldMappingModal = showFieldMappingModal;
+window.showFieldMappingForPreset = showFieldMappingForPreset;
 window.showFieldMappingForCurrentReward = showFieldMappingForCurrentReward;
 window.confirmFieldMapping = confirmFieldMapping;
 window.autoMapFields = autoMapFields;

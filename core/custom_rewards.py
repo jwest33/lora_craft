@@ -68,6 +68,9 @@ class RewardConfig:
     patterns: Optional[List[str]] = None
     strict_order: bool = False
 
+    # Signal accuracy validation
+    signal_direction_match_score: float = 0.70  # Score for correct direction, wrong strength
+
     # Custom function
     custom_code: Optional[str] = None
     safe_mode: bool = True
@@ -104,13 +107,15 @@ class RewardFunction:
     def compute(self,
                 instruction: str,
                 generated: str,
-                reference: Optional[str] = None) -> float:
+                reference: Optional[str] = None,
+                tokenizer: Optional[Any] = None) -> float:
         """Compute reward for generated text.
 
         Args:
             instruction: Input instruction
             generated: Generated response
             reference: Reference response (optional)
+            tokenizer: Optional tokenizer for token-based metrics
 
         Returns:
             Reward value
@@ -124,7 +129,8 @@ class BinaryReward(RewardFunction):
     def compute(self,
                 instruction: str,
                 generated: str,
-                reference: Optional[str] = None) -> float:
+                reference: Optional[str] = None,
+                tokenizer: Optional[Any] = None) -> float:
         """Compute binary reward."""
         if reference is None:
             return 0.0
@@ -164,7 +170,8 @@ class NumericalReward(RewardFunction):
     def compute(self,
                 instruction: str,
                 generated: str,
-                reference: Optional[str] = None) -> float:
+                reference: Optional[str] = None,
+                tokenizer: Optional[Any] = None) -> float:
         """Compute numerical reward."""
         if reference is None:
             return 0.0
@@ -199,29 +206,59 @@ class NumericalReward(RewardFunction):
 
 
 class LengthReward(RewardFunction):
-    """Reward based on response length."""
+    """Reward based on response length (token count if tokenizer provided, else word count).
+
+    Best Practice for max_length:
+        Set max_length to (max_new_tokens - margin) to detect clipped/truncated responses.
+
+        Example:
+            max_new_tokens = 512  # Your generation limit
+            max_length = 492      # Detects responses that hit the limit (20 token margin)
+
+        This penalizes responses that were likely cut off mid-thought, encouraging
+        the model to learn more concise responses that fit within the token budget.
+    """
 
     def compute(self,
                 instruction: str,
                 generated: str,
-                reference: Optional[str] = None) -> float:
-        """Compute length-based reward."""
-        gen_length = len(generated.split())
+                reference: Optional[str] = None,
+                tokenizer: Optional[Any] = None) -> float:
+        """Compute length-based reward.
+
+        Args:
+            instruction: Input instruction
+            generated: Generated response
+            reference: Reference response (optional, unused)
+            tokenizer: Optional tokenizer for token-based length calculation
+
+        Returns:
+            Reward value based on length constraints
+        """
+        # Use token count if tokenizer is provided, otherwise fall back to word count
+        if tokenizer is not None:
+            try:
+                gen_length = len(tokenizer.encode(generated, add_special_tokens=False))
+            except Exception as e:
+                logger.warning(f"Failed to tokenize for length reward: {e}, falling back to word count")
+                gen_length = len(generated.split())
+        else:
+            gen_length = len(generated.split())
 
         reward = 1.0
 
-        # Check minimum length
-        if self.config.min_length and gen_length < self.config.min_length:
+        # Check minimum length (only if explicitly set)
+        if self.config.min_length is not None and gen_length < self.config.min_length:
             penalty = (self.config.min_length - gen_length) / self.config.min_length
             reward *= (1 - penalty)
 
-        # Check maximum length
-        if self.config.max_length and gen_length > self.config.max_length:
+        # Check maximum length (only if explicitly set)
+        if self.config.max_length is not None and gen_length > self.config.max_length:
             penalty = (gen_length - self.config.max_length) / self.config.max_length
             reward *= (1 - min(penalty, 0.5))  # Cap penalty at 50%
 
-        # Check optimal length
-        if self.config.optimal_length:
+        # Check optimal length (only if explicitly set)
+        if self.config.optimal_length is not None:
             distance = abs(gen_length - self.config.optimal_length)
             penalty = distance / self.config.optimal_length
             reward *= math.exp(-penalty)  # Gaussian-like penalty
@@ -235,7 +272,8 @@ class FormatReward(RewardFunction):
     def compute(self,
                 instruction: str,
                 generated: str,
-                reference: Optional[str] = None) -> float:
+                reference: Optional[str] = None,
+                tokenizer: Optional[Any] = None) -> float:
         """Compute format-based reward."""
         if not self.config.regex_pattern:
             return 1.0
@@ -289,7 +327,8 @@ class CustomReward(RewardFunction):
     def compute(self,
                 instruction: str,
                 generated: str,
-                reference: Optional[str] = None) -> float:
+                reference: Optional[str] = None,
+                tokenizer: Optional[Any] = None) -> float:
         """Compute custom reward."""
         try:
             reward = self._custom_func(instruction, generated, reference)
@@ -312,7 +351,8 @@ class TemplateValidationReward(RewardFunction):
     def compute(self,
                 instruction: str,
                 generated: str,
-                reference: Optional[str] = None) -> float:
+                reference: Optional[str] = None,
+                tokenizer: Optional[Any] = None) -> float:
         """Compute template validation reward with partial credit."""
         score = 1.0
         found_sections = []
@@ -370,7 +410,8 @@ class MultiChoiceValidationReward(RewardFunction):
     def compute(self,
                 instruction: str,
                 generated: str,
-                reference: Optional[str] = None) -> float:
+                reference: Optional[str] = None,
+                tokenizer: Optional[Any] = None) -> float:
         """Compute multi-choice validation reward."""
         if not self.valid_choices:
             return 1.0
@@ -412,7 +453,8 @@ class SectionContentReward(RewardFunction):
     def compute(self,
                 instruction: str,
                 generated: str,
-                reference: Optional[str] = None) -> float:
+                reference: Optional[str] = None,
+                tokenizer: Optional[Any] = None) -> float:
         """Compute section content reward."""
         score = 1.0
 
@@ -468,7 +510,8 @@ class SequentialPatternReward(RewardFunction):
     def compute(self,
                 instruction: str,
                 generated: str,
-                reference: Optional[str] = None) -> float:
+                reference: Optional[str] = None,
+                tokenizer: Optional[Any] = None) -> float:
         """Compute sequential pattern reward."""
         if not self.patterns:
             return 1.0
@@ -532,6 +575,7 @@ class SignalAccuracyReward(RewardFunction):
         """
         super().__init__(config)
         self.valid_signals = config.valid_choices or []
+        self.direction_match_score = config.signal_direction_match_score
 
     def _extract_signal(self, text: str) -> Optional[str]:
         """Extract signal from <signal> tags.
@@ -587,13 +631,15 @@ class SignalAccuracyReward(RewardFunction):
     def compute(self,
                 instruction: str,
                 generated: str,
-                reference: Optional[str] = None) -> float:
+                reference: Optional[str] = None,
+                tokenizer: Optional[Any] = None) -> float:
         """Compute signal accuracy reward with partial credit.
 
         Args:
             instruction: Input instruction
             generated: Generated response
             reference: Reference response with correct signal
+            tokenizer: Optional tokenizer (unused for this reward)
 
         Returns:
             Reward value (0.0 to 1.0)
@@ -629,19 +675,10 @@ class SignalAccuracyReward(RewardFunction):
            (gen_dir == 'SELL' and ref_dir == 'BUY'):
             return 0.0
 
-        # Same direction, different strength = 70% credit
+        # Same direction, different strength = configurable credit
         # This is the key partial credit case!
         if gen_dir == ref_dir and gen_dir != 'HOLD':
-            return 0.70
-
-        # HOLD scenarios (one is HOLD, the other isn't)
-        if gen_dir == 'HOLD' or ref_dir == 'HOLD':
-            # HOLD when should be WEAK signal = 50% (more forgivable)
-            if not self._is_strong_signal(ref_signal if ref_dir != 'HOLD' else gen_signal):
-                return 0.50
-            # HOLD when should be STRONG signal = 40% (less forgivable)
-            else:
-                return 0.40
+            return self.direction_match_score
 
         # Fallback (shouldn't reach here)
         return 0.0
@@ -999,6 +1036,7 @@ class RewardPresetLibrary:
         builder.add_signal_accuracy(
             "signal_accuracy",
             valid_signals=["STRONG_BUY", "WEAK_BUY", "HOLD", "WEAK_SELL", "STRONG_SELL"],
+            direction_match_score=0.70,  # 70% credit for correct direction, wrong strength
             weight=0.85  # Massively increased - this is what we care about
         )
 
@@ -1222,6 +1260,7 @@ class CustomRewardBuilder:
 
     def add_signal_accuracy(self, name: str,
                            valid_signals: List[str],
+                           direction_match_score: float = 0.70,
                            weight: float = 1.0):
         """Add signal accuracy reward with partial credit for direction.
 
@@ -1231,14 +1270,13 @@ class CustomRewardBuilder:
 
         Partial credit scoring:
             - Perfect match: 1.00
-            - Right direction, wrong strength: 0.70
-            - HOLD when should be WEAK: 0.50
-            - HOLD when should be STRONG: 0.40
+            - Right direction, wrong strength: direction_match_score (default 0.70)
             - Opposite direction: 0.00
 
         Args:
             name: Reward component name
             valid_signals: List of valid signal names (e.g., ['STRONG_BUY', 'WEAK_BUY', ...])
+            direction_match_score: Score for correct direction but wrong strength (0.0-1.0)
             weight: Weight for this reward component
         """
         config = RewardConfig(
@@ -1246,6 +1284,7 @@ class CustomRewardBuilder:
             description=f"Signal accuracy with partial credit: {name}",
             type=RewardType.CONTINUOUS,
             valid_choices=valid_signals,
+            signal_direction_match_score=direction_match_score,
             weight=weight
         )
         self.add_reward(SignalAccuracyReward(config), weight)
@@ -1253,7 +1292,8 @@ class CustomRewardBuilder:
     def compute_total_reward(self,
                             instruction: str,
                             generated: str,
-                            reference: Optional[str] = None) -> Tuple[float, Dict[str, float]]:
+                            reference: Optional[str] = None,
+                            tokenizer: Optional[Any] = None) -> Tuple[float, Dict[str, float]]:
         """Compute total reward from all components with brevity bonus.
 
         Uses a two-pass approach:
@@ -1268,6 +1308,7 @@ class CustomRewardBuilder:
             instruction: Input instruction
             generated: Generated response
             reference: Reference response
+            tokenizer: Optional tokenizer for token-based metrics
 
         Returns:
             Tuple of (total_reward, component_rewards)
@@ -1278,7 +1319,7 @@ class CustomRewardBuilder:
         # First pass: compute all component rewards
         component_rewards = {}
         for reward_func in self.rewards:
-            reward_value = reward_func.compute(instruction, generated, reference)
+            reward_value = reward_func.compute(instruction, generated, reference, tokenizer)
             component_rewards[reward_func.config.name] = reward_value
 
         # Calculate base quality from non-length components
@@ -1302,16 +1343,23 @@ class CustomRewardBuilder:
                 break
 
         if length_component_name and base_quality > quality_threshold:
-            word_count = len(generated.split())
+            # Use token count if tokenizer provided, otherwise word count
+            if tokenizer is not None:
+                try:
+                    count = len(tokenizer.encode(generated, add_special_tokens=False))
+                except Exception:
+                    count = len(generated.split())
+            else:
+                count = len(generated.split())
 
-            # Brevity bonus: shorter is better within 30-150 word range
-            # Up to +15% bonus for responses closer to 30 words
-            min_brevity_words = 30
-            max_brevity_words = 150
+            # Brevity bonus: shorter is better within 30-150 unit range (tokens or words)
+            # Up to +15% bonus for responses closer to 30 units
+            min_brevity_units = 30
+            max_brevity_units = 150
 
-            if min_brevity_words <= word_count <= max_brevity_words:
-                # Linear interpolation: 150 words = 1.0x, 30 words = 1.15x
-                brevity_multiplier = 1.0 + (max_brevity_words - word_count) / (max_brevity_words - min_brevity_words) * 0.15
+            if min_brevity_units <= count <= max_brevity_units:
+                # Linear interpolation: 150 units = 1.0x, 30 units = 1.15x
+                brevity_multiplier = 1.0 + (max_brevity_units - count) / (max_brevity_units - min_brevity_units) * 0.15
                 component_rewards[length_component_name] *= brevity_multiplier
 
         # Compute final weighted sum
@@ -1415,10 +1463,11 @@ class CustomRewardBuilder:
                     'relative': config.relative_tolerance
                 }
             elif isinstance(reward_func, LengthReward):
+                # Include all parameters, showing "Excluded" for None values
                 details['parameters'] = {
-                    'min_length': config.min_length,
-                    'max_length': config.max_length,
-                    'optimal_length': config.optimal_length
+                    'min_length': config.min_length if config.min_length is not None else "Excluded",
+                    'max_length': config.max_length if config.max_length is not None else "Excluded",
+                    'optimal_length': config.optimal_length if config.optimal_length is not None else "Excluded"
                 }
             elif isinstance(reward_func, FormatReward):
                 details['parameters'] = {
@@ -1442,11 +1491,12 @@ class CustomRewardBuilder:
                     'exact_match': config.exact_match
                 }
             elif isinstance(reward_func, SectionContentReward):
+                # Show all parameters, with "Excluded" for optional ones
                 details['parameters'] = {
                     'section_tag': config.section_tag,
-                    'min_words': config.min_words,
-                    'max_words': config.max_words,
-                    'required_keywords': config.required_keywords[:5] if config.required_keywords else []  # Show first 5
+                    'min_words': config.min_words if (config.min_words is not None and config.min_words > 0) else "Excluded",
+                    'max_words': config.max_words if (config.max_words is not None and config.max_words != float('inf')) else "Excluded",
+                    'required_keywords': config.required_keywords[:5] if config.required_keywords else "Excluded"
                 }
             elif isinstance(reward_func, SequentialPatternReward):
                 details['parameters'] = {
@@ -1456,7 +1506,7 @@ class CustomRewardBuilder:
             elif isinstance(reward_func, SignalAccuracyReward):
                 details['parameters'] = {
                     'valid_signals': config.valid_choices,
-                    'partial_credit': 'Yes (0.7 for correct direction, 0.5/0.4 for HOLD mismatches)'
+                    'direction_match_score': config.signal_direction_match_score
                 }
 
             components.append(details)
@@ -1510,19 +1560,21 @@ class RewardTester:
     def test_single(self,
                    instruction: str,
                    generated: str,
-                   reference: Optional[str] = None) -> Dict[str, Any]:
+                   reference: Optional[str] = None,
+                   tokenizer: Optional[Any] = None) -> Dict[str, Any]:
         """Test reward on a single example.
 
         Args:
             instruction: Input instruction
             generated: Generated response
             reference: Reference response (optional)
+            tokenizer: Optional tokenizer for token-based metrics
 
         Returns:
             Dictionary with total reward and component breakdown
         """
         total_reward, component_rewards = self.reward_builder.compute_total_reward(
-            instruction, generated, reference
+            instruction, generated, reference, tokenizer
         )
 
         return {
@@ -1533,11 +1585,12 @@ class RewardTester:
             'reference': reference
         }
 
-    def test_batch(self, test_cases: List[Dict[str, str]]) -> Dict[str, Any]:
+    def test_batch(self, test_cases: List[Dict[str, str]], tokenizer: Optional[Any] = None) -> Dict[str, Any]:
         """Test reward on multiple examples.
 
         Args:
             test_cases: List of dicts with 'instruction', 'generated', 'reference' keys
+            tokenizer: Optional tokenizer for token-based metrics
 
         Returns:
             Dictionary with statistics and individual results
@@ -1549,7 +1602,8 @@ class RewardTester:
             result = self.test_single(
                 case.get('instruction', ''),
                 case.get('generated', ''),
-                case.get('reference')
+                case.get('reference'),
+                tokenizer
             )
             results.append(result)
             rewards.append(result['total_reward'])
@@ -1596,13 +1650,15 @@ class RewardTester:
     def compare_responses(self,
                          instruction: str,
                          responses: List[str],
-                         reference: Optional[str] = None) -> List[Dict[str, Any]]:
+                         reference: Optional[str] = None,
+                         tokenizer: Optional[Any] = None) -> List[Dict[str, Any]]:
         """Compare multiple responses for the same instruction.
 
         Args:
             instruction: Input instruction
             responses: List of different responses to compare
             reference: Reference response (optional)
+            tokenizer: Optional tokenizer for token-based metrics
 
         Returns:
             List of results sorted by total reward (highest first)
@@ -1610,7 +1666,7 @@ class RewardTester:
         results = []
 
         for i, response in enumerate(responses):
-            result = self.test_single(instruction, response, reference)
+            result = self.test_single(instruction, response, reference, tokenizer)
             result['response_index'] = i
             results.append(result)
 
@@ -1618,6 +1674,104 @@ class RewardTester:
         results.sort(key=lambda x: x['total_reward'], reverse=True)
 
         return results
+
+    def test_with_model(self,
+                       instruction: str,
+                       reference: Optional[str],
+                       model_tester,
+                       model_type: str,
+                       model_key: str,
+                       generation_config: Optional[Dict[str, Any]] = None,
+                       session_info = None,
+                       system_prompt: Optional[str] = None,
+                       tokenizer: Optional[Any] = None) -> Dict[str, Any]:
+        """Test reward function by generating a response with a model and scoring it.
+
+        Args:
+            instruction: Input instruction/prompt
+            reference: Reference response for comparison (optional)
+            model_tester: ModelTester instance for generation
+            model_type: "trained" or "base"
+            model_key: Session ID for trained models or model name for base models
+            generation_config: Generation parameters (temperature, max_tokens, etc.)
+            session_info: SessionInfo object with training configuration
+            system_prompt: Custom system prompt to use (overrides session config)
+            tokenizer: Optional tokenizer for token-based metrics
+
+        Returns:
+            Dictionary with:
+                - instruction: The input instruction
+                - generated: Model-generated response
+                - reference: Reference response (if provided)
+                - total_reward: Overall reward score
+                - components: Breakdown of component scores
+                - generation_metadata: Info about the generation (tokens, time, etc.)
+        """
+        try:
+            # Import TestConfig if generation config provided
+            from core.model_tester import TestConfig
+
+            # Convert generation config to TestConfig if provided
+            test_config = None
+            if generation_config:
+                test_config = TestConfig(
+                    temperature=generation_config.get('temperature', 0.7),
+                    max_new_tokens=generation_config.get('max_new_tokens', 512),
+                    top_p=generation_config.get('top_p', 0.95),
+                    top_k=generation_config.get('top_k', 50),
+                    repetition_penalty=generation_config.get('repetition_penalty', 1.0),
+                    do_sample=generation_config.get('do_sample', True),
+                    num_beams=generation_config.get('num_beams', 1)
+                )
+
+            # Generate response using the model
+            generation_result = model_tester.generate_response(
+                prompt=instruction,
+                model_type=model_type,
+                model_key=model_key,
+                config=test_config,
+                use_chat_template=True,
+                session_info=session_info,
+                override_system_prompt=system_prompt if system_prompt else None
+            )
+
+            if not generation_result.get('success', False):
+                return {
+                    'success': False,
+                    'error': generation_result.get('error', 'Unknown generation error')
+                }
+
+            generated_text = generation_result.get('response', '')
+
+            # Score the generated response using the reward function
+            total_reward, component_rewards = self.reward_builder.compute_total_reward(
+                instruction=instruction,
+                generated=generated_text,
+                reference=reference,
+                tokenizer=tokenizer
+            )
+
+            return {
+                'success': True,
+                'instruction': instruction,
+                'generated': generated_text,
+                'reference': reference,
+                'total_reward': total_reward,
+                'components': component_rewards,
+                'generation_metadata': {
+                    'model_type': model_type,
+                    'model_key': model_key,
+                    'tokens_generated': generation_result.get('tokens_generated', 0),
+                    'generation_time': generation_result.get('generation_time', 0)
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to test with model: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
 
     def visualize_components(self, test_result: Dict[str, Any]) -> str:
         """Create a text visualization of component rewards.

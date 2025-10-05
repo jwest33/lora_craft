@@ -259,7 +259,8 @@ You are a helpful AI assistant.
         use_chat_template: bool = True,
         streaming_callback = None,
         use_simple_prompt: bool = False,
-        session_info = None
+        session_info = None,
+        override_system_prompt: Optional[str] = None
     ) -> Dict[str, Any]:
         """Generate response from a model.
 
@@ -272,6 +273,7 @@ You are a helpful AI assistant.
             streaming_callback: Callback for streaming tokens
             use_simple_prompt: Use simple prompting without system instructions
             session_info: SessionInfo object with training configuration (for trained models)
+            override_system_prompt: Custom system prompt to override session config
 
         Returns:
             Dictionary with response and metadata
@@ -316,8 +318,8 @@ You are a helpful AI assistant.
                         training_config.get('template', {}).get('chat_template')
                     )
 
-                    # Get system prompt
-                    system_prompt = (
+                    # Get system prompt (use override if provided, otherwise from config)
+                    system_prompt = override_system_prompt or (
                         training_config.get('system_prompt') or
                         training_config.get('template', {}).get('system_prompt') or
                         'You are a helpful AI assistant.'

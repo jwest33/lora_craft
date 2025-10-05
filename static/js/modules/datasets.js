@@ -617,6 +617,12 @@
                 datasetPathInput.value = path;
             }
 
+            // Update dataset source input to 'upload'
+            const datasetSourceInput = document.getElementById('dataset-source');
+            if (datasetSourceInput) {
+                datasetSourceInput.value = 'upload';
+            }
+
             // No AppState persistence - HTML inputs are source of truth
 
             // Fetch dataset info to get columns for mapping
@@ -1236,7 +1242,18 @@ ${solutionStart}4${solutionEnd}`;
                 case 'upload':
                     if (uploadSectionUnified) uploadSectionUnified.style.display = 'block';
                     this.loadUploadedDatasets();  // Load cached uploads
-                    this.restoreColumnMapping();  // Restore column mapping if available
+
+                    // Check if column mapping is already populated (check DOM, not async data)
+                    const mappingSection = document.getElementById('column-mapping-section');
+                    const instructionSelect = document.getElementById('upload-instruction-field');
+                    const responseSelect = document.getElementById('upload-response-field');
+
+                    // Only hide if mapping section exists but has no column options loaded
+                    const hasColumnOptions = instructionSelect?.options.length > 1 || responseSelect?.options.length > 1;
+                    if (mappingSection && !hasColumnOptions) {
+                        this.restoreColumnMapping();  // Hide it only if truly empty
+                    }
+                    // Otherwise keep it visible with existing data
                     break;
             }
 
@@ -1384,6 +1401,72 @@ ${solutionStart}4${solutionEnd}`;
                     <span>${CoreModule.escapeHtml(dataset.name)}</span>
                 </div>
             `).join('');
+        },
+
+        // Load uploaded dataset when restoring from config
+        loadUploadedDatasetFromConfig(datasetPath, datasetConfig) {
+            console.log('[Config Load] Loading uploaded dataset:', datasetPath);
+
+            // Fetch dataset info from backend
+            fetch('/api/upload_dataset_info', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    path: datasetPath
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    console.error('Failed to load dataset:', data.error);
+                    return;
+                }
+
+                // Store dataset info
+                this.currentUploadData = {
+                    filename: datasetPath.split('/').pop(),
+                    path: datasetPath,
+                    columns: data.columns || [],
+                    preview: data.preview,
+                    instruction_field: datasetConfig.instruction_field || '',
+                    response_field: datasetConfig.response_field || ''
+                };
+
+                // Show column mapping with pre-populated values
+                if (data.columns && data.columns.length > 0) {
+                    this.showColumnMapping(this.currentUploadData);
+
+                    // Pre-select the saved field mappings
+                    setTimeout(() => {
+                        const instructionSelect = document.getElementById('upload-instruction-field');
+                        const responseSelect = document.getElementById('upload-response-field');
+
+                        if (instructionSelect && datasetConfig.instruction_field) {
+                            instructionSelect.value = datasetConfig.instruction_field;
+                        }
+                        if (responseSelect && datasetConfig.response_field) {
+                            responseSelect.value = datasetConfig.response_field;
+                        }
+
+                        // Auto-confirm if both fields are set
+                        if (datasetConfig.instruction_field && datasetConfig.response_field) {
+                            this.confirmColumnMapping();
+                        }
+                    }, 200);
+                }
+
+                // Update hidden fields
+                const datasetPathInput = document.getElementById('dataset-path');
+                const datasetSourceInput = document.getElementById('dataset-source');
+                if (datasetPathInput) datasetPathInput.value = datasetPath;
+                if (datasetSourceInput) datasetSourceInput.value = 'upload';
+
+                // Reload uploaded files list to show selection
+                this.loadUploadedDatasets();
+            })
+            .catch(error => {
+                console.error('Error loading uploaded dataset:', error);
+            });
         }
     };
 

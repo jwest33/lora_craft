@@ -100,14 +100,13 @@
 
                         // Generate model cards HTML
                         const cardsHtml = data.models.map(model => {
-                            // Extract model name from various sources
-                            let modelName = model.model_name;
-                            if (!modelName || modelName === 'Unknown') {
-                                // Try to get from training_config
-                                modelName = model.training_config?.model?.modelName ||
-                                           model.display_name ||
-                                           model.session_id ||
-                                           'Unknown Model';
+                            // Get display name (user-entered name) as primary title
+                            let displayName = model.display_name || model.session_id || 'Unnamed Model';
+
+                            // Get base model name for meta details
+                            let baseModelName = model.model_name;
+                            if (!baseModelName || baseModelName === 'Unknown') {
+                                baseModelName = model.training_config?.model?.modelName || null;
                             }
 
                             const createdDate = new Date(model.created_at || Date.now());
@@ -140,7 +139,7 @@
                                             <div class="flex-grow-1">
                                                 <h6 class="card-title mb-0">
                                                     <i class="fas fa-robot text-primary"></i>
-                                                    ${CoreModule.escapeHtml(modelName)}
+                                                    ${CoreModule.escapeHtml(displayName)}
                                                 </h6>
                                                 ${datasetName ? `<small class="text-muted"><i class="fas fa-database"></i> ${CoreModule.escapeHtml(datasetName)}</small>` : ''}
                                             </div>
@@ -148,6 +147,7 @@
                                         </div>
 
                                         <div class="model-meta text-muted small mb-3">
+                                            ${baseModelName ? `<div><i class="fas fa-cube"></i> Base: ${CoreModule.escapeHtml(baseModelName)}</div>` : ''}
                                             <div><i class="fas fa-calendar"></i> Completed: ${completedDate.toLocaleString()}</div>
                                             <div><i class="fas fa-layer-group"></i> Epochs: ${epochs}</div>
                                             ${model.has_final_checkpoint ? '<div><i class="fas fa-check-circle text-success"></i> Final checkpoint saved</div>' : ''}
@@ -353,10 +353,10 @@
 
             // Build info HTML with available data
             let infoHtml = `
-                <div class="card">
+                <div class="card" style="background-color: var(--bg-card); border-color: var(--border-color);">
                     <div class="card-body">
-                        <h6 class="card-title">Model Information</h6>
-                        <dl class="row mb-0">
+                        <h6 class="card-title" style="color: var(--text-primary);">Model Information</h6>
+                        <dl class="row mb-0" style="color: var(--text-primary);">
                             <dt class="col-sm-4">Name:</dt>
                             <dd class="col-sm-8">${CoreModule.escapeHtml(modelName)}</dd>
 

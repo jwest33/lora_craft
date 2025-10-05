@@ -14,8 +14,10 @@
         init() {
             this.setupEventListeners();
             this.loadConfigList();
-            // Ensure GRPO is selected by default
+            // Ensure GRPO is selected by default (with delay for DOM readiness)
             this.selectAlgorithm('grpo');
+            setTimeout(() => this.selectAlgorithm('grpo'), 100);
+            setTimeout(() => this.selectAlgorithm('grpo'), 500);
         },
 
         // Setup configuration-related event listeners
@@ -406,7 +408,35 @@
                 if (config.dataset.source) {
                     const datasetSourceElement = document.getElementById('dataset-source');
                     if (datasetSourceElement) {
-                        datasetSourceElement.value = config.dataset.source;
+                        // Detect if path indicates an uploaded dataset (override source if needed)
+                        let actualSource = config.dataset.source;
+                        if (config.dataset.path && config.dataset.path.startsWith('uploads/')) {
+                            actualSource = 'upload';
+                            console.log('[Config] Detected upload path, overriding source to "upload"');
+                        }
+
+                        datasetSourceElement.value = actualSource;
+
+                        // Store dataset type for later application (when user navigates to Step 2)
+                        // Don't call selectDatasetType here to avoid race conditions
+                        const sourceTypeMap = {
+                            'huggingface': 'popular',  // HF datasets show as "popular"
+                            'upload': 'upload',
+                            'custom': 'custom'
+                        };
+
+                        const uiType = sourceTypeMap[actualSource] || actualSource;
+
+                        // Store pending dataset type to apply when navigating to Step 2
+                        AppState.setConfigValue('pendingDatasetType', uiType);
+
+                        // For uploaded datasets, store the info for later restoration
+                        if (actualSource === 'upload' && config.dataset.path) {
+                            AppState.setConfigValue('pendingUploadedDataset', {
+                                path: config.dataset.path,
+                                config: config.dataset
+                            });
+                        }
                     } else {
                         console.warn('dataset-source element not found');
                     }
@@ -616,7 +646,16 @@
                     // Preset reward - use selectPresetByName if available
                     if (typeof selectPresetByName === 'function') {
                         setTimeout(() => {
-                            selectPresetByName(config.reward.preset_name, true);
+                            // Select the preset and show it visibly
+                            selectPresetByName(config.reward.preset_name, false); // Don't be silent - show selection
+
+                            // Scroll to and highlight the selected card
+                            setTimeout(() => {
+                                const selectedCard = document.querySelector('.preset-card.selected');
+                                if (selectedCard) {
+                                    selectedCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                }
+                            }, 600);
                         }, 500);
                     }
                 } else if (config.reward.type === 'custom' && config.reward.components) {
@@ -1234,23 +1273,29 @@
                 return;
             }
 
-            // Send test request to server
-            fetch('/api/test_reward', {
+            // Send test request to server (using updated API endpoint)
+            fetch('/api/rewards/test', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    instruction: instruction,
-                    generated: generated,
-                    reference: reference,
-                    reward_config: rewardConfig
+                    reward_config: rewardConfig,
+                    test_cases: [{
+                        instruction: instruction,
+                        generated: generated,
+                        reference: reference || null
+                    }]
                 })
             })
             .then(response => response.json())
             .then(data => {
-                if (data.success) {
-                    this.displayTestResults(data.results);
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                // Extract first result from results array
+                if (data.results && data.results.length > 0) {
+                    this.displayTestResults(data.results[0]);
                 } else {
-                    throw new Error(data.error || 'Failed to test reward');
+                    throw new Error('No results returned');
                 }
             })
             .catch(error => {
@@ -1265,15 +1310,16 @@
             if (!resultsContainer) return;
 
             let html = '<div class="test-results-content">';
-            html += `<div class="mb-3"><strong>Total Score:</strong> <span class="badge bg-primary">${results.total_score?.toFixed(4) || 'N/A'}</span></div>`;
+            html += `<div class="mb-3"><strong>Total Score:</strong> <span class="badge bg-primary">${results.total_reward?.toFixed(4) || 'N/A'}</span></div>`;
 
-            if (results.components && results.components.length > 0) {
+            // Handle components as object (API returns object, not array)
+            if (results.components && typeof results.components === 'object') {
                 html += '<h6>Component Scores:</h6><ul class="list-group">';
-                results.components.forEach(comp => {
+                Object.entries(results.components).forEach(([name, value]) => {
                     html += `
                         <li class="list-group-item d-flex justify-content-between align-items-center">
-                            ${comp.name || comp.type}
-                            <span class="badge bg-info">${comp.score?.toFixed(4) || 'N/A'}</span>
+                            ${name}
+                            <span class="badge bg-info">${value?.toFixed(4) || 'N/A'}</span>
                         </li>
                     `;
                 });

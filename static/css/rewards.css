@@ -218,7 +218,7 @@
     background: linear-gradient(135deg,
         rgba(168, 85, 247, 0.12) 0%,
         rgba(196, 181, 253, 0.12) 100%);
-    border-color: var(--primary-light);
+    border-color: var(--primary);
 }
 
 .selected-reward-header {
@@ -309,6 +309,25 @@
 /* ============================================================================ */
 /* Custom Reward Builder */
 /* ============================================================================ */
+
+/* Parameter Grid Layout */
+.params-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    width: 100%;
+}
+
+.param-field {
+    display: flex;
+    flex-direction: column;
+}
+
+@media (max-width: 768px) {
+    .params-grid {
+        grid-template-columns: 1fr;
+    }
+}
 
 #reward-components-advanced .card {
     background: var(--bg-secondary);
