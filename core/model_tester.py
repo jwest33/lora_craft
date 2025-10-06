@@ -21,6 +21,8 @@ from transformers import (
 )
 from peft import PeftModel
 
+from core.reward_loader import load_reward_from_session
+
 logger = logging.getLogger(__name__)
 
 
@@ -251,6 +253,66 @@ You are a helpful AI assistant.
             logger.error(f"Failed to load base model: {str(e)}")
             return False, str(e)
 
+    def evaluate_response_with_reward(
+        self,
+        instruction: str,
+        generated: str,
+        reference: Optional[str] = None,
+        session_info = None,
+        tokenizer = None
+    ) -> Dict[str, Any]:
+        """Evaluate a generated response using the session's reward function.
+
+        Args:
+            instruction: Input instruction/prompt
+            generated: Generated response to evaluate
+            reference: Reference response for comparison (optional)
+            session_info: SessionInfo object with reward_config
+            tokenizer: Optional tokenizer for token-based metrics
+
+        Returns:
+            Dictionary with:
+                - success: Whether evaluation succeeded
+                - total_reward: Overall reward score (0.0-1.0)
+                - components: Breakdown of component scores
+                - error: Error message if evaluation failed
+        """
+        try:
+            # Load reward function from session
+            reward_builder = load_reward_from_session(session_info)
+
+            if not reward_builder:
+                return {
+                    "success": False,
+                    "error": "No reward configuration found in session",
+                    "total_reward": None,
+                    "components": {}
+                }
+
+            # Compute reward
+            total_reward, component_rewards = reward_builder.compute_total_reward(
+                instruction=instruction,
+                generated=generated,
+                reference=reference,
+                tokenizer=tokenizer
+            )
+
+            return {
+                "success": True,
+                "total_reward": total_reward,
+                "components": component_rewards,
+                "error": None
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to evaluate response with reward: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "total_reward": None,
+                "components": {}
+            }
+
     def generate_response(
         self,
         prompt: str,
@@ -261,7 +323,9 @@ You are a helpful AI assistant.
         streaming_callback = None,
         use_simple_prompt: bool = False,
         session_info = None,
-        override_system_prompt: Optional[str] = None
+        override_system_prompt: Optional[str] = None,
+        evaluate_reward: bool = False,
+        reference_response: Optional[str] = None
     ) -> Dict[str, Any]:
         """Generate response from a model.
 
@@ -275,9 +339,11 @@ You are a helpful AI assistant.
             use_simple_prompt: Use simple prompting without system instructions
             session_info: SessionInfo object with training configuration (for trained models)
             override_system_prompt: Custom system prompt to override session config
+            evaluate_reward: Whether to evaluate the response using session's reward function
+            reference_response: Reference response for reward comparison (optional)
 
         Returns:
-            Dictionary with response and metadata
+            Dictionary with response and metadata (includes reward data if evaluate_reward=True)
         """
         try:
             # Get the model key
@@ -660,7 +726,7 @@ You are a helpful AI assistant.
             # Calculate tokens per second
             tokens_per_second = output_tokens / generation_time if generation_time > 0 else 0
 
-            return {
+            result = {
                 "success": True,
                 "response": response,
                 "metadata": {
@@ -683,12 +749,60 @@ You are a helpful AI assistant.
                 }
             }
 
+            # Optionally evaluate with reward function
+            if evaluate_reward and session_info:
+                reward_eval = self.evaluate_response_with_reward(
+                    instruction=prompt,
+                    generated=response,
+                    reference=reference_response,
+                    session_info=session_info,
+                    tokenizer=tokenizer
+                )
+                result["reward_evaluation"] = reward_eval
+
+            return result
+
         except Exception as e:
             logger.error(f"Generation failed: {str(e)}")
             return {
                 "success": False,
                 "error": str(e)
             }
+
+    def test_with_reward(
+        self,
+        prompt: str,
+        model_type: str,
+        model_key: str,
+        session_info,
+        reference_response: Optional[str] = None,
+        config: Optional[TestConfig] = None
+    ) -> Dict[str, Any]:
+        """Generate and evaluate a response with the session's reward function.
+
+        This is a convenience method that combines generation and reward evaluation.
+
+        Args:
+            prompt: Input prompt
+            model_type: "trained" or "base"
+            model_key: Session ID for trained or model name for base
+            session_info: SessionInfo object with reward configuration
+            reference_response: Optional reference response for comparison
+            config: Generation configuration
+
+        Returns:
+            Dictionary with generation and reward evaluation results
+        """
+        return self.generate_response(
+            prompt=prompt,
+            model_type=model_type,
+            model_key=model_key,
+            config=config,
+            use_chat_template=True,
+            session_info=session_info,
+            evaluate_reward=True,
+            reference_response=reference_response
+        )
 
     def compare_two_models(
         self,

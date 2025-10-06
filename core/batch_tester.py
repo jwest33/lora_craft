@@ -15,6 +15,8 @@ from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, asdict
 import logging
 
+from core.reward_loader import load_reward_from_session
+
 logger = logging.getLogger(__name__)
 
 @dataclass
@@ -27,6 +29,8 @@ class BatchTestConfig:
     output_dir: str
     session_info: Optional[Any] = None  # Session info for trained models
     callback: Optional[Callable] = None  # Progress callback
+    evaluate_rewards: bool = True  # Whether to compute reward scores
+    references: Optional[List[str]] = None  # Reference responses for reward comparison
 
 @dataclass
 class BatchTestResult:
@@ -38,6 +42,9 @@ class BatchTestResult:
     generation_time: float
     token_count: int
     error: Optional[str] = None
+    reference: Optional[str] = None  # Reference response for comparison
+    total_reward: Optional[float] = None  # Overall reward score
+    reward_components: Optional[Dict[str, float]] = None  # Component breakdown
 
     def to_dict(self):
         """Convert to dictionary."""
@@ -58,6 +65,11 @@ class BatchTestStatus:
     average_time: Optional[float] = None
     results_file: Optional[str] = None
     error: Optional[str] = None
+    # Reward statistics
+    average_reward: Optional[float] = None
+    min_reward: Optional[float] = None
+    max_reward: Optional[float] = None
+    reward_std: Optional[float] = None
 
     def to_dict(self):
         """Convert to dictionary."""
@@ -80,7 +92,7 @@ class BatchTestRunner:
         self._lock = threading.Lock()
 
     def start_batch_test(self, model: str, prompts_file: str, parameters: Dict[str, Any],
-                         model_tester=None, session_info=None) -> str:
+                         model_tester=None, session_info=None, evaluate_rewards: bool = True) -> str:
         """Start a batch test.
 
         Args:
@@ -88,7 +100,8 @@ class BatchTestRunner:
             prompts_file: Path to file containing prompts (CSV or JSON)
             parameters: Generation parameters
             model_tester: ModelTester instance to use
-            session_info: Session info for trained models (contains system prompt)
+            session_info: Session info for trained models (contains system prompt and reward config)
+            evaluate_rewards: Whether to compute reward scores for responses
 
         Returns:
             Batch test ID
@@ -97,8 +110,8 @@ class BatchTestRunner:
             # Generate unique batch ID
             batch_id = f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
-            # Load prompts from file
-            prompts = self._load_prompts(prompts_file)
+            # Load prompts and references from file
+            prompts, references = self._load_prompts(prompts_file)
 
             if not prompts:
                 raise ValueError("No prompts found in file")
@@ -114,7 +127,9 @@ class BatchTestRunner:
                 prompts=prompts,
                 parameters=parameters,
                 output_dir=str(output_dir),
-                session_info=session_info
+                session_info=session_info,
+                evaluate_rewards=evaluate_rewards,
+                references=references
             )
 
             # Create status
@@ -149,16 +164,17 @@ class BatchTestRunner:
             logger.error(f"Error starting batch test: {e}")
             raise
 
-    def _load_prompts(self, prompts_file: str) -> List[str]:
-        """Load prompts from file.
+    def _load_prompts(self, prompts_file: str) -> tuple[List[str], Optional[List[str]]]:
+        """Load prompts and references from file.
 
         Args:
             prompts_file: Path to prompts file
 
         Returns:
-            List of prompts
+            Tuple of (prompts, references) where references may be None if not present
         """
         prompts = []
+        references = []
         file_path = Path(prompts_file)
 
         if not file_path.exists():
@@ -169,9 +185,20 @@ class BatchTestRunner:
                 with open(file_path, 'r') as f:
                     data = json.load(f)
                     if isinstance(data, list):
-                        prompts = data
+                        # List of objects or strings
+                        for item in data:
+                            if isinstance(item, dict):
+                                prompt = item.get('prompt') or item.get('input') or item.get('instruction')
+                                reference = item.get('reference') or item.get('output') or item.get('response')
+                                if prompt:
+                                    prompts.append(prompt)
+                                    references.append(reference if reference else None)
+                            else:
+                                prompts.append(str(item))
+                                references.append(None)
                     elif isinstance(data, dict) and 'prompts' in data:
                         prompts = data['prompts']
+                        references = data.get('references', [None] * len(prompts))
                     else:
                         raise ValueError("Invalid JSON format")
 
@@ -179,14 +206,18 @@ class BatchTestRunner:
                 with open(file_path, 'r', newline='', encoding='utf-8') as f:
                     reader = csv.DictReader(f)
                     for row in reader:
-                        # Try common column names
-                        prompt = row.get('prompt') or row.get('text') or row.get('input')
+                        # Try common column names for prompts
+                        prompt = row.get('prompt') or row.get('text') or row.get('input') or row.get('instruction')
+                        # Try common column names for references
+                        reference = row.get('reference') or row.get('output') or row.get('response') or row.get('answer')
                         if prompt:
                             prompts.append(prompt)
+                            references.append(reference if reference else None)
 
             elif file_path.suffix == '.txt':
                 with open(file_path, 'r', encoding='utf-8') as f:
                     prompts = [line.strip() for line in f if line.strip()]
+                    references = [None] * len(prompts)
 
             else:
                 raise ValueError(f"Unsupported file format: {file_path.suffix}")
@@ -195,7 +226,11 @@ class BatchTestRunner:
             logger.error(f"Error loading prompts: {e}")
             raise
 
-        return prompts
+        # Return None for references if all are None
+        if all(ref is None for ref in references):
+            references = None
+
+        return prompts, references
 
     def _run_batch_test(self, config: BatchTestConfig, status: BatchTestStatus, model_tester):
         """Run the batch test (in thread).
@@ -212,6 +247,31 @@ class BatchTestRunner:
 
             results = []
             start_time = time.time()
+
+            # Load reward function once if evaluation is enabled
+            reward_builder = None
+            if config.evaluate_rewards and config.session_info:
+                try:
+                    reward_builder = load_reward_from_session(config.session_info)
+                    if reward_builder:
+                        logger.info("Loaded reward function for batch evaluation")
+                    else:
+                        logger.warning("Could not load reward function, skipping reward evaluation")
+                except Exception as e:
+                    logger.error(f"Failed to load reward function: {e}")
+
+            # Get tokenizer for reward computation if available
+            tokenizer = None
+            if model_tester and reward_builder:
+                # Try to get tokenizer from loaded model
+                try:
+                    if hasattr(model_tester, 'loaded_models'):
+                        cache_key = f"trained_{config.model}"
+                        model_data = model_tester.loaded_models.get(cache_key)
+                        if model_data and 'tokenizer' in model_data:
+                            tokenizer = model_data['tokenizer']
+                except Exception:
+                    pass  # Continue without tokenizer
 
             # Process each prompt
             for i, prompt in enumerate(config.prompts):
@@ -242,6 +302,25 @@ class BatchTestRunner:
 
                     generation_time = time.time() - prompt_start
 
+                    # Get reference if available
+                    reference = None
+                    if config.references and i < len(config.references):
+                        reference = config.references[i]
+
+                    # Compute reward if evaluation enabled
+                    total_reward = None
+                    reward_components = None
+                    if reward_builder and response:
+                        try:
+                            total_reward, reward_components = reward_builder.compute_total_reward(
+                                instruction=prompt,
+                                generated=response,
+                                reference=reference,
+                                tokenizer=tokenizer
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to compute reward for test {i}: {e}")
+
                     # Create result
                     result = BatchTestResult(
                         index=i,
@@ -249,7 +328,10 @@ class BatchTestRunner:
                         response=response,
                         success=True,
                         generation_time=generation_time,
-                        token_count=token_count
+                        token_count=token_count,
+                        reference=reference,
+                        total_reward=total_reward,
+                        reward_components=reward_components
                     )
 
                     results.append(result)
@@ -295,6 +377,22 @@ class BatchTestRunner:
             else:
                 avg_time = 0
 
+            # Calculate reward statistics if rewards were computed
+            results_with_rewards = [r for r in successful_results if r.total_reward is not None]
+            if results_with_rewards:
+                rewards = [r.total_reward for r in results_with_rewards]
+                avg_reward = sum(rewards) / len(rewards)
+                min_reward = min(rewards)
+                max_reward = max(rewards)
+                # Calculate standard deviation
+                reward_variance = sum((r - avg_reward) ** 2 for r in rewards) / len(rewards)
+                reward_std = reward_variance ** 0.5
+            else:
+                avg_reward = None
+                min_reward = None
+                max_reward = None
+                reward_std = None
+
             # Save results
             results_file = self._save_results(config, results, status)
 
@@ -306,6 +404,10 @@ class BatchTestRunner:
                 status.elapsed_time = elapsed_time
                 status.average_time = avg_time
                 status.results_file = str(results_file)
+                status.average_reward = avg_reward
+                status.min_reward = min_reward
+                status.max_reward = max_reward
+                status.reward_std = reward_std
 
             logger.info(f"Batch test {config.batch_id} completed: {status.successful}/{status.total} successful")
 
@@ -346,13 +448,36 @@ class BatchTestRunner:
             # Also save as CSV for easy analysis
             csv_file = output_dir / 'results.csv'
             with open(csv_file, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.DictWriter(f, fieldnames=[
-                    'index', 'prompt', 'response', 'success',
-                    'generation_time', 'token_count', 'error'
-                ])
+                # Determine fieldnames based on whether rewards were computed
+                has_rewards = any(r.total_reward is not None for r in results)
+                fieldnames = [
+                    'index', 'prompt', 'response', 'reference', 'success',
+                    'generation_time', 'token_count', 'total_reward', 'error'
+                ]
+
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
                 for result in results:
-                    writer.writerow(result.to_dict())
+                    row = result.to_dict()
+                    # Flatten reward_components for CSV (skip to keep file readable)
+                    if 'reward_components' in row:
+                        del row['reward_components']
+                    writer.writerow(row)
+
+            # Save detailed reward components separately if present
+            if any(r.reward_components for r in results):
+                components_file = output_dir / 'reward_components.json'
+                with open(components_file, 'w') as f:
+                    components_data = [
+                        {
+                            'index': r.index,
+                            'prompt': r.prompt[:100] + '...' if len(r.prompt) > 100 else r.prompt,
+                            'total_reward': r.total_reward,
+                            'components': r.reward_components
+                        }
+                        for r in results if r.reward_components
+                    ]
+                    json.dump(components_data, f, indent=2)
 
             logger.info(f"Saved batch test results to {output_dir}")
             return json_file
