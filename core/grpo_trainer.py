@@ -28,7 +28,8 @@ from peft import (
     LoraConfig,
     TaskType,
     get_peft_model,
-    prepare_model_for_kbit_training
+    prepare_model_for_kbit_training,
+    PeftModel
 )
 from datasets import Dataset
 from accelerate import Accelerator
@@ -133,7 +134,7 @@ class GRPOTrainingConfig:
     adaptive_pre_training: bool = True  # Enable adaptive pre-training with validation
     pre_training_min_success_rate: float = 0.8  # Minimum format compliance rate (80%)
     pre_training_max_additional_epochs: int = 3  # Maximum additional epochs if validation fails
-    pre_training_validation_samples: int = 20  # Number of samples to validate format learning (increased from 5 for reliability)
+    pre_training_validation_samples: int = 5  # Number of samples to validate format learning
 
     # GRPO/GSPO specific
     loss_type: str = "grpo"  # Always use "grpo" for TRL compatibility
@@ -1231,6 +1232,24 @@ class GRPOModelTrainer:
             self.metrics_callback(phase_change_notification)
             logger.info("Sent phase change notification to frontend to reset visualizations")
 
+        # Check if pre-training checkpoint exists (for reference)
+        pre_trained_path = Path(self.config.checkpoint_dir) / "pre_trained"
+        if pre_trained_path.exists():
+            logger.info("=" * 80)
+            logger.info(f"Pre-trained checkpoint found at {pre_trained_path}")
+            logger.info("Model already has trained adapter weights from pre-training phase")
+            logger.info("(No need to reload - following official Unsloth SFT→GRPO approach)")
+
+            # Verify adapters are active
+            if hasattr(self.model, 'peft_config'):
+                logger.info(f"Active PEFT adapters: {list(self.model.peft_config.keys())}")
+
+            logger.info("=" * 80)
+        else:
+            logger.warning(f"Pre-trained checkpoint not found at {pre_trained_path}")
+            logger.warning("Starting GRPO training without pre-training phase!")
+            logger.warning("The model may not have learned the output format yet.")
+
         # Disable Torch compilation for TRL to avoid Dynamo errors with Unsloth
         # This is necessary due to incompatibility between Unsloth's optimizations and TRL's gradient computation
         os.environ['TORCHDYNAMO_DISABLE'] = '1'
@@ -1331,6 +1350,54 @@ class GRPOModelTrainer:
         logger.info(f"Total training steps: {steps_per_epoch} steps/epoch * {self.config.num_train_epochs} epochs = {max_steps} steps")
         logger.info(f"Note: Each step processes {effective_prompts_per_step} unique prompts, generating {num_gens} completions per prompt ({effective_prompts_per_step * num_gens} total completions per step)")
 
+        # Calculate proper max_prompt_length from actual dataset (following official Unsloth notebook)
+        # This prevents truncation of long prompts which destroys context
+        logger.info("=" * 80)
+        logger.info("Calculating optimal max_prompt_length from dataset prompts...")
+        logger.info("=" * 80)
+
+        prompt_lengths = []
+        for item in formatted_dataset:
+            # Apply chat template with add_generation_prompt to match actual GRPO usage
+            prompt_text = self.tokenizer.apply_chat_template(
+                item['prompt'],
+                add_generation_prompt=True,
+                tokenize=False
+            )
+            tokens = self.tokenizer.encode(prompt_text, add_special_tokens=True)
+            prompt_lengths.append(len(tokens))
+
+        # Calculate 90th percentile to avoid truncating most prompts
+        # while filtering out extreme outliers (like official notebook does)
+        import numpy as np
+        percentile_90 = int(np.quantile(prompt_lengths, 0.9))
+        max_prompt_length = percentile_90 + 10  # Add small buffer
+
+        # Ensure we don't exceed total sequence length
+        max_completion_length = self.config.max_sequence_length - max_prompt_length
+        if max_completion_length < 256:
+            # If completion space is too small, reduce prompt length
+            logger.warning(f"Completion length would be too small ({max_completion_length}), adjusting...")
+            max_prompt_length = self.config.max_sequence_length - 512
+            max_completion_length = 512
+
+        logger.info(f"Prompt length statistics:")
+        logger.info(f"  Min: {min(prompt_lengths)} tokens")
+        logger.info(f"  Mean: {int(np.mean(prompt_lengths))} tokens")
+        logger.info(f"  Median: {int(np.median(prompt_lengths))} tokens")
+        logger.info(f"  90th percentile: {percentile_90} tokens")
+        logger.info(f"  Max: {max(prompt_lengths)} tokens")
+        logger.info(f"  Configured max_prompt_length: {max_prompt_length} tokens")
+        logger.info(f"  Configured max_completion_length: {max_completion_length} tokens")
+
+        # Warn about prompts that will be truncated
+        truncated_count = sum(1 for length in prompt_lengths if length > max_prompt_length)
+        if truncated_count > 0:
+            logger.warning(f"  {truncated_count}/{len(prompt_lengths)} prompts exceed max_prompt_length and will be truncated")
+            logger.warning(f"  Consider filtering dataset or increasing max_sequence_length")
+
+        logger.info("=" * 80)
+
         # Create TRL GRPO configuration with algorithm support
         logger.info(f"Configuring GRPO training with logging_steps={self.config.logging_steps} for frequent updates")
         grpo_config = TRLGRPOConfig(
@@ -1345,8 +1412,8 @@ class GRPOModelTrainer:
             optim=self.config.optim,
             logging_steps=self.config.logging_steps,
             num_generations=self.config.num_generations,  # Number of generations per prompt
-            max_prompt_length=128,
-            max_completion_length=self.config.max_new_tokens,
+            max_prompt_length=max_prompt_length,  # Calculated from actual prompt lengths
+            max_completion_length=max_completion_length,  # Remainder of sequence length
             save_steps=self.config.save_steps,
             max_grad_norm=self.config.max_grad_norm,
             report_to="none",

@@ -645,7 +645,7 @@ def run_training(session_id: str, config: Dict[str, Any]):
             pre_training_max_additional_epochs=(config.get('pre_training', {}).get('max_additional_epochs') or
                                                config.get('pre_training_max_additional_epochs', 3)),
             pre_training_validation_samples=(config.get('pre_training', {}).get('validation_samples') or
-                                            config.get('pre_training_validation_samples', 20)),
+                                            config.get('pre_training_validation_samples', 5)),
 
             # Paths
             output_dir=f"./outputs/{session_id}",
@@ -788,8 +788,10 @@ def run_training(session_id: str, config: Dict[str, Any]):
             solution_end_marker=template_config.get('solution_end') or config.get('solution_end', '</SOLUTION>'),
             system_prompt=custom_system_prompt,
             chat_template=template_config.get('chat_template') or config.get('chat_template'),  # Add chat template from config
-            prepend_reasoning_start=True,  # For GRPO templates
-            model_type=template_config.get('chat_template_type') or config.get('chat_template_type', 'grpo')
+            # For custom templates, don't prepend reasoning marker since it's in the template itself
+            # Only prepend for built-in templates that don't have it in {% if add_generation_prompt %}
+            model_type=template_config.get('chat_template_type') or config.get('chat_template_type', 'grpo'),
+            prepend_reasoning_start=((template_config.get('chat_template_type') or config.get('chat_template_type', 'grpo')) != 'custom')
         )
         template = PromptTemplate(template_config_obj)
 
@@ -939,8 +941,9 @@ def run_training(session_id: str, config: Dict[str, Any]):
                 q.put(('log', f"Applied {config.get('chat_template_type', 'grpo')} chat template to tokenizer"))
 
             # Run adaptive or standard pre-fine-tuning
-            # Adaptive mode is now the default and handles validation automatically
-            adaptive_enabled = config.get('pre_training', {}).get('adaptive', True) if 'pre_training' in config else True
+            # Simple mode is now the default (matching official Unsloth notebook)
+            # Adaptive mode with validation can be enabled via config if needed
+            adaptive_enabled = config.get('pre_training', {}).get('adaptive', False) if 'pre_training' in config else False
 
             if adaptive_enabled:
                 q.put(('log', "Using adaptive pre-training with automatic format validation"))
@@ -1062,6 +1065,18 @@ def run_training(session_id: str, config: Dict[str, Any]):
                 except Exception as e:
                     q.put(('log', f"Format validation error: {str(e)}"))
                     q.put(('log', "=" * 60))
+
+        # Memory cleanup before GRPO (matching official Unsloth notebook)
+        # This frees up GPU memory from pre-training dataset
+        try:
+            import gc
+            import torch
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            q.put(('log', "Memory cleanup complete"))
+        except Exception as e:
+            q.put(('log', f"Memory cleanup skipped: {e}"))
 
         # GRPO/GSPO training
         q.put(('log', f"Starting {algorithm_name} training..."))
