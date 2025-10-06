@@ -12,6 +12,16 @@
         testHistory: [],
         batchTests: [],
         activeBatchTest: null,
+        uploadedFileData: null,
+
+        // Pagination state for batch results
+        batchPagination: {
+            currentPage: 1,
+            pageSize: 25,
+            totalRows: 0,
+            allData: [],
+            uploadedColumns: null
+        },
 
         // Initialize the module
         init() {
@@ -76,6 +86,12 @@
                 topPSlider.addEventListener('input', () => this.updateTopPDisplay());
             }
 
+            // Repetition penalty slider
+            const repPenaltySlider = document.getElementById('test-rep-penalty');
+            if (repPenaltySlider) {
+                repPenaltySlider.addEventListener('input', () => this.updateRepPenaltyDisplay());
+            }
+
             // Test prompt input - update counter and preview
             const promptInput = document.getElementById('test-prompt');
             if (promptInput) {
@@ -98,6 +114,22 @@
             }
             if (batchCompareModelRadio) {
                 batchCompareModelRadio.addEventListener('change', () => this.updateBatchModelSelection());
+            }
+
+            // Batch generation settings sliders
+            const batchTempSlider = document.getElementById('batch-temperature');
+            if (batchTempSlider) {
+                batchTempSlider.addEventListener('input', () => this.updateBatchTemperatureDisplay());
+            }
+
+            const batchTopPSlider = document.getElementById('batch-top-p');
+            if (batchTopPSlider) {
+                batchTopPSlider.addEventListener('input', () => this.updateBatchTopPDisplay());
+            }
+
+            const batchRepPenaltySlider = document.getElementById('batch-rep-penalty');
+            if (batchRepPenaltySlider) {
+                batchRepPenaltySlider.addEventListener('input', () => this.updateBatchRepPenaltyDisplay());
             }
         },
 
@@ -274,7 +306,7 @@
         // Update temperature display
         updateTemperatureDisplay() {
             const slider = document.getElementById('test-temperature');
-            const display = document.getElementById('temperature-display');
+            const display = document.getElementById('test-temp-value');
             if (slider && display) {
                 display.textContent = slider.value;
             }
@@ -283,7 +315,43 @@
         // Update top-p display
         updateTopPDisplay() {
             const slider = document.getElementById('test-top-p');
-            const display = document.getElementById('top-p-display');
+            const display = document.getElementById('test-top-p-value');
+            if (slider && display) {
+                display.textContent = slider.value;
+            }
+        },
+
+        // Update repetition penalty display
+        updateRepPenaltyDisplay() {
+            const slider = document.getElementById('test-rep-penalty');
+            const display = document.getElementById('test-rep-value');
+            if (slider && display) {
+                display.textContent = slider.value;
+            }
+        },
+
+        // Update batch temperature display
+        updateBatchTemperatureDisplay() {
+            const slider = document.getElementById('batch-temperature');
+            const display = document.getElementById('batch-temp-value');
+            if (slider && display) {
+                display.textContent = slider.value;
+            }
+        },
+
+        // Update batch top-p display
+        updateBatchTopPDisplay() {
+            const slider = document.getElementById('batch-top-p');
+            const display = document.getElementById('batch-top-p-value');
+            if (slider && display) {
+                display.textContent = slider.value;
+            }
+        },
+
+        // Update batch repetition penalty display
+        updateBatchRepPenaltyDisplay() {
+            const slider = document.getElementById('batch-rep-penalty');
+            const display = document.getElementById('batch-rep-value');
             if (slider && display) {
                 display.textContent = slider.value;
             }
@@ -1284,6 +1352,9 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
+                    // Store uploaded file data
+                    this.uploadedFileData = data.rows || [];
+
                     // Update file info display
                     if (fileDetailsSpan) {
                         fileDetailsSpan.innerHTML = `
@@ -1312,6 +1383,14 @@
                     const runButton = document.getElementById('batch-compare-btn');
                     if (runButton) {
                         runButton.disabled = false;
+                    }
+
+                    // Populate table immediately with uploaded data
+                    const instructionCol = document.getElementById('batch-instruction-column')?.value;
+                    const responseCol = document.getElementById('batch-response-column')?.value;
+
+                    if (instructionCol && responseCol && this.uploadedFileData.length > 0) {
+                        this.populateBatchTableFromFile(this.uploadedFileData, instructionCol, responseCol);
                     }
 
                     CoreModule.showAlert('File uploaded and analyzed successfully', 'success');
@@ -1375,6 +1454,409 @@
                     responseSelect.appendChild(option);
                 });
             }
+        },
+
+        // Populate batch table from uploaded file data
+        async populateBatchTableFromFile(fileData, instructionCol, expectedCol) {
+            // Get selected model to format prompts
+            const sessionId = document.getElementById('batch-test-model-select')?.value;
+
+            // Extract instructions
+            const instructions = fileData.map(row => row[instructionCol] || '');
+            console.log('sessionId for formatting:', sessionId);
+            // Format prompts with system messages if model selected
+            let formattedPrompts = instructions; // default to raw instructions
+            if (sessionId && instructions.length > 0) {
+                try {
+                    const response = await fetch('/api/test/format-prompts', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            session_id: sessionId,
+                            instructions: instructions
+                        })
+                    });
+                    const data = await response.json();
+                    if (data.success && data.formatted_prompts) {
+                        formattedPrompts = data.formatted_prompts;
+                    }
+                } catch (error) {
+                    console.error('Failed to format prompts:', error);
+                    // Continue with raw instructions on error
+                }
+            }
+
+            console.log('Formatted prompts:', formattedPrompts);
+
+            // Initialize pagination data
+            this.batchPagination.allData = fileData.map((row, index) => ({
+                rowNumber: index + 1,
+                instruction: row[instructionCol] || '',
+                formatted_prompt: formattedPrompts[index] || row[instructionCol] || '',
+                expected: row[expectedCol] || '',
+                trainedResponse: '',
+                comparisonResponse: '',
+                trainedMatch: null,
+                comparisonMatch: null,
+                isLoading: false
+            }));
+
+            this.batchPagination.totalRows = fileData.length;
+            this.batchPagination.currentPage = 1;
+            this.batchPagination.uploadedColumns = { instructionCol, expectedCol };
+
+            // Show pagination controls and results section
+            const paginationControls = document.getElementById('batch-pagination-controls');
+            const resultsSection = document.getElementById('batch-results');
+
+            if (paginationControls) {
+                paginationControls.style.display = 'flex';
+            }
+            if (resultsSection) {
+                resultsSection.style.display = 'block';
+            }
+
+            // Render first page
+            this.renderBatchPage();
+        },
+
+        // Render current page of batch results
+        renderBatchPage() {
+            const { currentPage, pageSize, totalRows, allData } = this.batchPagination;
+            const startIndex = (currentPage - 1) * pageSize;
+            const endIndex = Math.min(startIndex + pageSize, totalRows);
+
+            // Update pagination info
+            document.getElementById('batch-page-start').textContent = totalRows > 0 ? startIndex + 1 : 0;
+            document.getElementById('batch-page-end').textContent = endIndex;
+            document.getElementById('batch-total-rows').textContent = totalRows;
+
+            // Update pagination buttons
+            const prevButton = document.getElementById('batch-prev-page-item');
+            const nextButton = document.getElementById('batch-next-page-item');
+
+            if (prevButton) {
+                prevButton.classList.toggle('disabled', currentPage === 1);
+            }
+            if (nextButton) {
+                const totalPages = Math.ceil(totalRows / pageSize);
+                nextButton.classList.toggle('disabled', currentPage >= totalPages);
+            }
+
+            // Render table rows
+            const tbody = document.querySelector('#batch-results-table tbody');
+            if (!tbody) return;
+
+            tbody.innerHTML = '';
+
+            for (let i = startIndex; i < endIndex; i++) {
+                const rowData = allData[i];
+                const row = this.createBatchTableRow(rowData, i);
+                tbody.appendChild(row);
+            }
+        },
+
+        // Create batch table row
+        createBatchTableRow(rowData, globalIndex) {
+            const tr = document.createElement('tr');
+            tr.dataset.globalIndex = globalIndex;
+            tr.className = 'batch-table-row-clickable';
+
+            // Add row click handler to open modal
+            tr.onclick = () => this.showBatchRowDetailsModal(rowData);
+
+            // Row number
+            const tdNum = document.createElement('td');
+            tdNum.textContent = rowData.rowNumber;
+            tr.appendChild(tdNum);
+
+            // Instruction/Prompt (use formatted_prompt if available)
+            const tdInstruction = document.createElement('td');
+            const instructionSpan = document.createElement('span');
+            instructionSpan.className = 'batch-cell-content text-truncated';
+            const displayPrompt = rowData.formatted_prompt || rowData.instruction || '';
+            instructionSpan.textContent = displayPrompt;
+            instructionSpan.title = displayPrompt;
+            tdInstruction.appendChild(instructionSpan);
+            tr.appendChild(tdInstruction);
+
+            // Expected Answer (MOVED HERE - 2nd content column)
+            const tdExpected = document.createElement('td');
+            const expectedSpan = document.createElement('span');
+            expectedSpan.className = 'batch-cell-content text-truncated';
+            expectedSpan.textContent = rowData.expected || '-';
+            expectedSpan.title = rowData.expected || '-';
+            tdExpected.appendChild(expectedSpan);
+            tr.appendChild(tdExpected);
+
+            // Trained Model Response (MOVED HERE - 3rd content column)
+            const tdTrained = document.createElement('td');
+            if (rowData.isLoading && !rowData.trainedResponse) {
+                tdTrained.innerHTML = '<div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div>';
+            } else {
+                const trainedSpan = document.createElement('span');
+                trainedSpan.className = 'batch-cell-content text-truncated';
+                trainedSpan.textContent = rowData.trainedResponse || '';
+                trainedSpan.title = rowData.trainedResponse || '';
+                tdTrained.appendChild(trainedSpan);
+            }
+            tr.appendChild(tdTrained);
+
+            // Comparison Model Response (MOVED HERE - 4th content column)
+            const tdComparison = document.createElement('td');
+            if (rowData.isLoading && !rowData.comparisonResponse) {
+                tdComparison.innerHTML = '<div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div>';
+            } else {
+                const comparisonSpan = document.createElement('span');
+                comparisonSpan.className = 'batch-cell-content text-truncated';
+                comparisonSpan.textContent = rowData.comparisonResponse || '';
+                comparisonSpan.title = rowData.comparisonResponse || '';
+                tdComparison.appendChild(comparisonSpan);
+            }
+            tr.appendChild(tdComparison);
+
+            // Match Status (last column)
+            const tdMatch = document.createElement('td');
+            if (rowData.trainedMatch !== null || rowData.comparisonMatch !== null) {
+                const trainedBadge = rowData.trainedMatch !== null
+                    ? `<span class="badge ${rowData.trainedMatch ? 'bg-success' : 'bg-danger'} me-1">T: ${rowData.trainedMatch ? 'Yes' : 'No'}</span>`
+                    : '';
+                const comparisonBadge = rowData.comparisonMatch !== null
+                    ? `<span class="badge ${rowData.comparisonMatch ? 'bg-success' : 'bg-danger'}">C: ${rowData.comparisonMatch ? 'Yes' : 'No'}</span>`
+                    : '';
+                tdMatch.innerHTML = trainedBadge + comparisonBadge;
+            } else {
+                tdMatch.textContent = '-';
+            }
+            tr.appendChild(tdMatch);
+
+            return tr;
+        },
+
+        // Update batch row with results (for streaming)
+        updateBatchRowResult(globalIndex, formattedPrompt, trainedResp, comparisonResp, trainedMatch, comparisonMatch) {
+            // Update data
+            if (this.batchPagination.allData[globalIndex]) {
+                const rowData = this.batchPagination.allData[globalIndex];
+                if (formattedPrompt !== undefined) rowData.formatted_prompt = formattedPrompt;
+                if (trainedResp !== undefined) rowData.trainedResponse = trainedResp;
+                if (comparisonResp !== undefined) rowData.comparisonResponse = comparisonResp;
+                if (trainedMatch !== undefined) rowData.trainedMatch = trainedMatch;
+                if (comparisonMatch !== undefined) rowData.comparisonMatch = comparisonMatch;
+                rowData.isLoading = false;
+            }
+
+            // Update UI if row is on current page
+            const { currentPage, pageSize } = this.batchPagination;
+            const startIndex = (currentPage - 1) * pageSize;
+            const endIndex = startIndex + pageSize;
+
+            if (globalIndex >= startIndex && globalIndex < endIndex) {
+                const row = document.querySelector(`#batch-results-table tbody tr[data-global-index="${globalIndex}"]`);
+                if (row) {
+                    const rowData = this.batchPagination.allData[globalIndex];
+
+                    // Update trained response
+                    const trainedCell = row.children[2];
+                    if (trainedCell && trainedResp !== undefined) {
+                        trainedCell.innerHTML = '';
+                        const trainedSpan = document.createElement('span');
+                        trainedSpan.className = 'batch-cell-content text-truncated';
+                        trainedSpan.textContent = trainedResp;
+                        trainedSpan.title = trainedResp;
+                        trainedCell.appendChild(trainedSpan);
+                    }
+
+                    // Update comparison response
+                    const comparisonCell = row.children[3];
+                    if (comparisonCell && comparisonResp !== undefined) {
+                        comparisonCell.innerHTML = '';
+                        const comparisonSpan = document.createElement('span');
+                        comparisonSpan.className = 'batch-cell-content text-truncated';
+                        comparisonSpan.textContent = comparisonResp;
+                        comparisonSpan.title = comparisonResp;
+                        comparisonCell.appendChild(comparisonSpan);
+                    }
+
+                    // Update match badges
+                    const matchCell = row.children[5];
+                    if (matchCell && (trainedMatch !== undefined || comparisonMatch !== undefined)) {
+                        const trainedBadge = rowData.trainedMatch !== null
+                            ? `<span class="badge ${rowData.trainedMatch ? 'bg-success' : 'bg-danger'} me-1">T: ${rowData.trainedMatch ? 'Yes' : 'No'}</span>`
+                            : '';
+                        const comparisonBadge = rowData.comparisonMatch !== null
+                            ? `<span class="badge ${rowData.comparisonMatch ? 'bg-success' : 'bg-danger'}">C: ${rowData.comparisonMatch ? 'Yes' : 'No'}</span>`
+                            : '';
+                        matchCell.innerHTML = trainedBadge + comparisonBadge;
+                    }
+
+                    // Update row click handler with latest data
+                    row.onclick = () => this.showBatchRowDetailsModal(rowData);
+                }
+            }
+        },
+
+        // Mark batch row as loading
+        markBatchRowLoading(globalIndex) {
+            if (this.batchPagination.allData[globalIndex]) {
+                this.batchPagination.allData[globalIndex].isLoading = true;
+            }
+
+            // Update UI if row is on current page
+            const { currentPage, pageSize } = this.batchPagination;
+            const startIndex = (currentPage - 1) * pageSize;
+            const endIndex = startIndex + pageSize;
+
+            if (globalIndex >= startIndex && globalIndex < endIndex) {
+                this.renderBatchPage();
+            }
+        },
+
+        // Pagination navigation
+        batchNextPage() {
+            const totalPages = Math.ceil(this.batchPagination.totalRows / this.batchPagination.pageSize);
+            if (this.batchPagination.currentPage < totalPages) {
+                this.batchPagination.currentPage++;
+                this.renderBatchPage();
+            }
+        },
+
+        batchPrevPage() {
+            if (this.batchPagination.currentPage > 1) {
+                this.batchPagination.currentPage--;
+                this.renderBatchPage();
+            }
+        },
+
+        batchChangePageSize() {
+            const pageSizeSelect = document.getElementById('batch-page-size');
+            if (pageSizeSelect) {
+                this.batchPagination.pageSize = parseInt(pageSizeSelect.value);
+                this.batchPagination.currentPage = 1;
+                this.renderBatchPage();
+            }
+        },
+
+        // Show batch row details in modal
+        showBatchRowDetailsModal(rowData) {
+            const modalId = 'batchRowDetailsModal';
+            let modal = document.getElementById(modalId);
+
+            // Create modal if it doesn't exist
+            if (!modal) {
+                const modalHtml = `
+                    <div class="modal fade" id="${modalId}" tabindex="-1">
+                        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Batch Test Result Details</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body" id="batch-row-details-content"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+                modal = document.getElementById(modalId);
+            }
+
+            // Populate modal content
+            const content = modal.querySelector('#batch-row-details-content');
+
+            const hasExpected = rowData.expected && rowData.expected.trim() !== '';
+            const hasMatches = rowData.trainedMatch !== null || rowData.comparisonMatch !== null;
+
+            content.innerHTML = `
+                <div class="mb-3">
+                    <h6 class="text-muted">Row #${rowData.rowNumber}</h6>
+                </div>
+
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0"><i class="fas fa-question-circle text-primary me-2"></i>Test Prompt (Full)</h6>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="TestingModule.copyToClipboard('${CoreModule.escapeHtml(rowData.formatted_prompt || rowData.instruction).replace(/'/g, "\\'")}', 'Test prompt')">
+                            <i class="fas fa-copy me-1"></i>Copy
+                        </button>
+                    </div>
+                    <div class="p-3 bg-light rounded">
+                        <pre class="mb-0" style="white-space: pre-wrap; word-wrap: break-word;">${CoreModule.escapeHtml(rowData.formatted_prompt || rowData.instruction)}</pre>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0"><i class="fas fa-robot text-success me-2"></i>Trained Model Response</h6>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="TestingModule.copyToClipboard('${CoreModule.escapeHtml(rowData.trainedResponse || 'N/A').replace(/'/g, "\\'")}', 'Trained response')">
+                            <i class="fas fa-copy me-1"></i>Copy
+                        </button>
+                    </div>
+                    <div class="p-3 bg-light rounded">
+                        <pre class="mb-0" style="white-space: pre-wrap; word-wrap: break-word;">${CoreModule.escapeHtml(rowData.trainedResponse || 'N/A')}</pre>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0"><i class="fas fa-robot text-info me-2"></i>Comparison Model Response</h6>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="TestingModule.copyToClipboard('${CoreModule.escapeHtml(rowData.comparisonResponse || 'N/A').replace(/'/g, "\\'")}', 'Comparison response')">
+                            <i class="fas fa-copy me-1"></i>Copy
+                        </button>
+                    </div>
+                    <div class="p-3 bg-light rounded">
+                        <pre class="mb-0" style="white-space: pre-wrap; word-wrap: break-word;">${CoreModule.escapeHtml(rowData.comparisonResponse || 'N/A')}</pre>
+                    </div>
+                </div>
+
+                ${hasExpected ? `
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0"><i class="fas fa-check-circle text-warning me-2"></i>Expected Answer</h6>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="TestingModule.copyToClipboard('${CoreModule.escapeHtml(rowData.expected).replace(/'/g, "\\'")}', 'Expected answer')">
+                                <i class="fas fa-copy me-1"></i>Copy
+                            </button>
+                        </div>
+                        <div class="p-3 bg-light rounded">
+                            <pre class="mb-0" style="white-space: pre-wrap; word-wrap: break-word;">${CoreModule.escapeHtml(rowData.expected)}</pre>
+                        </div>
+                    </div>
+                ` : ''}
+
+                ${hasMatches ? `
+                    <div class="mb-3">
+                        <h6 class="mb-2"><i class="fas fa-chart-bar text-secondary me-2"></i>Match Results</h6>
+                        <div class="d-flex gap-2">
+                            ${rowData.trainedMatch !== null ? `
+                                <span class="badge ${rowData.trainedMatch ? 'bg-success' : 'bg-danger'} fs-6">
+                                    <i class="fas fa-${rowData.trainedMatch ? 'check' : 'times'} me-1"></i>
+                                    Trained: ${rowData.trainedMatch ? 'Match' : 'No Match'}
+                                </span>
+                            ` : ''}
+                            ${rowData.comparisonMatch !== null ? `
+                                <span class="badge ${rowData.comparisonMatch ? 'bg-success' : 'bg-danger'} fs-6">
+                                    <i class="fas fa-${rowData.comparisonMatch ? 'check' : 'times'} me-1"></i>
+                                    Comparison: ${rowData.comparisonMatch ? 'Match' : 'No Match'}
+                                </span>
+                            ` : ''}
+                        </div>
+                    </div>
+                ` : ''}
+            `;
+
+            // Show modal
+            new bootstrap.Modal(modal).show();
+        },
+
+        // Copy text to clipboard helper
+        copyToClipboard(text, label) {
+            navigator.clipboard.writeText(text)
+                .then(() => {
+                    CoreModule.showAlert(`${label} copied to clipboard`, 'success');
+                })
+                .catch(err => {
+                    console.error('Failed to copy:', err);
+                    CoreModule.showAlert('Failed to copy to clipboard', 'danger');
+                });
         },
 
         // Update batch model selection
@@ -1506,10 +1988,10 @@
                 use_chat_template: document.getElementById('batch-use-chat-template')?.checked !== false,
                 compare_mode: comparisonMode,
                 config: {
-                    temperature: parseFloat(document.getElementById('test-temperature')?.value) || 0.7,
-                    top_p: parseFloat(document.getElementById('test-top-p')?.value) || 0.95,
-                    max_new_tokens: parseInt(document.getElementById('test-max-tokens')?.value) || 512,
-                    repetition_penalty: parseFloat(document.getElementById('test-rep-penalty')?.value) || 1.0,
+                    temperature: parseFloat(document.getElementById('batch-temperature')?.value) || 0.7,
+                    top_p: parseFloat(document.getElementById('batch-top-p')?.value) || 0.95,
+                    max_new_tokens: parseInt(document.getElementById('batch-max-tokens')?.value) || 512,
+                    repetition_penalty: parseFloat(document.getElementById('batch-rep-penalty')?.value) || 1.0,
                     do_sample: true
                 }
             };
@@ -1529,6 +2011,11 @@
                     return;
                 }
                 config.comparison_session_id = comparisonModelSelect.value;
+            }
+
+            // Populate table with uploaded data before starting test
+            if (this.uploadedFileData && this.uploadedFileData.length > 0) {
+                this.populateBatchTableFromFile(this.uploadedFileData, instructionColumn, responseColumn);
             }
 
             // Show loading state
@@ -1555,15 +2042,10 @@
                 `;
             }
 
-            // Hide previous summary and results
+            // Hide previous summary
             const summaryContainer = document.getElementById('batch-summary');
             if (summaryContainer) {
                 summaryContainer.style.display = 'none';
-            }
-
-            const resultsBody = document.getElementById('batch-results-body');
-            if (resultsBody) {
-                resultsBody.innerHTML = '';
             }
 
             // Show cancel button, hide run button
@@ -1637,27 +2119,48 @@
 
         // Update batch comparison progress
         updateBatchComparisonProgress(data) {
-            const progressContainer = document.getElementById('batch-test-progress');
-            if (!progressContainer) return;
+            // Update progress bar
+            const stepCounter = document.getElementById('batch-step-counter');
+            const progressBar = document.querySelector('#batch-progress .progress-bar');
+            const currentItemSpan = document.querySelector('#batch-current-item span');
 
-            const percentage = data.total > 0 ? (data.progress / data.total) * 100 : 0;
+            const total = data.total || 0;
+            const progress = data.progress || 0;
+            const percentage = total > 0 ? (progress / total) * 100 : 0;
 
-            progressContainer.style.display = 'block';
-            progressContainer.innerHTML = `
-                <div class="progress mb-2">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated"
-                         style="width: ${percentage}%">
-                        ${Math.round(percentage)}%
-                    </div>
-                </div>
-                <div class="text-muted">
-                    Processing: ${data.progress || 0} / ${data.total || 0} prompts
-                    ${data.current_instruction ? `<br><small>Current: ${CoreModule.escapeHtml(data.current_instruction.substring(0, 80))}...</small>` : ''}
-                </div>
-                <button class="btn btn-sm btn-danger mt-2" onclick="TestingModule.cancelBatchTest()">
-                    <i class="fas fa-stop me-1"></i>Cancel Test
-                </button>
-            `;
+            if (stepCounter) {
+                stepCounter.textContent = `${progress} / ${total}`;
+            }
+
+            if (progressBar) {
+                progressBar.style.width = `${percentage}%`;
+            }
+
+            if (currentItemSpan && data.current_instruction) {
+                const instruction = data.current_instruction.substring(0, 60);
+                currentItemSpan.innerHTML = `Processing: ${CoreModule.escapeHtml(instruction)}...`;
+            }
+
+            // Handle streaming results
+            if (data.partial_results && Array.isArray(data.partial_results)) {
+                data.partial_results.forEach((result, index) => {
+                    if (result) {
+                        this.updateBatchRowResult(
+                            index,
+                            result.formatted_prompt,
+                            result.trained_response,
+                            result.comparison_response,
+                            result.trained_match,
+                            result.comparison_match
+                        );
+                    }
+                });
+            }
+
+            // Mark current row as loading
+            if (data.current_index !== undefined && data.current_index < total) {
+                this.markBatchRowLoading(data.current_index);
+            }
         },
 
         // Handle batch comparison completion
@@ -1730,12 +2233,12 @@
             const results = data.results || [];
             const hasExpected = results.length > 0 && 'expected' in results[0];
 
-            // Show/hide expected answer columns
+            // Always show columns (no conditional hiding)
             if (expectedHeader) {
-                expectedHeader.style.display = hasExpected ? 'table-cell' : 'none';
+                expectedHeader.style.display = 'table-cell';
             }
             if (matchHeader) {
-                matchHeader.style.display = hasExpected ? 'table-cell' : 'none';
+                matchHeader.style.display = 'table-cell';
             }
 
             // Clear previous results
@@ -1748,34 +2251,33 @@
                 const trainedMatch = result.trained_match === true;
                 const comparisonMatch = result.comparison_match === true;
 
-                let matchCell = '';
-                if (hasExpected) {
-                    matchCell = `
-                        <td style="display: ${hasExpected ? 'table-cell' : 'none'};">
-                            ${CoreModule.escapeHtml(result.expected || 'N/A')}
-                        </td>
-                        <td style="display: ${hasExpected ? 'table-cell' : 'none'};">
-                            <div class="d-flex gap-2">
-                                <span class="badge bg-${trainedMatch ? 'success' : 'warning'}">
-                                    <i class="fas fa-${trainedMatch ? 'check' : 'times'}"></i> Trained
-                                </span>
-                                <span class="badge bg-${comparisonMatch ? 'success' : 'warning'}">
-                                    <i class="fas fa-${comparisonMatch ? 'check' : 'times'}"></i> Comparison
-                                </span>
-                            </div>
-                        </td>
-                    `;
-                } else {
-                    matchCell = `
-                        <td style="display: none;"></td>
-                        <td style="display: none;"></td>
-                    `;
-                }
+                // Use formatted_prompt (full prompt with template) or fallback to instruction
+                const displayPrompt = result.formatted_prompt || result.instruction || '';
+
+                // Prepare expected answer display
+                const expectedDisplay = result.expected
+                    ? `${CoreModule.escapeHtml(result.expected.substring(0, 80))}${result.expected.length > 80 ? '...' : ''}`
+                    : '-';
+
+                // Prepare match badges display
+                const matchDisplay = hasExpected
+                    ? `<div class="d-flex gap-2">
+                        <span class="badge bg-${trainedMatch ? 'success' : 'warning'}">
+                            <i class="fas fa-${trainedMatch ? 'check' : 'times'}"></i> Trained
+                        </span>
+                        <span class="badge bg-${comparisonMatch ? 'success' : 'warning'}">
+                            <i class="fas fa-${comparisonMatch ? 'check' : 'times'}"></i> Comparison
+                        </span>
+                    </div>`
+                    : '-';
 
                 row.innerHTML = `
                     <td>${idx + 1}</td>
-                    <td class="text-truncate" style="max-width: 200px;" title="${CoreModule.escapeHtml(result.instruction || '')}">
-                        ${CoreModule.escapeHtml((result.instruction || '').substring(0, 100))}${result.instruction && result.instruction.length > 100 ? '...' : ''}
+                    <td class="text-truncate" style="max-width: 300px;" title="${CoreModule.escapeHtml(displayPrompt)}">
+                        ${CoreModule.escapeHtml(displayPrompt.substring(0, 150))}${displayPrompt.length > 150 ? '...' : ''}
+                    </td>
+                    <td class="text-truncate" title="${CoreModule.escapeHtml(result.expected || '-')}">
+                        ${expectedDisplay}
                     </td>
                     <td class="text-truncate" style="max-width: 250px;" title="${CoreModule.escapeHtml(result.trained_response || '')}">
                         ${CoreModule.escapeHtml((result.trained_response || '').substring(0, 100))}${result.trained_response && result.trained_response.length > 100 ? '...' : ''}
@@ -1783,7 +2285,9 @@
                     <td class="text-truncate" style="max-width: 250px;" title="${CoreModule.escapeHtml(result.comparison_response || '')}">
                         ${CoreModule.escapeHtml((result.comparison_response || '').substring(0, 100))}${result.comparison_response && result.comparison_response.length > 100 ? '...' : ''}
                     </td>
-                    ${matchCell}
+                    <td>
+                        ${matchDisplay}
+                    </td>
                 `;
 
                 resultsBody.appendChild(row);
@@ -1889,7 +2393,7 @@
             const hasExpected = results.length > 0 && 'expected' in results[0];
 
             // Build headers based on what data we have
-            const headers = ['ID', 'Instruction', 'Trained Response', 'Comparison Response', 'Trained Time (s)', 'Comparison Time (s)'];
+            const headers = ['ID', 'Formatted Prompt', 'Trained Response', 'Comparison Response', 'Trained Time (s)', 'Comparison Time (s)'];
             if (hasExpected) {
                 headers.push('Expected Answer', 'Trained Match', 'Comparison Match');
             }
@@ -1898,9 +2402,12 @@
 
             // Build data rows
             results.forEach((result, idx) => {
+                // Use formatted_prompt if available, otherwise fall back to instruction
+                const promptToExport = result.formatted_prompt || result.instruction || '';
+
                 const row = [
                     idx + 1,
-                    `"${(result.instruction || '').replace(/"/g, '""')}"`,
+                    `"${promptToExport.replace(/"/g, '""')}"`,
                     `"${(result.trained_response || '').replace(/"/g, '""')}"`,
                     `"${(result.comparison_response || '').replace(/"/g, '""')}"`,
                     result.trained_time?.toFixed(2) || 'N/A',

@@ -181,8 +181,21 @@ class SessionRegistry:
                         session_info.model_name = state.get('config', {}).get('model_name', 'Unknown')
                         session_info.best_reward = state.get('best_reward')
                         session_info.epochs_trained = state.get('current_epoch')
+                        # Load training config for prompt formatting
+                        session_info.training_config = state.get('config')
                 except Exception as e:
                     logger.warning(f"Failed to read state for {session_dir.name}: {e}")
+
+            # If training_config not found, try loading from config.json as fallback
+            if not session_info.training_config:
+                config_file = final_checkpoint / "config.json"
+                if config_file.exists():
+                    try:
+                        with open(config_file, 'r') as f:
+                            session_info.training_config = json.load(f)
+                            logger.debug(f"Loaded training config from config.json for {session_dir.name}")
+                    except Exception as e:
+                        logger.warning(f"Failed to read config.json for {session_dir.name}: {e}")
 
             self.add_session(session_info)
             sessions_found += 1

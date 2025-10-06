@@ -2244,6 +2244,7 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
 
                                 <!-- Batch Test Tab -->
                                 <div class="tab-pane fade" id="batch-test" role="tabpanel">
+                                    <div id="batch-test-section">
                                     <!-- Model Selection for Batch Test -->
                                     <div class="card mb-4">
                                         <div class="card-body">
@@ -2322,18 +2323,18 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                             </h6>
                                             <div class="row">
                                                 <div class="col-md-4">
-                                                    <label class="form-label">Instruction Column</label>
+                                                    <label class="form-label">Test Prompt Column</label>
                                                     <select class="form-select" id="batch-instruction-column">
                                                         <option value="">Select column...</option>
                                                     </select>
-                                                    <small class="text-muted">Column containing test prompts</small>
+                                                    <small class="text-muted">Column containing test prompts/instructions</small>
                                                 </div>
                                                 <div class="col-md-4">
-                                                    <label class="form-label">Expected Response Column (Optional)</label>
+                                                    <label class="form-label">Expected Answer Column (Optional)</label>
                                                     <select class="form-select" id="batch-response-column">
                                                         <option value="">None - Just compare models</option>
                                                     </select>
-                                                    <small class="text-muted">For evaluation against expected outputs</small>
+                                                    <small class="text-muted">Column with expected answers for accuracy evaluation</small>
                                                 </div>
                                                 <div class="col-md-4">
                                                     <label class="form-label">Sample Size</label>
@@ -2351,8 +2352,33 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                     <div class="card mb-4" id="batch-test-options" style="display: none;">
                                         <div class="card-body">
                                             <h6 class="card-title fw-bold mb-3">
-                                                <i class="fas fa-cog"></i> Test Options
+                                                <i class="fas fa-cog"></i> Generation Settings
                                             </h6>
+
+                                            <!-- Generation Parameters -->
+                                            <div class="row mb-3">
+                                                <div class="col-md-3">
+                                                    <label class="form-label">Temperature</label>
+                                                    <input type="range" class="form-range" id="batch-temperature" min="0" max="2" step="0.1" value="0.7">
+                                                    <small class="text-muted">Value: <span id="batch-temp-value">0.7</span></small>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <label class="form-label">Max Tokens</label>
+                                                    <input type="number" class="form-control" id="batch-max-tokens" value="512" min="32" max="2048">
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <label class="form-label">Top P</label>
+                                                    <input type="range" class="form-range" id="batch-top-p" min="0" max="1" step="0.05" value="0.95">
+                                                    <small class="text-muted">Value: <span id="batch-top-p-value">0.95</span></small>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <label class="form-label">Repetition Penalty</label>
+                                                    <input type="range" class="form-range" id="batch-rep-penalty" min="0.5" max="2" step="0.1" value="1.0">
+                                                    <small class="text-muted">Value: <span id="batch-rep-value">1.0</span></small>
+                                                </div>
+                                            </div>
+
+                                            <!-- Additional Options -->
                                             <div class="row">
                                                 <div class="col-md-6">
                                                     <div class="form-check">
@@ -2432,17 +2458,47 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                                 </div>
                                             </div>
 
+                                            <!-- Pagination Controls -->
+                                            <div class="d-flex justify-content-between align-items-center mb-3 batch-pagination-controls" id="batch-pagination-controls" style="display: none !important;">
+                                                <div class="text-muted">
+                                                    Showing <span id="batch-page-start">1</span>-<span id="batch-page-end">10</span> of <span id="batch-total-rows">0</span> rows
+                                                </div>
+                                                <nav aria-label="Batch results pagination">
+                                                    <ul class="pagination pagination-sm mb-0">
+                                                        <li class="page-item" id="batch-prev-page-item">
+                                                            <a class="page-link" href="#" onclick="TestingModule.batchPrevPage(); return false;">
+                                                                <i class="fas fa-chevron-left"></i> Previous
+                                                            </a>
+                                                        </li>
+                                                        <li class="page-item disabled">
+                                                            <span class="page-link">Page <span id="batch-current-page">1</span></span>
+                                                        </li>
+                                                        <li class="page-item" id="batch-next-page-item">
+                                                            <a class="page-link" href="#" onclick="TestingModule.batchNextPage(); return false;">
+                                                                Next <i class="fas fa-chevron-right"></i>
+                                                            </a>
+                                                        </li>
+                                                    </ul>
+                                                </nav>
+                                                <select class="form-select form-select-sm" id="batch-page-size" style="width: auto;" onchange="TestingModule.batchChangePageSize()">
+                                                    <option value="10">10 per page</option>
+                                                    <option value="25" selected>25 per page</option>
+                                                    <option value="50">50 per page</option>
+                                                    <option value="100">100 per page</option>
+                                                </select>
+                                            </div>
+
                                             <!-- Results Table -->
                                             <div class="table-responsive">
-                                                <table class="table table-sm" id="batch-results-table">
-                                                    <thead>
+                                                <table class="table table-sm table-hover batch-results-table" id="batch-results-table">
+                                                    <thead class="batch-table-header">
                                                         <tr>
-                                                            <th>#</th>
-                                                            <th>Instruction</th>
-                                                            <th>Trained Model</th>
-                                                            <th>Comparison Model</th>
-                                                            <th id="expected-header">Expected Response</th>
-                                                            <th id="match-header">Match</th>
+                                                            <th style="width: 50px;">#</th>
+                                                            <th style="width: 28%;">Test Prompt (Full)</th>
+                                                            <th style="width: 15%;">Expected Answer</th>
+                                                            <th style="width: 20%;">Trained Model</th>
+                                                            <th style="width: 20%;">Comparison Model</th>
+                                                            <th style="width: 12%;">Match</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody id="batch-results-body">
@@ -2459,6 +2515,7 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                             </div>
                                         </div>
                                     </div>
+                                    </div><!-- end batch-test-section -->
                                 </div>
                                 <!-- End Batch Test Tab -->
                             </div>

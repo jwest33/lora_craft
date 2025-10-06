@@ -742,8 +742,15 @@
                 });
             }
 
-            // Navigate to export step
+            // Navigate to export step and refresh models
             NavigationModule.goToStep(5);
+            // Ensure models are refreshed after navigation
+            setTimeout(() => {
+                if (window.ExportModule) {
+                    ExportModule.loadExportableModels();
+                    ExportModule.displayTrainedModelCards();
+                }
+            }, 200);
         },
 
         // Handle training error

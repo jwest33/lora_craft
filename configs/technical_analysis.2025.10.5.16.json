@@ -1,5 +1,5 @@
 {
-  "name": "technical_analysis.2025.10.5.15",
+  "name": "technical_analysis.2025.10.5.16",
   "description": "",
   "config": {
     "setupMode": "setup-recommended",
@@ -87,7 +87,7 @@
     "pre_training": {
       "enabled": true,
       "epochs": 2,
-      "max_samples": 250,
+      "max_samples": 100,
       "filter_by_length": false,
       "validate_format": true
     },
@@ -137,5 +137,5 @@
       "type": "custom"
     }
   },
-  "timestamp": 1759707069853
+  "timestamp": 1759711648504
 }

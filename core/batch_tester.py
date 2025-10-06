@@ -25,6 +25,7 @@ class BatchTestConfig:
     prompts: List[str]
     parameters: Dict[str, Any]  # temperature, top_p, max_tokens, etc.
     output_dir: str
+    session_info: Optional[Any] = None  # Session info for trained models
     callback: Optional[Callable] = None  # Progress callback
 
 @dataclass
@@ -79,7 +80,7 @@ class BatchTestRunner:
         self._lock = threading.Lock()
 
     def start_batch_test(self, model: str, prompts_file: str, parameters: Dict[str, Any],
-                         model_tester=None) -> str:
+                         model_tester=None, session_info=None) -> str:
         """Start a batch test.
 
         Args:
@@ -87,6 +88,7 @@ class BatchTestRunner:
             prompts_file: Path to file containing prompts (CSV or JSON)
             parameters: Generation parameters
             model_tester: ModelTester instance to use
+            session_info: Session info for trained models (contains system prompt)
 
         Returns:
             Batch test ID
@@ -111,7 +113,8 @@ class BatchTestRunner:
                 model=model,
                 prompts=prompts,
                 parameters=parameters,
-                output_dir=str(output_dir)
+                output_dir=str(output_dir),
+                session_info=session_info
             )
 
             # Create status
@@ -224,12 +227,14 @@ class BatchTestRunner:
                     # Use model tester if available
                     if model_tester:
                         response_data = model_tester.generate_response(
-                            model_id=config.model,
                             prompt=prompt,
+                            model_type='trained',
+                            model_key=config.model,
+                            session_info=config.session_info,
                             **config.parameters
                         )
                         response = response_data.get('response', '')
-                        token_count = response_data.get('token_count', 0)
+                        token_count = response_data.get('metadata', {}).get('token_count', 0)
                     else:
                         # Fallback - would need actual model loading here
                         response = f"[Mock response to: {prompt[:50]}...]"

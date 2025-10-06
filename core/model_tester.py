@@ -310,8 +310,15 @@ You are a helpful AI assistant.
                 logger.debug("Using simple prompt format for testing")
             elif use_chat_template:
                 # Try to use chat template from training configuration if available
+                logger.debug(f"use_chat_template=True, session_info exists: {session_info is not None}")
+                if session_info:
+                    logger.debug(f"session_info has training_config: {hasattr(session_info, 'training_config')}")
+                    if hasattr(session_info, 'training_config'):
+                        logger.debug(f"training_config is None: {session_info.training_config is None}")
+
                 if session_info and hasattr(session_info, 'training_config') and session_info.training_config:
                     training_config = session_info.training_config
+                    logger.debug(f"Using training_config from session_info")
 
                     # Get chat template from training config
                     chat_template = (
@@ -325,6 +332,7 @@ You are a helpful AI assistant.
                         training_config.get('template', {}).get('system_prompt') or
                         'You are a helpful AI assistant.'
                     )
+                    logger.debug(f"Extracted system_prompt: {system_prompt[:100] if system_prompt else None}")
 
                     if chat_template:
                         # Use the training chat template
@@ -339,8 +347,12 @@ You are a helpful AI assistant.
                                 messages.append({"role": "system", "content": system_prompt})
                             messages.append({"role": "user", "content": prompt})
 
-                            # Get template markers from config
-                            reasoning_start = training_config.get('reasoning_start', '<start_working_out>')
+                            # Get template markers from config (check both root and template object)
+                            reasoning_start = (
+                                training_config.get('reasoning_start') or
+                                training_config.get('template', {}).get('reasoning_start') or
+                                '<start_working_out>'
+                            )
                             eos_token = '</s>'  # Common default
 
                             # Render template
@@ -376,7 +388,12 @@ You are a helpful AI assistant.
                             training_config.get('template', {}).get('chat_template_type') or
                             'grpo'
                         )
-                        reasoning_start = training_config.get('reasoning_start', '<start_working_out>')
+                        # Get reasoning_start from config (check both root and template object)
+                        reasoning_start = (
+                            training_config.get('reasoning_start') or
+                            training_config.get('template', {}).get('reasoning_start') or
+                            '<start_working_out>'
+                        )
 
                         if chat_template_type == 'grpo':
                             # GRPO format
@@ -405,10 +422,105 @@ You are a helpful AI assistant.
 
                         logger.debug(f"Applied {chat_template_type} chat template from training config")
                 elif model_type == "base":
-                    # Use generic chat template for base model without training config
-                    system_prompt = "You are a helpful AI assistant."
-                    formatted_prompt = self.base_chat_template.format(prompt=prompt)
-                    logger.debug("Applied generic base chat template")
+                    # Use training system prompt if session_info provided, otherwise generic
+                    if session_info and hasattr(session_info, 'training_config') and session_info.training_config:
+                        training_config = session_info.training_config
+
+                        # Get system prompt from training config
+                        system_prompt = override_system_prompt or (
+                            training_config.get('system_prompt') or
+                            training_config.get('template', {}).get('system_prompt') or
+                            'You are a helpful AI assistant.'
+                        )
+
+                        # Get chat template configuration
+                        chat_template = (
+                            training_config.get('chat_template') or
+                            training_config.get('template', {}).get('chat_template')
+                        )
+
+                        if chat_template:
+                            # Use the training chat template
+                            try:
+                                from jinja2 import Environment
+                                env = Environment()
+                                template = env.from_string(chat_template)
+
+                                # Prepare messages
+                                messages = []
+                                if system_prompt:
+                                    messages.append({"role": "system", "content": system_prompt})
+                                messages.append({"role": "user", "content": prompt})
+
+                                # Get template markers from config (check both root and template object)
+                                reasoning_start = (
+                                    training_config.get('reasoning_start') or
+                                    training_config.get('template', {}).get('reasoning_start') or
+                                    '<start_working_out>'
+                                )
+                                eos_token = '</s>'  # Common default
+
+                                # Render template
+                                formatted_prompt = template.render(
+                                    messages=messages,
+                                    add_generation_prompt=True,
+                                    eos_token=eos_token,
+                                    system_prompt=system_prompt,
+                                    reasoning_start=reasoning_start
+                                )
+                                logger.debug(f"Applied training chat template to base model")
+                            except Exception as e:
+                                logger.warning(f"Failed to apply training chat template to base model: {e}")
+                                # Fallback to formatted prompt with system prompt
+                                if system_prompt:
+                                    formatted_prompt = f"{system_prompt}</s>{prompt}"
+                                else:
+                                    formatted_prompt = prompt
+                        else:
+                            # Use chat template type to format
+                            chat_template_type = (
+                                training_config.get('chat_template_type') or
+                                training_config.get('template', {}).get('chat_template_type') or
+                                'grpo'
+                            )
+                            # Get reasoning_start from config (check both root and template object)
+                            reasoning_start = (
+                                training_config.get('reasoning_start') or
+                                training_config.get('template', {}).get('reasoning_start') or
+                                '<start_working_out>'
+                            )
+
+                            if chat_template_type == 'grpo':
+                                # GRPO format
+                                if system_prompt:
+                                    formatted_prompt = f"{system_prompt}</s>{prompt}{reasoning_start}"
+                                else:
+                                    formatted_prompt = f"{prompt}{reasoning_start}"
+                            elif chat_template_type == 'qwen':
+                                # Qwen format
+                                if system_prompt:
+                                    formatted_prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
+                                else:
+                                    formatted_prompt = f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
+                            elif chat_template_type == 'llama':
+                                # LLaMA format
+                                if system_prompt:
+                                    formatted_prompt = f"<s>[INST] <<SYS>>\n{system_prompt}\n<</SYS>>\n\n{prompt} [/INST]"
+                                else:
+                                    formatted_prompt = f"<s>[INST] {prompt} [/INST]"
+                            else:
+                                # Generic format
+                                if system_prompt:
+                                    formatted_prompt = f"{system_prompt}\n\nUser: {prompt}\n\nAssistant:"
+                                else:
+                                    formatted_prompt = f"User: {prompt}\n\nAssistant:"
+
+                            logger.debug(f"Applied {chat_template_type} chat template from training config to base model")
+                    else:
+                        # Use generic chat template for base model without training config
+                        system_prompt = "You are a helpful AI assistant."
+                        formatted_prompt = self.base_chat_template.format(prompt=prompt)
+                        logger.debug("Applied generic base chat template")
                 else:
                     # Try to use model's tokenizer chat template if available
                     if hasattr(tokenizer, 'chat_template') and tokenizer.chat_template:
@@ -711,7 +823,7 @@ You are a helpful AI assistant.
         )
         results["trained"] = trained_result
 
-        # Generate from base model using generic chat template (not training config)
+        # Generate from base model using same system prompt as trained model
         base_result = self.generate_response(
             prompt=prompt,
             model_type="base",
@@ -719,7 +831,7 @@ You are a helpful AI assistant.
             config=config,
             use_chat_template=use_chat_template,
             use_simple_prompt=use_simple_prompt,
-            session_info=None  # Don't use trained model's chat template for base model
+            session_info=session_info  # Use trained model's system prompt for fair comparison
         )
         results["base"] = base_result
 

@@ -2175,6 +2175,11 @@ def start_batch_test():
             'max_tokens': int(request.form.get('max_tokens', 512))
         }
 
+        # Get session info for trained model
+        session_info = session_registry.get_session(model)
+        if not session_info:
+            return jsonify({'error': 'Session not found', 'success': False}), 404
+
         # Get batch test runner
         runner = get_batch_test_runner()
 
@@ -2186,7 +2191,8 @@ def start_batch_test():
             model=model,
             prompts_file=str(file_path),
             parameters=parameters,
-            model_tester=model_tester
+            model_tester=model_tester,
+            session_info=session_info
         )
 
         return jsonify({
@@ -3850,13 +3856,27 @@ def generate_test_response():
         data = request.json
         prompt = data.get('prompt')
         model_type = data.get('model_type', 'trained')  # 'trained' or 'base'
-        model_key = data.get('model_key')  # session_id or base_model_name
 
-        # Generation config
-        config_data = data.get('config', {})
+        # Support both old 'model' parameter and new 'model_key' parameter
+        model_key = data.get('model_key') or data.get('model')
+
+        # Handle old API format - extract config from top-level parameters
+        if 'config' in data:
+            config_data = data.get('config', {})
+        else:
+            # Old format: parameters at top level
+            config_data = {
+                'temperature': data.get('temperature', 0.7),
+                'max_new_tokens': data.get('max_tokens', 512),
+                'top_p': data.get('top_p', 0.95),
+                'top_k': data.get('top_k', 50),
+                'repetition_penalty': data.get('repetition_penalty', 1.0),
+                'do_sample': True
+            }
+
         config = TestConfig(
             temperature=config_data.get('temperature', 0.7),
-            max_new_tokens=config_data.get('max_new_tokens', 512),
+            max_new_tokens=config_data.get('max_new_tokens', config_data.get('max_tokens', 512)),
             top_p=config_data.get('top_p', 0.95),
             top_k=config_data.get('top_k', 50),
             repetition_penalty=config_data.get('repetition_penalty', 1.0),
@@ -3868,13 +3888,21 @@ def generate_test_response():
         if not prompt or not model_key:
             return jsonify({'error': 'prompt and model_key required'}), 400
 
+        # Get session info if testing a trained model
+        session_info = None
+        if model_type == 'trained':
+            session_info = session_registry.get_session(model_key)
+            if not session_info:
+                return jsonify({'error': 'Session not found'}), 404
+
         # Generate response
         result = model_tester.generate_response(
             prompt=prompt,
             model_type=model_type,
             model_key=model_key,
             config=config,
-            use_chat_template=use_chat_template
+            use_chat_template=use_chat_template,
+            session_info=session_info
         )
 
         return jsonify(result)
@@ -4547,6 +4575,7 @@ def upload_test_file():
                 columns = df.columns.tolist()
                 sample_count = len(df)
                 samples = df.head(5).to_dict('records')
+                rows = df.to_dict('records')
             elif ext == 'json':
                 with open(temp_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
@@ -4555,6 +4584,7 @@ def upload_test_file():
                     columns = df.columns.tolist()
                     sample_count = len(data)
                     samples = data[:5]
+                    rows = data
                 else:
                     return jsonify({'error': 'JSON file must contain an array of objects'}), 400
             elif ext == 'jsonl':
@@ -4564,6 +4594,7 @@ def upload_test_file():
                 columns = df.columns.tolist()
                 sample_count = len(data)
                 samples = data[:5]
+                rows = data
 
             # Store file data in session for later use
             session['batch_test_file'] = {
@@ -4578,6 +4609,7 @@ def upload_test_file():
                 'columns': columns,
                 'sample_count': sample_count,
                 'samples': samples,
+                'rows': rows,
                 'filename': filename
             })
 
@@ -4641,6 +4673,14 @@ def run_batch_comparison_background(batch_id, params):
         if not trained_session_info:
             raise Exception(f'Session {session_id} not found')
 
+        # Debug: Check if training_config is available
+        logger.info(f"Batch test - Session {session_id} has training_config: {hasattr(trained_session_info, 'training_config')}")
+        if hasattr(trained_session_info, 'training_config'):
+            logger.info(f"Batch test - training_config is None: {trained_session_info.training_config is None}")
+            if trained_session_info.training_config:
+                logger.info(f"Batch test - training_config keys: {list(trained_session_info.training_config.keys()) if isinstance(trained_session_info.training_config, dict) else 'not a dict'}")
+                logger.info(f"Batch test - system_prompt in config: {'system_prompt' in trained_session_info.training_config if isinstance(trained_session_info.training_config, dict) else False}")
+
         checkpoint_path = trained_session_info.checkpoint_path
         if not checkpoint_path or not Path(checkpoint_path).exists():
             raise Exception(f'Checkpoint not found for session {session_id}')
@@ -4683,6 +4723,11 @@ def run_batch_comparison_background(batch_id, params):
         results = []
         total_rows = len(df)
 
+        # Initialize partial results array
+        with batch_test_lock:
+            active_batch_tests[batch_id]['total'] = total_rows
+            active_batch_tests[batch_id]['partial_results'] = [None] * total_rows
+
         # Send initial status via WebSocket
         socketio.emit('batch_progress', {
             'batch_id': batch_id,
@@ -4702,7 +4747,8 @@ def run_batch_comparison_background(batch_id, params):
 
             # Update progress
             with batch_test_lock:
-                active_batch_tests[batch_id]['current'] = idx + 1
+                active_batch_tests[batch_id]['progress'] = idx + 1
+                active_batch_tests[batch_id]['current_index'] = idx
                 active_batch_tests[batch_id]['current_instruction'] = instruction[:100]
 
             # Send progress update
@@ -4745,9 +4791,25 @@ def run_batch_comparison_background(batch_id, params):
                     session_info=comparison_session_info
                 )
 
+            # Extract formatted prompt from trained response metadata
+            formatted_prompt = instruction  # default fallback
+            if trained_response.get('success'):
+                metadata = trained_response.get('metadata', {})
+                formatted_prompt = metadata.get('formatted_prompt', instruction)
+                # Debug logging
+                if idx == 0:  # Log first item for debugging
+                    print(f"\n=== BATCH TEST DEBUG (First Item) ===")
+                    print(f"Metadata keys: {list(metadata.keys())}")
+                    print(f"Has 'formatted_prompt' key: {'formatted_prompt' in metadata}")
+                    print(f"Formatted prompt length: {len(formatted_prompt)}")
+                    print(f"Instruction length: {len(instruction)}")
+                    print(f"Formatted prompt preview (first 200 chars): {formatted_prompt[:200]}")
+                    print(f"=====================================\n")
+
             result_item = {
                 'index': row_idx,
                 'instruction': instruction,
+                'formatted_prompt': formatted_prompt,
                 'trained_response': trained_response.get('response', '') if trained_response.get('success') else 'ERROR',
                 'comparison_response': comparison_response.get('response', '') if comparison_response.get('success') else 'ERROR',
                 'trained_time': trained_response.get('metadata', {}).get('generation_time', 0),
@@ -4761,6 +4823,25 @@ def run_batch_comparison_background(batch_id, params):
                 result_item['comparison_match'] = result_item['comparison_response'].strip().lower() == expected.strip().lower()
 
             results.append(result_item)
+
+            # Store result in partial_results for streaming
+            with batch_test_lock:
+                partial_result = {
+                    'formatted_prompt': result_item['formatted_prompt'],
+                    'trained_response': result_item['trained_response'],
+                    'comparison_response': result_item['comparison_response'],
+                    'trained_match': result_item.get('trained_match'),
+                    'comparison_match': result_item.get('comparison_match')
+                }
+                active_batch_tests[batch_id]['partial_results'][idx] = partial_result
+
+                # Debug first item sent via socket
+                if idx == 0:
+                    print(f"\n=== SOCKET.IO EMIT DEBUG (First Item) ===")
+                    print(f"Partial result keys: {list(partial_result.keys())}")
+                    print(f"Has 'formatted_prompt': {'formatted_prompt' in partial_result}")
+                    print(f"Formatted prompt length in socket data: {len(partial_result.get('formatted_prompt', ''))}")
+                    print(f"=========================================\n")
 
             # Send result update for each completed row
             socketio.emit('batch_result', {
@@ -4827,14 +4908,137 @@ def run_batch_comparison_background(batch_id, params):
         })
 
 
+@app.route('/api/test/format-prompts', methods=['POST'])
+def format_batch_prompts():
+    """Format prompts with system messages for preview in batch test table.
+
+    Uses the same logic as model_tester.generate_response to ensure UI shows
+    exactly what the LLM will receive.
+    """
+    try:
+        data = request.json
+        session_id = data.get('session_id')
+        instructions = data.get('instructions', [])
+
+        if not session_id or not instructions:
+            return jsonify({'error': 'Missing session_id or instructions'}), 400
+
+        # Get session info
+        session_info = session_registry.get_session(session_id)
+        if not session_info:
+            return jsonify({'error': f'Session {session_id} not found'}), 404
+
+        # Format each instruction using the same logic as model_tester
+        formatted_prompts = []
+        for instruction in instructions:
+            if session_info.training_config:
+                training_config = session_info.training_config
+
+                # Get system prompt
+                system_prompt = (
+                    training_config.get('system_prompt') or
+                    training_config.get('template', {}).get('system_prompt') or
+                    ''
+                )
+
+                # Get chat template
+                chat_template = (
+                    training_config.get('chat_template') or
+                    training_config.get('template', {}).get('chat_template')
+                )
+
+                # Format using same logic as model_tester.generate_response
+                if chat_template:
+                    # Use Jinja2 template (same as model_tester)
+                    try:
+                        from jinja2 import Environment
+                        env = Environment()
+                        template = env.from_string(chat_template)
+
+                        messages = []
+                        if system_prompt:
+                            messages.append({"role": "system", "content": system_prompt})
+                        messages.append({"role": "user", "content": instruction})
+
+                        # Get reasoning_start from root or template object
+                        reasoning_start = (
+                            training_config.get('reasoning_start') or
+                            training_config.get('template', {}).get('reasoning_start') or
+                            '<start_working_out>'
+                        )
+                        eos_token = '</s>'
+
+                        formatted = template.render(
+                            messages=messages,
+                            add_generation_prompt=True,
+                            eos_token=eos_token,
+                            system_prompt=system_prompt,
+                            reasoning_start=reasoning_start
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to apply chat template: {e}")
+                        formatted = instruction
+                else:
+                    # Use chat template type (same as model_tester)
+                    chat_template_type = (
+                        training_config.get('chat_template_type') or
+                        training_config.get('template', {}).get('chat_template_type') or
+                        'grpo'
+                    )
+                    # Get reasoning_start from root or template object
+                    reasoning_start = (
+                        training_config.get('reasoning_start') or
+                        training_config.get('template', {}).get('reasoning_start') or
+                        '<start_working_out>'
+                    )
+
+                    if chat_template_type == 'grpo':
+                        if system_prompt:
+                            formatted = f"{system_prompt}</s>{instruction}{reasoning_start}"
+                        else:
+                            formatted = f"{instruction}{reasoning_start}"
+                    elif chat_template_type == 'qwen':
+                        if system_prompt:
+                            formatted = f"<|im_start|>system\n{system_prompt}<|im_end|>\n<|im_start|>user\n{instruction}<|im_end|>\n<|im_start|>assistant\n"
+                        else:
+                            formatted = f"<|im_start|>user\n{instruction}<|im_end|>\n<|im_start|>assistant\n"
+                    elif chat_template_type == 'llama':
+                        if system_prompt:
+                            formatted = f"<s>[INST] <<SYS>>\n{system_prompt}\n<</SYS>>\n\n{instruction} [/INST]"
+                        else:
+                            formatted = f"<s>[INST] {instruction} [/INST]"
+                    else:
+                        # Generic format
+                        if system_prompt:
+                            formatted = f"{system_prompt}\n\nUser: {instruction}\n\nAssistant:"
+                        else:
+                            formatted = f"User: {instruction}\n\nAssistant:"
+            else:
+                formatted = instruction
+
+            formatted_prompts.append(formatted)
+
+        return jsonify({
+            'success': True,
+            'formatted_prompts': formatted_prompts
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to format prompts: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/test/batch-compare', methods=['POST'])
 def batch_compare_models():
     """Start batch comparison in background."""
+    print("\n!!! BATCH COMPARE ENDPOINT CALLED !!!\n")
     try:
         data = request.json
+        print(f"Request data keys: {list(data.keys()) if data else 'No data'}")
 
         # Get file data from session
         if 'batch_test_file' not in session:
+            print("ERROR: No test file in session")
             return jsonify({'error': 'No test file uploaded'}), 400
 
         file_info = session['batch_test_file']
@@ -4936,6 +5140,8 @@ def get_batch_status(batch_id):
             'progress': test_info.get('progress', 0),
             'total': test_info.get('total', 0),
             'current_instruction': test_info.get('current_instruction', ''),
+            'current_index': test_info.get('current_index', 0),
+            'partial_results': test_info.get('partial_results', []),
             'start_time': test_info.get('start_time'),
             'end_time': test_info.get('end_time'),
             'error': test_info.get('error')
@@ -4957,7 +5163,7 @@ def get_batch_results(batch_id):
                 'error': f"Test is still {test_info['status']}",
                 'status': test_info['status']
             }), 400
-
+        
         return jsonify({
             'batch_id': batch_id,
             'status': test_info['status'],
