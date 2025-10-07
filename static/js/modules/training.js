@@ -815,6 +815,28 @@
                 }
             };
 
+            // Update progress bar
+            if (data.total_steps && data.step !== undefined) {
+                const progressContainer = document.getElementById('training-progress-container');
+                const progressBar = document.getElementById('training-progress-bar-inner');
+                const progressStats = document.getElementById('progress-stats');
+
+                if (progressContainer && progressBar && progressStats) {
+                    // Show progress container
+                    progressContainer.style.display = 'block';
+
+                    // Calculate percentage
+                    const percentage = Math.min(100, Math.max(0, (data.step / data.total_steps) * 100));
+
+                    // Update progress bar
+                    progressBar.style.width = `${percentage}%`;
+                    progressBar.setAttribute('aria-valuenow', percentage);
+
+                    // Update stats text
+                    progressStats.textContent = `${percentage.toFixed(1)}% (${data.step}/${data.total_steps})`;
+                }
+            }
+
             // Primary metrics - show step as "current / total"
             const stepDisplay = data.total_steps
                 ? `${data.step || 0} / ${data.total_steps}`

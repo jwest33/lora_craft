@@ -440,8 +440,8 @@
                                                 </div>
                                             </div>
                                             <div class="mt-3">
-                                                <button class="btn btn-primary" onclick="DatasetsModule.confirmColumnMapping()">
-                                                    <i class="fas fa-check"></i> Confirm Selection
+                                                <button class="btn btn-success btn-confirm-selection" onclick="DatasetsModule.confirmColumnMapping()">
+                                                    <i class="fas fa-check-circle"></i> Confirm Selection
                                                 </button>
                                             </div>
                                         </div>
@@ -813,21 +813,9 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                 <!-- Reward Mode Tabs -->
                                 <ul class="nav nav-tabs" role="tablist">
                                     <li class="nav-item" role="presentation">
-                                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#reward-templates-tab"
-                                                type="button" role="tab">
-                                            <i class="fas fa-rocket"></i> Quick Start
-                                        </button>
-                                    </li>
-                                    <li class="nav-item" role="presentation">
-                                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#reward-presets-tab"
+                                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#reward-presets-tab"
                                                 type="button" role="tab">
                                             <i class="fas fa-list-alt"></i> Preset Library
-                                        </button>
-                                    </li>
-                                    <li class="nav-item" role="presentation">
-                                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#reward-custom-tab"
-                                                type="button" role="tab">
-                                            <i class="fas fa-tools"></i> Custom Builder
                                         </button>
                                     </li>
                                     <li class="nav-item" role="presentation">
@@ -840,56 +828,8 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
 
                                 <!-- Tab Content -->
                                 <div class="tab-content p-3 border-top-0">
-                                    <!-- Quick Start Templates Tab -->
-                                    <div class="tab-pane fade show active" id="reward-templates-tab" role="tabpanel">
-                                        <div class="row" id="reward-templates-grid">
-                                            <!-- Templates will be loaded dynamically -->
-                                            <div class="col-md-4 mb-3">
-                                                <div class="card template-card h-100" onclick="selectTemplate('math_problem_solving')">
-                                                    <div class="card-body">
-                                                        <h6 class="card-title">
-                                                            <i class="fas fa-calculator text-primary"></i> Math Problems
-                                                        </h6>
-                                                        <p class="card-text small">Train models to solve mathematical problems with step-by-step solutions</p>
-                                                        <div class="mt-auto">
-                                                            <span class="badge bg-success">Popular</span>
-                                                            <span class="badge bg-info">Beginner</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-4 mb-3">
-                                                <div class="card template-card h-100" onclick="selectTemplate('code_generation')">
-                                                    <div class="card-body">
-                                                        <h6 class="card-title">
-                                                            <i class="fas fa-code text-success"></i> Code Generation
-                                                        </h6>
-                                                        <p class="card-text small">Generate clean, well-documented code with proper formatting</p>
-                                                        <div class="mt-auto">
-                                                            <span class="badge bg-success">Popular</span>
-                                                            <span class="badge bg-warning">Intermediate</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-4 mb-3">
-                                                <div class="card template-card h-100" onclick="selectTemplate('question_answering')">
-                                                    <div class="card-body">
-                                                        <h6 class="card-title">
-                                                            <i class="fas fa-comments text-info"></i> Q&A
-                                                        </h6>
-                                                        <p class="card-text small">Train models to provide accurate, concise answers to questions</p>
-                                                        <div class="mt-auto">
-                                                            <span class="badge bg-info">Beginner</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
                                     <!-- Preset Library Tab -->
-                                    <div class="tab-pane fade" id="reward-presets-tab" role="tabpanel">
+                                    <div class="tab-pane fade show active" id="reward-presets-tab" role="tabpanel">
                                         <div class="row">
                                             <div class="col-md-3">
                                                 <h6>Categories</h6>
@@ -903,22 +843,6 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
-
-                                    <!-- Custom Builder Tab -->
-                                    <div class="tab-pane fade" id="reward-custom-tab" role="tabpanel">
-                                        <div class="alert alert-info">
-                                            <i class="fas fa-info-circle"></i> Build a custom reward by combining components. Each component evaluates a different aspect of the generated output.
-                                        </div>
-                                        <div id="reward-components-advanced">
-                                            <!-- Components will be added here -->
-                                        </div>
-                                        <button class="btn btn-primary mt-3" onclick="addAdvancedComponent()">
-                                            <i class="fas fa-plus"></i> Add Component
-                                        </button>
-                                        <button class="btn btn-success mt-3 ms-2" onclick="saveCustomReward()">
-                                            <i class="fas fa-save"></i> Save Configuration
-                                        </button>
                                     </div>
 
                                     <!-- Test Reward Tab -->
@@ -1031,11 +955,47 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                             <button class="btn btn-sm btn-outline-primary" onclick="viewRewardDetails()">
                                                 <i class="fas fa-info-circle"></i> View Details
                                             </button>
-                                            <button class="btn btn-sm btn-outline-secondary" onclick="testSelectedReward()">
-                                                <i class="fas fa-flask"></i> Test
-                                            </button>
                                             <button class="btn btn-sm btn-outline-success" onclick="showFieldMappingForCurrentReward()">
                                                 <i class="fas fa-link"></i> Configure Fields
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Custom Reward Builder Modal -->
+                            <div class="modal fade" id="customRewardBuilderModal" tabindex="-1" aria-hidden="true">
+                                <div class="modal-dialog modal-xl">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">
+                                                <i class="fas fa-tools"></i> Custom Reward Builder
+                                            </h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <div class="alert alert-info">
+                                                <i class="fas fa-info-circle"></i> Build a custom reward by combining components. Each component evaluates a different aspect of the generated output.
+                                            </div>
+
+                                            <!-- Component List -->
+                                            <div id="custom-reward-components" class="mb-3">
+                                                <!-- Components will be added dynamically -->
+                                            </div>
+
+                                            <!-- Add Component Button -->
+                                            <button class="btn btn-primary" onclick="addCustomComponent()">
+                                                <i class="fas fa-plus"></i> Add Component
+                                            </button>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <div class="me-auto">
+                                                <span id="custom-weight-total" class="badge bg-secondary"></span>
+                                            </div>
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                            <button type="button" class="btn btn-primary" onclick="applyCustomReward()">Apply Custom Reward</button>
+                                            <button type="button" class="btn btn-success" onclick="saveCustomRewardAsPreset()">
+                                                <i class="fas fa-save"></i> Save as Preset
                                             </button>
                                         </div>
                                     </div>
@@ -1477,6 +1437,24 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                 </h5>
 
                                 <!-- Metrics Panel -->
+                                <!-- Training Progress Indicator -->
+                                <div class="training-progress-container mb-3" id="training-progress-container" style="display: none;">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="progress-label">Training Progress</span>
+                                        <span class="progress-stats" id="progress-stats">0% (0/0)</span>
+                                    </div>
+                                    <div class="progress training-progress-bar">
+                                        <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                             role="progressbar"
+                                             id="training-progress-bar-inner"
+                                             style="width: 0%"
+                                             aria-valuenow="0"
+                                             aria-valuemin="0"
+                                             aria-valuemax="100">
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div class="metrics-panel mb-4">
                                     <!-- Primary Metrics -->
                                     <div class="row mb-3">

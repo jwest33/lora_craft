@@ -141,7 +141,7 @@
                             </div>
                             <div class="dataset-actions mt-2">
                                 <button class="btn btn-sm btn-primary flex-grow-1 dataset-select-btn" data-path="${escapedPath}" data-name="${escapedName}">
-                                    <i class="fas fa-check"></i> Select
+                                    <i class="fas fa-mouse-pointer"></i> Select
                                 </button>
                                 ${dataset.is_cached ? `
                                     <button class="btn btn-sm btn-outline-secondary dataset-preview-btn" data-path="${escapedPath}" data-name="${escapedName}">

@@ -123,6 +123,42 @@ class SessionRegistry:
         """
         return self.sessions.get(session_id)
 
+    def get_checkpoint_path(self, session_id: str) -> Optional[str]:
+        """Get the checkpoint path for a session.
+
+        Args:
+            session_id: Session ID to get checkpoint for
+
+        Returns:
+            Path to checkpoint if found, None otherwise
+        """
+        session = self.get_session(session_id)
+        if session and session.checkpoint_path:
+            return session.checkpoint_path
+
+        # Fallback: try to find checkpoint in outputs directory
+        checkpoint_path = Path(f"./outputs/{session_id}/checkpoints/final")
+        if checkpoint_path.exists():
+            return str(checkpoint_path)
+
+        return None
+
+    def remove_session(self, session_id: str) -> bool:
+        """Remove a session from the registry.
+
+        Args:
+            session_id: Session ID to remove
+
+        Returns:
+            True if removed, False if not found
+        """
+        with self._lock:
+            if session_id in self.sessions:
+                del self.sessions[session_id]
+                self.save()
+                return True
+        return False
+
     def list_completed_sessions(self) -> List[SessionInfo]:
         """List all completed sessions.
 

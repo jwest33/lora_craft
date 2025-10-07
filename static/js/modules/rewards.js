@@ -133,20 +133,20 @@ async function initializeRewardSystem() {
         const presetsData = await presetsResponse.json();
         rewardPresets = presetsData.presets || {};
 
-        // Load templates
-        const templatesResponse = await fetch('/api/rewards/templates');
-        const templatesData = await templatesResponse.json();
-        rewardTemplates = templatesData.templates || {};
+        // Load custom presets
+        const customResponse = await fetch('/api/rewards/custom-presets');
+        const customData = await customResponse.json();
+        const customPresets = customData.presets || {};
+
+        // Merge custom presets into main presets
+        rewardPresets = {...rewardPresets, ...customPresets};
 
         // Populate UI if elements exist
         if (document.getElementById('preset-categories')) {
             populatePresetCategories();
         }
-        if (document.getElementById('reward-templates-grid')) {
-            populateTemplates();
-        }
 
-        // Initialize first category
+        // Initialize first category (default to "all")
         if (Object.keys(rewardPresets).length > 0) {
             filterPresetsByCategory('all');
         }
@@ -198,6 +198,30 @@ function filterPresetsByCategory(category) {
     // Filter and display presets
     presetListDiv.innerHTML = '';
 
+    // Add "Custom Reward" card at the beginning if showing all or Custom category
+    if (category === 'all' || category === 'Custom') {
+        presetListDiv.innerHTML += `
+            <div class="col-md-6 mb-3">
+                <div class="card preset-card h-100 border-primary" onclick="openCustomRewardBuilder()" style="cursor: pointer;">
+                    <div class="card-body">
+                        <h6 class="card-title">
+                            <i class="fas fa-tools text-primary"></i> Custom Reward
+                        </h6>
+                        <p class="card-text small text-muted">Build your own custom reward by combining components tailored to your specific task</p>
+                        <div class="mt-2">
+                            <span class="badge bg-primary">Build Your Own</span>
+                        </div>
+                        <div class="mt-2">
+                            <button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); openCustomRewardBuilder()">
+                                <i class="fas fa-plus"></i> Create Custom
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
     Object.entries(rewardPresets).forEach(([name, preset]) => {
         if (category === 'all' || preset.category === category) {
             const difficultyColor = {
@@ -206,11 +230,22 @@ function filterPresetsByCategory(category) {
                 'advanced': 'danger'
             }[preset.difficulty] || 'secondary';
 
+            const isCustomPreset = preset.category === 'Custom';
+
             presetListDiv.innerHTML += `
                 <div class="col-md-6 mb-3">
                     <div class="card preset-card h-100" onclick="selectPresetByName('${name}')">
                         <div class="card-body">
-                            <h6 class="card-title">${preset.name}</h6>
+                            <div class="d-flex justify-content-between align-items-start">
+                                <h6 class="card-title">${preset.name}</h6>
+                                ${isCustomPreset ? `
+                                <button class="btn btn-sm btn-outline-danger"
+                                        onclick="event.stopPropagation(); deleteCustomPreset('${name}')"
+                                        title="Delete custom preset">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                                ` : ''}
+                            </div>
                             <p class="card-text small text-muted">${preset.description}</p>
                             <div class="mt-2">
                                 <span class="badge bg-${difficultyColor}">${preset.difficulty}</span>
@@ -2208,6 +2243,410 @@ function showCustomRewardAsSelected(rewardConfig) {
     console.log('Custom reward displayed as selected (summary mode)');
 }
 
+// ============================================================================
+// Custom Reward Builder Functions
+// ============================================================================
+
+let customComponentCounter = 0;
+
+function openCustomRewardBuilder() {
+    // Reset counter and clear components
+    customComponentCounter = 0;
+    const componentsDiv = document.getElementById('custom-reward-components');
+    if (componentsDiv) {
+        componentsDiv.innerHTML = '';
+    }
+
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('customRewardBuilderModal'));
+    modal.show();
+
+    // Add one default component
+    addCustomComponent();
+}
+
+function addCustomComponent() {
+    const componentsDiv = document.getElementById('custom-reward-components');
+    if (!componentsDiv) return;
+
+    const componentId = `custom-comp-${customComponentCounter++}`;
+
+    const componentHtml = `
+        <div class="card mb-3 custom-component" id="${componentId}">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Component ${customComponentCounter}</span>
+                <button class="btn btn-sm btn-danger" onclick="removeCustomComponent('${componentId}')">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Component Name</label>
+                        <input type="text" class="form-control component-name" placeholder="e.g., accuracy_check">
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Type</label>
+                        <select class="form-select component-type" onchange="updateCustomComponentFields('${componentId}', this.value)">
+                            <option value="binary">Binary (Pass/Fail)</option>
+                            <option value="continuous">Continuous (0-1 Score)</option>
+                            <option value="numerical">Numerical Comparison</option>
+                            <option value="format">Format/Pattern Match</option>
+                            <option value="length">Length Validation</option>
+                            <option value="template">Template Structure</option>
+                            <option value="multi_choice">Multi-Choice</option>
+                            <option value="section_content">Section Content</option>
+                            <option value="sequential">Sequential Pattern</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Weight</label>
+                        <input type="number" class="form-control component-weight" value="1.0" step="0.1" min="0" onchange="updateCustomWeightTotal()">
+                    </div>
+                </div>
+                <div class="component-parameters" id="${componentId}-params">
+                    <!-- Parameters will be added dynamically based on type -->
+                </div>
+            </div>
+        </div>
+    `;
+
+    componentsDiv.insertAdjacentHTML('beforeend', componentHtml);
+    updateCustomComponentFields(componentId, 'binary');
+    updateCustomWeightTotal();
+}
+
+function removeCustomComponent(componentId) {
+    const component = document.getElementById(componentId);
+    if (component) {
+        component.remove();
+        updateCustomWeightTotal();
+    }
+}
+
+function updateCustomComponentFields(componentId, type) {
+    const paramsDiv = document.getElementById(`${componentId}-params`);
+    if (!paramsDiv) return;
+
+    let fieldsHtml = '';
+
+    switch(type) {
+        case 'binary':
+            fieldsHtml = `
+                <div class="mb-2">
+                    <label class="form-label small">Regex Pattern (optional)</label>
+                    <input type="text" class="form-control form-control-sm" data-param="regex_pattern" placeholder="e.g., ^[A-Z]+$">
+                </div>
+            `;
+            break;
+        case 'numerical':
+            fieldsHtml = `
+                <div class="row">
+                    <div class="col-md-6 mb-2">
+                        <label class="form-label small">Tolerance</label>
+                        <input type="number" class="form-control form-control-sm" data-param="tolerance" value="0.000001" step="0.000001">
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <label class="form-label small">Relative Tolerance</label>
+                        <select class="form-select form-select-sm" data-param="relative">
+                            <option value="false">No</option>
+                            <option value="true">Yes</option>
+                        </select>
+                    </div>
+                </div>
+            `;
+            break;
+        case 'format':
+            fieldsHtml = `
+                <div class="mb-2">
+                    <label class="form-label small">Regex Pattern</label>
+                    <input type="text" class="form-control form-control-sm" data-param="pattern" placeholder="e.g., \\\\boxed\\{.*?\\}">
+                </div>
+            `;
+            break;
+        case 'length':
+            fieldsHtml = `
+                <div class="row">
+                    <div class="col-md-4 mb-2">
+                        <label class="form-label small">Min Length</label>
+                        <input type="number" class="form-control form-control-sm" data-param="min_length" placeholder="Optional">
+                    </div>
+                    <div class="col-md-4 mb-2">
+                        <label class="form-label small">Max Length</label>
+                        <input type="number" class="form-control form-control-sm" data-param="max_length" placeholder="Optional">
+                    </div>
+                    <div class="col-md-4 mb-2">
+                        <label class="form-label small">Optimal Length</label>
+                        <input type="number" class="form-control form-control-sm" data-param="optimal_length" placeholder="Optional">
+                    </div>
+                </div>
+            `;
+            break;
+        case 'template':
+            fieldsHtml = `
+                <div class="mb-2">
+                    <label class="form-label small">Section Tags (comma-separated)</label>
+                    <input type="text" class="form-control form-control-sm" data-param="section_tags" placeholder="e.g., section1,section2">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Required Sections (comma-separated)</label>
+                    <input type="text" class="form-control form-control-sm" data-param="required_sections" placeholder="e.g., section1">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Order Matters</label>
+                    <select class="form-select form-select-sm" data-param="order_matters">
+                        <option value="false">No</option>
+                        <option value="true">Yes</option>
+                    </select>
+                </div>
+            `;
+            break;
+        case 'multi_choice':
+            fieldsHtml = `
+                <div class="mb-2">
+                    <label class="form-label small">Valid Choices (comma-separated)</label>
+                    <input type="text" class="form-control form-control-sm" data-param="valid_choices" placeholder="e.g., A,B,C,D">
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-2">
+                        <label class="form-label small">Case Sensitive</label>
+                        <select class="form-select form-select-sm" data-param="case_sensitive">
+                            <option value="false">No</option>
+                            <option value="true">Yes</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <label class="form-label small">Exact Match</label>
+                        <select class="form-select form-select-sm" data-param="exact_match">
+                            <option value="true">Yes</option>
+                            <option value="false">No</option>
+                        </select>
+                    </div>
+                </div>
+            `;
+            break;
+        case 'section_content':
+            fieldsHtml = `
+                <div class="mb-2">
+                    <label class="form-label small">Section Tag</label>
+                    <input type="text" class="form-control form-control-sm" data-param="section_tag" placeholder="e.g., analysis">
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-2">
+                        <label class="form-label small">Min Words</label>
+                        <input type="number" class="form-control form-control-sm" data-param="min_words" placeholder="Optional">
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <label class="form-label small">Max Words</label>
+                        <input type="number" class="form-control form-control-sm" data-param="max_words" placeholder="Optional">
+                    </div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Required Keywords (comma-separated)</label>
+                    <input type="text" class="form-control form-control-sm" data-param="required_keywords" placeholder="Optional">
+                </div>
+            `;
+            break;
+        case 'sequential':
+            fieldsHtml = `
+                <div class="mb-2">
+                    <label class="form-label small">Patterns (comma-separated regex)</label>
+                    <input type="text" class="form-control form-control-sm" data-param="patterns" placeholder="e.g., Step 1,Step 2,Step 3">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Strict Order</label>
+                    <select class="form-select form-select-sm" data-param="strict_order">
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                    </select>
+                </div>
+            `;
+            break;
+    }
+
+    paramsDiv.innerHTML = fieldsHtml;
+}
+
+function updateCustomWeightTotal() {
+    const weights = document.querySelectorAll('.component-weight');
+    let total = 0;
+    weights.forEach(input => {
+        total += parseFloat(input.value) || 0;
+    });
+
+    const display = document.getElementById('custom-weight-total');
+    if (display) {
+        const isValid = Math.abs(total - 1.0) < 0.001;
+        display.className = `badge ${isValid ? 'bg-success' : 'bg-warning'}`;
+        display.textContent = `Total Weight: ${total.toFixed(3)} ${isValid ? '✓' : '⚠'}`;
+    }
+}
+
+function gatherCustomComponents() {
+    const components = [];
+    const componentCards = document.querySelectorAll('.custom-component');
+
+    componentCards.forEach(card => {
+        const name = card.querySelector('.component-name').value.trim();
+        const type = card.querySelector('.component-type').value;
+        const weight = parseFloat(card.querySelector('.component-weight').value) || 1.0;
+
+        if (!name) return; // Skip components without names
+
+        const component = {
+            name: name,
+            type: type,
+            weight: weight,
+            parameters: {}
+        };
+
+        // Gather parameters
+        const paramInputs = card.querySelectorAll('[data-param]');
+        paramInputs.forEach(input => {
+            const paramName = input.getAttribute('data-param');
+            let value = input.value;
+
+            // Convert to appropriate type
+            if (value === 'true') value = true;
+            else if (value === 'false') value = false;
+            else if (value && value.includes(',')) {
+                // Array value (comma-separated)
+                value = value.split(',').map(v => v.trim()).filter(v => v);
+            } else if (input.type === 'number' && value) {
+                value = parseFloat(value);
+            }
+
+            if (value !== '' && value !== null && value !== undefined) {
+                component.parameters[paramName] = value;
+            }
+        });
+
+        components.push(component);
+    });
+
+    return components;
+}
+
+function applyCustomReward() {
+    const components = gatherCustomComponents();
+
+    if (components.length === 0) {
+        alert('Please add at least one component');
+        return;
+    }
+
+    // Check weight total
+    const totalWeight = components.reduce((sum, c) => sum + c.weight, 0);
+    if (Math.abs(totalWeight - 1.0) > 0.001) {
+        if (!confirm(`Weight total is ${totalWeight.toFixed(3)}, not 1.0. Continue anyway?`)) {
+            return;
+        }
+    }
+
+    // Update global reward config
+    window.selectedRewardConfig = {
+        type: 'custom',
+        components: components
+    };
+
+    selectedRewardName = 'Custom Reward Configuration';
+    selectedRewardType = 'custom';
+
+    // Update display
+    const nameElement = document.getElementById('selected-reward-name');
+    const descElement = document.getElementById('selected-reward-description');
+    if (nameElement) nameElement.textContent = selectedRewardName;
+    if (descElement) descElement.textContent = `Custom reward with ${components.length} component(s)`;
+
+    // Show success notification
+    showNotification('✓ Custom reward applied!', 'success');
+
+    // Close modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('customRewardBuilderModal'));
+    if (modal) modal.hide();
+
+    // Display components
+    displayCustomComponents(components);
+}
+
+async function saveCustomRewardAsPreset() {
+    const components = gatherCustomComponents();
+
+    if (components.length === 0) {
+        alert('Please add at least one component');
+        return;
+    }
+
+    const name = prompt('Enter a name for this custom preset:');
+    if (!name) return;
+
+    const description = prompt('Enter a description (optional):', 'Custom reward configuration') || 'Custom reward configuration';
+
+    try {
+        const response = await fetch('/api/rewards/custom-preset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: name,
+                description: description,
+                components: components,
+                difficulty: 'intermediate',
+                tags: ['custom']
+            })
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            showNotification(`✓ Custom preset "${name}" saved successfully!`, 'success');
+
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('customRewardBuilderModal'));
+            if (modal) modal.hide();
+
+            // Reload presets
+            await initializeRewardSystem();
+
+            // Select the new preset
+            filterPresetsByCategory('Custom');
+        } else {
+            showNotification(`Error: ${result.error || 'Failed to save preset'}`, 'error');
+        }
+    } catch (error) {
+        console.error('Failed to save custom preset:', error);
+        showNotification('Failed to save custom preset', 'error');
+    }
+}
+
+async function deleteCustomPreset(presetName) {
+    if (!confirm(`Are you sure you want to delete the custom preset "${presetName}"?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/rewards/custom-preset/${encodeURIComponent(presetName)}`, {
+            method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            showNotification(`✓ Custom preset "${presetName}" deleted successfully!`, 'success');
+
+            // Reload presets
+            await initializeRewardSystem();
+
+            // Refresh display
+            filterPresetsByCategory('Custom');
+        } else {
+            showNotification(`Error: ${result.error || 'Failed to delete preset'}`, 'error');
+        }
+    } catch (error) {
+        console.error('Failed to delete custom preset:', error);
+        showNotification('Failed to delete custom preset', 'error');
+    }
+}
+
 // Export all reward functions to window object for global access
 window.gatherRewardConfig = gatherRewardConfig;
 window.restoreCustomReward = restoreCustomReward;
@@ -2242,6 +2681,16 @@ window.updateWeightTotal = updateWeightTotal;
 window.resetPresetToOriginal = resetPresetToOriginal;
 window.saveCustomizedPreset = saveCustomizedPreset;
 window.toggleParameters = toggleParameters;
+
+// Export custom reward builder functions
+window.openCustomRewardBuilder = openCustomRewardBuilder;
+window.addCustomComponent = addCustomComponent;
+window.removeCustomComponent = removeCustomComponent;
+window.updateCustomComponentFields = updateCustomComponentFields;
+window.updateCustomWeightTotal = updateCustomWeightTotal;
+window.applyCustomReward = applyCustomReward;
+window.saveCustomRewardAsPreset = saveCustomRewardAsPreset;
+window.deleteCustomPreset = deleteCustomPreset;
 
 // Toggle function for expandable parameters
 function toggleParameters(index) {

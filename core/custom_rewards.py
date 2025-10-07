@@ -7,6 +7,8 @@ import json
 from typing import Dict, List, Optional, Any, Callable, Tuple, Union
 from dataclasses import dataclass, asdict
 from enum import Enum
+from pathlib import Path
+from datetime import datetime
 import numpy as np
 import logging
 
@@ -760,6 +762,7 @@ class RewardPresetLibrary:
         self.presets: Dict[str, RewardPreset] = {}
         self.categories: Dict[str, List[str]] = {}
         self._load_default_presets()
+        self._load_custom_presets()
 
     def _load_default_presets(self):
         """Load all default preset configurations."""
@@ -957,6 +960,269 @@ class RewardPresetLibrary:
             'categories': self.categories,
             'presets': {name: preset.to_dict() for name, preset in self.presets.items()}
         }
+
+    # Custom preset management methods
+    def _get_custom_presets_file(self) -> str:
+        """Get path to custom presets JSON file."""
+        from pathlib import Path
+        presets_dir = Path(__file__).parent.parent / 'presets' / 'rewards'
+        presets_dir.mkdir(parents=True, exist_ok=True)
+        return str(presets_dir / 'custom_presets.json')
+
+    def _load_custom_presets(self):
+        """Load user-created custom presets from file."""
+        try:
+            custom_file = self._get_custom_presets_file()
+            if not Path(custom_file).exists():
+                return
+
+            with open(custom_file, 'r') as f:
+                custom_data = json.load(f)
+
+            for preset_data in custom_data.get('presets', []):
+                # Create preset from stored component data
+                self.add_custom_preset_from_data(preset_data)
+
+            logger.info(f"Loaded {len(custom_data.get('presets', []))} custom presets")
+        except Exception as e:
+            logger.error(f"Failed to load custom presets: {e}")
+
+    def _save_custom_presets(self):
+        """Save all custom presets to file."""
+        try:
+            custom_file = self._get_custom_presets_file()
+            custom_presets = []
+
+            # Find all custom presets (those in "Custom" category)
+            for name, preset in self.presets.items():
+                if preset.category == "Custom":
+                    # Get the builder to extract component details
+                    builder = preset.create_builder()
+                    components = builder.get_component_details()
+
+                    custom_presets.append({
+                        'name': preset.name,
+                        'description': preset.description,
+                        'example_input': preset.example_input,
+                        'example_output': preset.example_output,
+                        'difficulty': preset.difficulty,
+                        'tags': preset.tags,
+                        'components': components,
+                        'created_at': datetime.now().isoformat()
+                    })
+
+            with open(custom_file, 'w') as f:
+                json.dump({'presets': custom_presets}, f, indent=2)
+
+            logger.info(f"Saved {len(custom_presets)} custom presets")
+        except Exception as e:
+            logger.error(f"Failed to save custom presets: {e}")
+
+    def add_custom_preset_from_data(self, preset_data: Dict[str, Any]):
+        """Add a custom preset from component data.
+
+        Args:
+            preset_data: Dictionary containing preset info and components
+        """
+        def builder_func() -> 'CustomRewardBuilder':
+            builder = CustomRewardBuilder()
+            for comp in preset_data.get('components', []):
+                self._add_component_to_builder(builder, comp)
+            return builder
+
+        preset = RewardPreset(
+            name=preset_data['name'],
+            category="Custom",
+            description=preset_data.get('description', 'Custom reward configuration'),
+            example_input=preset_data.get('example_input', ''),
+            example_output=preset_data.get('example_output', ''),
+            builder_func=builder_func,
+            difficulty=preset_data.get('difficulty', 'intermediate'),
+            tags=preset_data.get('tags', ['custom'])
+        )
+
+        self.add_preset(preset)
+
+    def _add_component_to_builder(self, builder: 'CustomRewardBuilder', comp: Dict[str, Any]):
+        """Add a component to builder from component data dict."""
+        name = comp.get('name', 'component')
+        comp_type = comp.get('type', 'continuous')
+        weight = comp.get('weight', 1.0)
+        params = comp.get('parameters', {})
+
+        # Map component type to builder method
+        if comp_type == 'binary' or name == 'binary':
+            regex_pattern = params.get('regex_pattern') or params.get('pattern')
+            builder.add_binary_reward(name, regex_pattern=regex_pattern, weight=weight)
+
+        elif comp_type == 'numerical' or name == 'numerical':
+            tolerance = params.get('tolerance', 1e-6)
+            relative = params.get('relative', False)
+            builder.add_numerical_reward(name, tolerance=tolerance, relative=relative, weight=weight)
+
+        elif comp_type == 'length' or 'length' in name:
+            min_len = params.get('min_length')
+            max_len = params.get('max_length')
+            opt_len = params.get('optimal_length')
+            builder.add_length_reward(name, min_length=min_len, max_length=max_len,
+                                     optimal_length=opt_len, weight=weight)
+
+        elif comp_type == 'format' or name == 'format':
+            pattern = params.get('pattern') or params.get('regex_pattern', '')
+            if pattern:
+                builder.add_format_reward(name, pattern=pattern, weight=weight)
+
+        elif comp_type == 'template':
+            section_tags = params.get('section_tags', [])
+            required = params.get('required_sections', section_tags)
+            order = params.get('order_matters', False)
+            builder.add_template_validation(name, section_tags=section_tags,
+                                           required_sections=required,
+                                           order_matters=order, weight=weight)
+
+        elif comp_type == 'multi_choice' or comp_type == 'choice':
+            valid_choices = params.get('valid_choices', [])
+            case_sens = params.get('case_sensitive', False)
+            exact = params.get('exact_match', True)
+            builder.add_multi_choice_validation(name, valid_choices=valid_choices,
+                                               case_sensitive=case_sens,
+                                               exact_match=exact, weight=weight)
+
+        elif comp_type == 'section_content' or comp_type == 'content':
+            section_tag = params.get('section_tag', '')
+            min_words = params.get('min_words')
+            max_words = params.get('max_words')
+            keywords = params.get('required_keywords', [])
+            builder.add_section_content(name, section_tag=section_tag,
+                                       min_words=min_words, max_words=max_words,
+                                       required_keywords=keywords, weight=weight)
+
+        elif comp_type == 'sequential' or comp_type == 'pattern':
+            patterns = params.get('patterns', [])
+            strict = params.get('strict_order', True)
+            builder.add_sequential_pattern(name, patterns=patterns,
+                                          strict_order=strict, weight=weight)
+
+    def add_custom_preset(self, name: str, description: str, components: List[Dict[str, Any]],
+                         example_input: str = '', example_output: str = '',
+                         difficulty: str = 'intermediate', tags: List[str] = None) -> bool:
+        """Add a new custom preset.
+
+        Args:
+            name: Preset name
+            description: Preset description
+            components: List of component configurations
+            example_input: Example input
+            example_output: Example output
+            difficulty: Difficulty level
+            tags: Tags for searchability
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Check if name already exists
+            if name in self.presets:
+                logger.warning(f"Preset '{name}' already exists")
+                return False
+
+            preset_data = {
+                'name': name,
+                'description': description,
+                'example_input': example_input,
+                'example_output': example_output,
+                'difficulty': difficulty,
+                'tags': tags or ['custom'],
+                'components': components
+            }
+
+            self.add_custom_preset_from_data(preset_data)
+            self._save_custom_presets()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to add custom preset: {e}")
+            return False
+
+    def delete_custom_preset(self, name: str) -> bool:
+        """Delete a custom preset.
+
+        Args:
+            name: Preset name to delete
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            if name not in self.presets:
+                return False
+
+            preset = self.presets[name]
+
+            # Only allow deletion of custom presets
+            if preset.category != "Custom":
+                logger.warning(f"Cannot delete non-custom preset: {name}")
+                return False
+
+            # Remove from presets
+            del self.presets[name]
+
+            # Remove from category
+            if name in self.categories.get("Custom", []):
+                self.categories["Custom"].remove(name)
+
+            # Save changes
+            self._save_custom_presets()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete custom preset: {e}")
+            return False
+
+    def update_custom_preset(self, name: str, description: str = None,
+                            components: List[Dict[str, Any]] = None) -> bool:
+        """Update an existing custom preset.
+
+        Args:
+            name: Preset name
+            description: New description (optional)
+            components: New components (optional)
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            if name not in self.presets:
+                return False
+
+            preset = self.presets[name]
+            if preset.category != "Custom":
+                logger.warning(f"Cannot update non-custom preset: {name}")
+                return False
+
+            # Delete and re-add with new data
+            old_preset = self.presets[name]
+            self.delete_custom_preset(name)
+
+            return self.add_custom_preset(
+                name=name,
+                description=description or old_preset.description,
+                components=components if components is not None else [],
+                example_input=old_preset.example_input,
+                example_output=old_preset.example_output,
+                difficulty=old_preset.difficulty,
+                tags=old_preset.tags
+            )
+        except Exception as e:
+            logger.error(f"Failed to update custom preset: {e}")
+            return False
+
+    def get_custom_presets(self) -> Dict[str, RewardPreset]:
+        """Get all custom presets.
+
+        Returns:
+            Dictionary of custom preset name to RewardPreset
+        """
+        return {name: preset for name, preset in self.presets.items()
+                if preset.category == "Custom"}
 
     # Helper methods to create specific reward configurations
     def _create_scientific_reward(self) -> 'CustomRewardBuilder':

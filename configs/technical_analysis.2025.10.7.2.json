@@ -1,0 +1,141 @@
+{
+  "name": "technical_analysis.2025.10.7.2",
+  "description": "",
+  "config": {
+    "setupMode": "setup-advanced",
+    "model": {
+      "modelName": "unsloth/Qwen3-0.6B",
+      "customModelPath": "",
+      "quantization": "auto",
+      "loraRank": 16,
+      "loraAlpha": 32,
+      "loraDropout": 0,
+      "targetModulesArray": [
+        "q_proj",
+        "v_proj",
+        "k_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj"
+      ],
+      "family": "qwen"
+    },
+    "dataset": {
+      "source": "upload",
+      "path": "uploads/dataset_tracked_20251004_235904_sampled_train_20251004_171517.csv",
+      "split": "train",
+      "sample_size": 0,
+      "train_split": 80,
+      "max_samples": 300,
+      "instruction_field": "input",
+      "response_field": "output"
+    },
+    "template": {
+      "reasoning_start": "<analysis>",
+      "reasoning_end": "</analysis>",
+      "solution_start": "<signal>",
+      "solution_end": "</signal> ",
+      "system_prompt": "You are a technical analysis expert that evaluates trading indicators and classifies market signals with precision, brevity, and structure.\n\nYour behavior is rule-bound. You must follow all instructions exactly. Failure to follow format, structure, or length limits = invalid output.\n\nExactly one final signal value must be chosen: `STRONG_BUY`, `WEAK_BUY`, `HOLD`, `WEAK_SELL`, or `STRONG_SELL`\n\n---\n\nANALYSIS RULES \u2014 FOLLOW THESE EXACTLY\n\n1. Identify exactly 2\u20133 key indicators that carry the highest conviction. Do not list every indicator.\n2. Flag any OUTLIERS that contradict the main trend. If none exist, write \"None\".\n3. Synthesize a short conclusion in 2\u20133 sentences maximum summarizing direction and sentiment.\n\nMETRIC REFERENCE (Quick Interpretation Guide):\n\n\u2022 RSI (0 to 100)\n  \u2191 Bullish: < 30 (oversold) or rising from oversold\n  \u2193 Bearish: > 70 (overbought) or falling from overbought\n\n\u2022 MACD (Varies (typically -5 to +5))\n  \u2191 Bullish: MACD > MACD_SIGNAL (bullish crossover); MACD > 0\n  \u2193 Bearish: MACD < MACD_SIGNAL (bearish crossover); MACD < 0\n\n\u2022 MACD_SIGNAL (Varies (typically -5 to +5))\n  \u2191 Bullish: MACD crosses above MACD_SIGNAL\n  \u2193 Bearish: MACD crosses below MACD_SIGNAL\n\n\u2022 STOCHASTIC_K (0 to 100)\n  \u2191 Bullish: < 20 (oversold) or bullish crossover above STOC...\n  \u2193 Bearish: > 80 (overbought) or bearish crossover below ST...\n\n\u2022 WILLIAMS_R (0 to -100)\n  \u2191 Bullish: < -80 (oversold)\n  \u2193 Bearish: > -20 (overbought)\n\n\u2022 SMA_20 (Varies by stock)\n  \u2191 Bullish: Price above SMA_20 with positive slope\n  \u2193 Bearish: Price below SMA_20 with negative slope\n\n\u2022 SMA_50 (Varies by stock)\n  \u2191 Bullish: Price above SMA_50; SMA_20 > SMA_50 (golden cross)\n  \u2193 Bearish: Price below SMA_50; SMA_20 < SMA_50 (death cross)\n\n\u2022 PRICE_TO_SMA20 (Typically 0.9 to 1.1)\n  \u2191 Bullish: > 1.0 (price above SMA_20)\n  \u2193 Bearish: < 1.0 (price below SMA_20)\n\n\u2022 PRICE_TO_SMA50 (Typically 0.85 to 1.15)\n  \u2191 Bullish: > 1.0 (price above SMA_50)\n  \u2193 Bearish: < 1.0 (price below SMA_50)\n\n\u2022 BB_POSITION (0 to 1)\n  \u2191 Bullish: Near 0 (oversold at lower band)\n  \u2193 Bearish: Near 1 (overbought at upper band)\n\n\u2022 ATR_RATIO (Typically 0.005 to 0.05 (0.5% to 5%))\n  \u2191 Bullish: Low ATR_RATIO (< 0.01) suggesting consolidation\n  \u2193 Bearish: Very high ATR_RATIO (> 0.03) suggesting unstabl...\n\n\u2022 VOLUME_RATIO (Typically 0.2 to 5.0)\n  \u2191 Bullish: High volume (> 1.5) on price increase\n  \u2193 Bearish: High volume (> 1.5) on price decrease\n\n\u2022 RETURN_24H (Typically -0.1 to +0.1 (-10% to +10%))\n  \u2191 Bullish: Positive return (> 0.02 or 2%)\n  \u2193 Bearish: Negative return (< -0.02 or -2%)\n\n\u2022 VOLATILITY_20 (Typically 0.1 to 2.0 (10% to 200% annualized))\n  \u2191 Bullish: Low volatility (< 0.3) with uptrend\n  \u2193 Bearish: High volatility (> 1.0) with downtrend\n\n\u2022 SMA20_TO_SMA50 (Typically 0.95 to 1.05)\n  \u2191 Bullish: > 1.0 (golden cross territory)\n  \u2193 Bearish: < 1.0 (death cross territory)\n\n---\nREQUIRED OUTPUT TEMPLATE:\n<analysis>\n[Key Indicator 1]: [Brief interpretation]\n[Key Indicator 2]: [Brief interpretation]\n[Outliers/Conflicts]: [If any]\n[Conclusion]: [1\u20132 sentence synthesis]\n</analysis>\n<signal>\nOne of: STRONG_BUY, WEAK_BUY, HOLD, WEAK_SELL, STRONG_SELL\n</signal>",
+      "chat_template": "{% if messages[0]['role'] == 'system' %}{{ messages[0]['content'] + eos_token }}{% set loop_messages = messages[1:] %}{% else %}{{ system_prompt + eos_token }}{% set loop_messages = messages %}{% endif %}{% for message in loop_messages %}{% if message['role'] == 'user' %}{{ message['content'] }}{% elif message['role'] == 'assistant' %}{{ message['content'] + eos_token }}{% endif %}{% endfor %}{% if add_generation_prompt %}{{ reasoning_start }}{% endif %}",
+      "chat_template_type": "custom"
+    },
+    "algorithm": {
+      "selected": "grpo",
+      "epsilon": 0.0003,
+      "epsilon_high": 0.0004
+    },
+    "training": {
+      "num_epochs": 3,
+      "batch_size": 24,
+      "gradient_accumulation": 1,
+      "learning_rate": 1e-05,
+      "lr_schedule": "cosine",
+      "lr_scheduler_type": "constant",
+      "warmup_ratio": 0.1,
+      "warmup_steps": 10,
+      "weight_decay": 0.001,
+      "max_grad_norm": 0.3,
+      "max_sequence_length": 3000,
+      "max_new_tokens": 1024,
+      "seed": 42,
+      "optimizer": "paged_adamw_32bit"
+    },
+    "grpo": {
+      "num_generations": 2,
+      "temperature": 0.7,
+      "top_p": 0.95,
+      "top_k": 50,
+      "repetition_penalty": 1.1,
+      "kl_weight": 0.1,
+      "kl_penalty": 0.05,
+      "clip_range": 0.2,
+      "value_coefficient": 1
+    },
+    "optimizations": {
+      "use_flash_attention": false,
+      "gradient_checkpointing": false,
+      "mixed_precision": true,
+      "use_bf16": true
+    },
+    "output": {
+      "name": "",
+      "save_steps": 100,
+      "eval_steps": 100,
+      "logging_steps": 10
+    },
+    "pre_training": {
+      "enabled": true,
+      "epochs": 2,
+      "max_samples": 500,
+      "filter_by_length": false,
+      "validate_format": true
+    },
+    "reward": {
+      "components": [
+        {
+          "name": "signal_accuracy",
+          "parameters": {
+            "direction_match_score": 0.7,
+            "valid_signals": [
+              "STRONG_BUY",
+              "WEAK_BUY",
+              "HOLD",
+              "WEAK_SELL",
+              "STRONG_SELL"
+            ]
+          },
+          "type": "continuous",
+          "weight": 0.85
+        },
+        {
+          "name": "template_structure",
+          "parameters": {
+            "order_matters": false,
+            "required_sections": [
+              "signal"
+            ],
+            "section_tags": [
+              "signal",
+              "analysis"
+            ]
+          },
+          "type": "binary",
+          "weight": 0.1
+        },
+        {
+          "name": "response_length",
+          "parameters": {
+            "max_length": 900,
+            "min_length": 10,
+            "optimal_length": 400
+          },
+          "type": "continuous",
+          "weight": 0.05
+        }
+      ],
+      "type": "custom"
+    }
+  },
+  "timestamp": 1759832925421
+}

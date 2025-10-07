@@ -1594,18 +1594,26 @@ class GRPOModelTrainer:
                 # Send metrics only when we have actual training data from TRL
                 # TRL calls log() multiple times per step - we want the call with actual metrics
                 # Check for presence of key metrics that indicate this is a real training log
-                has_training_metrics = (
-                    'loss' in logs or
-                    'reward' in logs or
+                # IMPORTANT: Must have reward metrics to avoid emitting 0.0 fallback values
+                has_reward_metrics = (
                     'rewards/reward_wrapper/mean' in logs or
+                    'reward' in logs
+                )
+
+                has_other_training_metrics = (
+                    'loss' in logs or
                     'kl' in logs or
                     'epoch' in logs or
                     'completions/mean_length' in logs
                 )
 
+                # Only emit if we have reward metrics AND other training metrics
+                # This prevents emitting partial logs with 0.0 reward fallbacks
+                has_training_metrics = has_reward_metrics and has_other_training_metrics
+
                 # Debug: Log why we're accepting or rejecting this log call
                 if current_step and not has_training_metrics:
-                    logger.debug(f"Step {current_step} - Skipping log call without training metrics. Keys: {list(logs.keys())[:10]}")
+                    logger.debug(f"Step {current_step} - Skipping log call without complete metrics. Has reward: {has_reward_metrics}, Has other: {has_other_training_metrics}, Keys: {list(logs.keys())[:10]}")
 
                 if current_step is not None and has_training_metrics and (parent.config.logging_steps == 1 or current_step % parent.config.logging_steps == 0):
                     logger.debug(f"Metrics logging triggered at step {current_step} with complete metrics (logging_steps={parent.config.logging_steps})")
@@ -1664,6 +1672,7 @@ class GRPOModelTrainer:
                     metrics = {
                         'epoch': calculated_epoch,
                         'step': current_step,  # Use global current_step for continuous numbering
+                        'total_steps': max_steps,  # Total steps for progress calculation
                         'loss': actual_loss,
                         'mean_reward': actual_reward,
                         'learning_rate': logs.get('learning_rate', parent.config.learning_rate),
