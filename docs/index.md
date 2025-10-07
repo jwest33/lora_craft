@@ -4,9 +4,8 @@ title: LoRA Craft Documentation
 ---
 
 <div class="content-logo">
-  <h1>LoRA Craft</h1>
   <img src="lora_craft.png" alt="LoRA Craft">
-  <p>Craft your own LoRA adapters with LoRA Craft - A web-based interface for fine-tuning language models using GRPO</p>
+  <h1>LoRA Craft</h1>
 </div>
 
 ## Overview
