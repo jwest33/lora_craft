@@ -1,0 +1,64 @@
+# Jekyll configuration for GitHub Pages
+
+# Site settings
+title: LoRA Craft
+description: Web-based interface for fine-tuning language models using GRPO
+url: "https://jwest33.github.io"
+baseurl: "/gpro_lora"
+
+# Theme
+theme: jekyll-theme-cayman
+# Alternative themes:
+# - jekyll-theme-minimal
+# - jekyll-theme-slate
+# - jekyll-theme-architect
+
+# Repository information
+repository: jwest33/gpro_lora
+github:
+  repository_url: https://github.com/jwest33/gpro_lora
+
+# Build settings
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+  syntax_highlighter_opts:
+    css_class: 'highlight'
+
+# Plugins
+plugins:
+  - jekyll-github-metadata
+  - jekyll-relative-links
+
+# Enable relative links
+relative_links:
+  enabled: true
+  collections: false
+
+# Include files
+include:
+  - _config.yml
+  - "*.jpg"
+  - "*.png"
+  - "*.md"
+
+# Exclude files
+exclude:
+  - "*.py"
+  - "qwen3_(4b)_grpo.py"
+  - "gpt_oss_(20b)_grpo.py"
+
+# Collections (if needed for future expansion)
+collections:
+  docs:
+    output: true
+    permalink: /:collection/:path/
+
+# Defaults
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+      image: true

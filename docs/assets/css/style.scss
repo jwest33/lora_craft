@@ -1,0 +1,298 @@
+---
+---
+
+@import "{{ site.theme }}";
+
+/* Custom styles for LoRA Craft documentation */
+
+/* Color scheme inspired by the app */
+:root {
+  --primary-color: #ec4899;
+  --primary-dark: #db2777;
+  --secondary-color: #8b5cf6;
+  --accent-color: #06b6d4;
+  --background-dark: #1e293b;
+  --background-light: #f8fafc;
+  --text-dark: #0f172a;
+  --text-light: #e2e8f0;
+  --code-background: #2d3748;
+}
+
+/* Page header styling */
+.page-header {
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  padding: 3rem 1rem;
+}
+
+.project-name {
+  font-weight: 700;
+  color: white;
+}
+
+.project-tagline {
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Main content area */
+.main-content {
+  max-width: 64rem;
+  padding: 2rem 1rem;
+  margin: 0 auto;
+  font-size: 1.1rem;
+  line-height: 1.7;
+  color: var(--text-dark);
+}
+
+/* Headings */
+.main-content h1,
+.main-content h2,
+.main-content h3,
+.main-content h4,
+.main-content h5,
+.main-content h6 {
+  font-weight: 700;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  color: var(--text-dark);
+}
+
+.main-content h1 {
+  font-size: 2.5rem;
+  color: var(--primary-dark);
+  border-bottom: 2px solid var(--primary-color);
+  padding-bottom: 0.5rem;
+}
+
+.main-content h2 {
+  font-size: 2rem;
+  color: var(--secondary-color);
+  border-bottom: 1px solid var(--accent-color);
+  padding-bottom: 0.3rem;
+}
+
+.main-content h3 {
+  font-size: 1.5rem;
+  color: var(--text-dark);
+}
+
+.main-content h4 {
+  font-size: 1.25rem;
+  color: var(--text-dark);
+  font-weight: 600;
+}
+
+/* Links */
+.main-content a {
+  color: var(--secondary-color);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.main-content a:hover {
+  color: var(--primary-color);
+  border-bottom: 1px solid var(--primary-color);
+}
+
+/* Images */
+.main-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  margin: 1.5rem 0;
+  display: block;
+}
+
+/* Center images in divs */
+div[align="center"] img {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Code blocks */
+.main-content pre {
+  background-color: var(--code-background);
+  border-radius: 6px;
+  padding: 1rem;
+  overflow-x: auto;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.main-content code {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.9rem;
+  background-color: var(--code-background);
+  color: #e2e8f0;
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+}
+
+.main-content pre code {
+  background-color: transparent;
+  padding: 0;
+}
+
+/* Inline code */
+.main-content p code,
+.main-content li code {
+  background-color: #e2e8f0;
+  color: var(--text-dark);
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+/* Lists */
+.main-content ul,
+.main-content ol {
+  margin-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.main-content li {
+  margin-bottom: 0.5rem;
+}
+
+/* Blockquotes */
+.main-content blockquote {
+  border-left: 4px solid var(--primary-color);
+  padding-left: 1rem;
+  margin-left: 0;
+  color: #64748b;
+  font-style: italic;
+}
+
+/* Tables */
+.main-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.main-content th {
+  background-color: var(--secondary-color);
+  color: white;
+  padding: 0.75rem;
+  text-align: left;
+  font-weight: 600;
+}
+
+.main-content td {
+  padding: 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.main-content tr:hover {
+  background-color: #f8fafc;
+}
+
+/* Horizontal rules */
+.main-content hr {
+  border: none;
+  border-top: 2px solid var(--accent-color);
+  margin: 2rem 0;
+}
+
+/* Table of contents styling */
+.main-content > ol:first-of-type,
+.main-content > ul:first-of-type {
+  background-color: var(--background-light);
+  border-left: 4px solid var(--primary-color);
+  padding: 1rem 1rem 1rem 2rem;
+  border-radius: 6px;
+  margin-bottom: 2rem;
+}
+
+/* Section dividers */
+.main-content > hr {
+  margin: 3rem 0;
+  border-top: 3px solid var(--accent-color);
+  opacity: 0.3;
+}
+
+/* Responsive adjustments */
+@media screen and (max-width: 64em) {
+  .main-content {
+    padding: 1.5rem 1rem;
+    font-size: 1rem;
+  }
+
+  .main-content h1 {
+    font-size: 2rem;
+  }
+
+  .main-content h2 {
+    font-size: 1.75rem;
+  }
+
+  .main-content h3 {
+    font-size: 1.35rem;
+  }
+}
+
+@media screen and (max-width: 42em) {
+  .main-content {
+    padding: 1rem 0.5rem;
+    font-size: 0.95rem;
+  }
+
+  .main-content h1 {
+    font-size: 1.75rem;
+  }
+
+  .main-content h2 {
+    font-size: 1.5rem;
+  }
+
+  .main-content h3 {
+    font-size: 1.25rem;
+  }
+
+  .page-header {
+    padding: 2rem 1rem;
+  }
+}
+
+/* Print styles */
+@media print {
+  .main-content a {
+    color: var(--text-dark);
+    text-decoration: underline;
+  }
+
+  .main-content img {
+    page-break-inside: avoid;
+  }
+
+  .main-content h2,
+  .main-content h3 {
+    page-break-after: avoid;
+  }
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Focus styles for accessibility */
+a:focus,
+button:focus {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* Custom highlight for important sections */
+.main-content strong {
+  color: var(--text-dark);
+  font-weight: 700;
+}
+
+/* Badge styling for inline labels */
+.main-content em {
+  font-style: italic;
+  color: var(--secondary-color);
+}

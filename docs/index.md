@@ -1,5 +1,10 @@
+---
+layout: default
+title: LoRA Craft Documentation
+---
+
 <div align="center">
-  <img src="static/images/lora_craft.png" alt="LoRA Craft" width="200"/>
+  <img src="../static/images/lora_craft.png" alt="LoRA Craft" width="200"/>
   <h1>LoRA Craft</h1>
   <p>Web-based interface for fine-tuning language models using GRPO (Group Relative Policy Optimization)</p>
 </div>
@@ -74,8 +79,8 @@ LoRA Craft is a web-based application that enables fine-tuning of large language
 ### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/lora_craft.git
-cd lora_craft
+git clone https://github.com/jwest33/gpro_lora.git
+cd gpro_lora
 ```
 
 ### Step 2: Install PyTorch with CUDA Support
@@ -118,7 +123,7 @@ You should see `CUDA available: True`.
 
 1. Navigate to the project directory:
    ```bash
-   cd lora_craft
+   cd gpro_lora
    ```
 
 2. Start the Flask server:
@@ -147,7 +152,7 @@ You should see `CUDA available: True`.
 
 ### Step 1: Model Selection
 
-![Model Selection](docs/example_model_selection.jpg)
+![Model Selection](example_model_selection.jpg)
 
 The Model Configuration page allows you to select the base model for fine-tuning.
 
@@ -167,14 +172,20 @@ Choose from several model families:
 
 #### Model Size Selection
 
-Select a model size based on your available VRAM. Examples:
+Select a model size based on your available VRAM:
 - **0.6B - 1.7B**: Works on 4GB+ VRAM
 - **3B - 4B**: Requires 8GB+ VRAM
 - **7B - 8B**: Requires 16GB+ VRAM
 
+#### LoRA Configuration (Custom/Advanced)
+
+- **LoRA Rank**: Controls adapter capacity (typical: 8-32)
+- **LoRA Alpha**: Scaling factor for adapter (typically 2x rank)
+- **LoRA Dropout**: Regularization to prevent overfitting (typical: 0.0-0.1)
+
 ### Step 2: Dataset Configuration
 
-![Dataset Selection](docs/example_dataset_selection.jpg)
+![Dataset Selection](example_dataset_selection.jpg)
 
 Configure the training data for your model.
 
@@ -213,7 +224,7 @@ The system auto-detects common field names (question, answer, prompt, completion
 
 #### System Prompt Configuration
 
-![System Prompt](docs/example_save_system_prompt.jpg)
+![System Prompt](example_save_system_prompt.jpg)
 
 Define the instruction format for your model:
 - **Template Type**: Choose GRPO Default or create custom templates
@@ -257,12 +268,6 @@ Configure hyperparameters for the training process.
 - **Clip Range**: PPO-style clipping for stable training (typical: 0.2)
 - **Importance Sampling Level**: Token-level or sequence-level weighting
 
-#### LoRA Parameters
-
-- **LoRA Rank**: Controls adapter capacity (typical: 8-32)
-- **LoRA Alpha**: Scaling factor for adapter (typically 2x rank)
-- **LoRA Dropout**: Regularization to prevent overfitting (typical: 0.0-0.1)
-
 #### Generation Parameters
 
 - **Max Sequence Length**: Maximum input length in tokens (typical: 1024-4096)
@@ -282,7 +287,7 @@ Pre-training helps the model learn output formatting before reinforcement learni
 
 ### Step 4: Reward Functions
 
-![Reward Catalog](docs/example_reward_catalog.jpg)
+![Reward Catalog](example_reward_catalog.jpg)
 
 Reward functions evaluate model outputs and guide training. Choose functions that match your task.
 
@@ -330,7 +335,7 @@ Reward functions evaluate model outputs and guide training. Choose functions tha
 
 #### Configuring Reward Functions
 
-![Reward Function Mapping](docs/example_reward_function_mapping.jpg)
+![Reward Function Mapping](example_reward_function_mapping.jpg)
 
 1. **Select Algorithm Type**: GRPO (standard), GSPO (sequence-level), or OR-GRPO (robust variant)
 
@@ -348,7 +353,7 @@ Reward functions evaluate model outputs and guide training. Choose functions tha
 
 ### Step 5: Training & Monitoring
 
-![Training Metrics](docs/example_training_metrics.jpg)
+![Training Metrics](example_training_metrics.jpg)
 
 Once training starts, monitor progress through real-time metrics.
 
@@ -452,7 +457,7 @@ ollama run my-model
 
 ### Step 7: Testing Models
 
-![Testing Model](docs/example_stock_trade_question.jpg)
+![Testing Model](example_stock_trade_question.jpg)
 
 Test your fine-tuned model with custom prompts.
 
@@ -997,8 +1002,8 @@ lora_craft/
 - [LM Studio](https://lmstudio.ai/)
 
 **Community & Support**
-- [GitHub Issues](https://github.com/yourusername/lora_craft/issues)
-- [Discussions](https://github.com/yourusername/lora_craft/discussions)
+- [GitHub Issues](https://github.com/jwest33/gpro_lora/issues)
+- [Discussions](https://github.com/jwest33/gpro_lora/discussions)
 
 ---
 
