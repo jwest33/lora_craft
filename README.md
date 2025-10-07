@@ -147,7 +147,7 @@ You should see `CUDA available: True`.
 
 ### Step 1: Model Selection
 
-![Model Selection](docs/example_model_selection.jpg)
+![Model Selection](docs/image/example_model_selection.jpg)
 
 The Model Configuration page allows you to select the base model for fine-tuning.
 
@@ -174,7 +174,7 @@ Select a model size based on your available VRAM. Examples:
 
 ### Step 2: Dataset Configuration
 
-![Dataset Selection](docs/example_dataset_selection.jpg)
+![Dataset Selection](docs/image/example_dataset_selection.jpg)
 
 Configure the training data for your model.
 
@@ -213,7 +213,7 @@ The system auto-detects common field names (question, answer, prompt, completion
 
 #### System Prompt Configuration
 
-![System Prompt](docs/example_save_system_prompt.jpg)
+![System Prompt](docs/image/example_save_system_prompt.jpg)
 
 Define the instruction format for your model:
 - **Template Type**: Choose GRPO Default or create custom templates
@@ -282,7 +282,7 @@ Pre-training helps the model learn output formatting before reinforcement learni
 
 ### Step 4: Reward Functions
 
-![Reward Catalog](docs/example_reward_catalog.jpg)
+![Reward Catalog](docs/image/example_reward_catalog.jpg)
 
 Reward functions evaluate model outputs and guide training. Choose functions that match your task.
 
@@ -330,7 +330,7 @@ Reward functions evaluate model outputs and guide training. Choose functions tha
 
 #### Configuring Reward Functions
 
-![Reward Function Mapping](docs/example_reward_function_mapping.jpg)
+![Reward Function Mapping](docs/image/example_reward_function_mapping.jpg)
 
 1. **Select Algorithm Type**: GRPO (standard), GSPO (sequence-level), or OR-GRPO (robust variant)
 
@@ -348,7 +348,7 @@ Reward functions evaluate model outputs and guide training. Choose functions tha
 
 ### Step 5: Training & Monitoring
 
-![Training Metrics](docs/example_training_metrics.jpg)
+![Training Metrics](docs/image/example_training_metrics.jpg)
 
 Once training starts, monitor progress through real-time metrics.
 
@@ -452,7 +452,7 @@ ollama run my-model
 
 ### Step 7: Testing Models
 
-![Testing Model](docs/example_stock_trade_question.jpg)
+![Testing Model](docs/image/example_stock_trade_question.jpg)
 
 Test your fine-tuned model with custom prompts.
 
