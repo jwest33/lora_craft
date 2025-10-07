@@ -3,6 +3,11 @@ layout: default
 title: LoRA Craft Documentation
 ---
 
+<div class="content-logo">
+  <img src="lora_craft.png" alt="LoRA Craft">
+  <h1>LoRA Craft</h1>
+</div>
+
 <div class="page-header-actions">
   <a href="https://github.com/jwest33/lora_craft" class="btn-github" target="_blank" rel="noopener">
     <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
@@ -10,11 +15,6 @@ title: LoRA Craft Documentation
     </svg>
     View on GitHub
   </a>
-</div>
-
-<div class="content-logo">
-  <img src="lora_craft.png" alt="LoRA Craft">
-  <h1>LoRA Craft</h1>
 </div>
 
 ## Overview

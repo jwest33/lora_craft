@@ -141,10 +141,9 @@ body {
 
 /* Page header actions (GitHub button) */
 .page-header-actions {
-  text-align: right;
-  margin-bottom: 1.5rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid rgba(168, 85, 247, 0.2);
+  text-align: center;
+  margin: 1.5rem 0 2rem;
+  padding: 0;
 }
 
 .btn-github {
@@ -153,7 +152,7 @@ body {
   gap: 0.5rem;
   padding: 0.75rem 1.5rem;
   background: linear-gradient(135deg, var(--primary), var(--accent));
-  color: white;
+  color: #ffffff !important;
   text-decoration: none;
   border-radius: 8px;
   font-weight: 600;
@@ -169,6 +168,7 @@ body {
   background: linear-gradient(135deg, var(--accent), var(--secondary));
   border-color: rgba(255, 255, 255, 0.4);
   text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+  color: #ffffff !important;
 }
 
 .btn-github svg {
@@ -660,7 +660,7 @@ div[align="center"] img {
 
   /* Mobile: Sidebar becomes overlay */
   .sidebar {
-    width: 280px;
+    width: min(280px, 100vw);
     box-shadow: var(--shadow-xl);
     top: 60px;
     height: calc(100vh - 60px);
@@ -722,7 +722,7 @@ div[align="center"] img {
   }
 
   .sidebar {
-    width: 260px;
+    width: min(260px, 85vw);
   }
 
   .sidebar-header {
@@ -801,6 +801,8 @@ div[align="center"] img {
   justify-content: center;
   transition: all 0.3s ease;
   padding: 0;
+  position: relative;
+  z-index: 1002;
 }
 
 .mobile-menu-toggle:hover {
