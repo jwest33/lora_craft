@@ -4,7 +4,7 @@
 title: LoRA Craft
 description: Web-based interface for fine-tuning language models using GRPO
 url: "https://jwest33.github.io"
-baseurl: "/gpro_lora"
+baseurl: "/lora_craft"
 
 # Theme
 theme: jekyll-theme-cayman
@@ -14,9 +14,9 @@ theme: jekyll-theme-cayman
 # - jekyll-theme-architect
 
 # Repository information
-repository: jwest33/gpro_lora
+repository: jwest33/lora_craft
 github:
-  repository_url: https://github.com/jwest33/gpro_lora
+  repository_url: https://github.com/jwest33/lora_craft
 
 # Build settings
 markdown: kramdown
