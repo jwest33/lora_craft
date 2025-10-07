@@ -3,6 +3,12 @@ layout: default
 title: LoRA Craft Documentation
 ---
 
+<div class="content-logo">
+  <img src="lora_craft.png" alt="LoRA Craft">
+  <h1>LoRA Craft</h1>
+  <p>Web-based interface for fine-tuning language models using GRPO</p>
+</div>
+
 ## Table of Contents
 
 1. [Overview](#overview)
