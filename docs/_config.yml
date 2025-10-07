@@ -36,24 +36,11 @@ relative_links:
   enabled: true
   collections: false
 
-# Include files
-include:
-  - _config.yml
-  - "*.jpg"
-  - "*.png"
-  - "*.md"
-
-# Exclude files
+# Exclude files from build
 exclude:
   - "*.py"
   - "qwen3_(4b)_grpo.py"
   - "gpt_oss_(20b)_grpo.py"
-
-# Collections (if needed for future expansion)
-collections:
-  docs:
-    output: true
-    permalink: /:collection/:path/
 
 # Defaults
 defaults:
@@ -61,4 +48,3 @@ defaults:
       path: ""
     values:
       layout: default
-      image: true
