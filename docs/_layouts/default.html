@@ -14,22 +14,7 @@
     {% include head-custom.html %}
   </head>
   <body>
-    <!-- Mobile Header (visible only on mobile) -->
-    <header class="mobile-header">
-      <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-label="Toggle Menu">
-        <span class="hamburger-icon">
-          <span></span>
-          <span></span>
-          <span></span>
-        </span>
-      </button>
-      <div class="mobile-header-content">
-        <img src="{{ '/lora_craft.png' | relative_url }}" alt="LoRA Craft" class="mobile-logo">
-        <span class="mobile-title">LoRA Craft</span>
-      </div>
-    </header>
-
-    <!-- Sidebar Toggle Button (desktop only) -->
+    <!-- Sidebar Toggle Button -->
     <button id="sidebar-toggle" class="sidebar-toggle" aria-label="Toggle Sidebar">
       <span class="toggle-icon">☰</span>
     </button>
@@ -74,9 +59,6 @@
         const toggleBtn = document.getElementById('sidebar-toggle');
         const sidebarNav = document.getElementById('sidebar-nav');
 
-        // Mobile menu toggle
-        const mobileToggle = document.getElementById('mobile-menu-toggle');
-
         // Check saved state
         const sidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
         if (sidebarCollapsed) {
@@ -84,21 +66,12 @@
           mainContainer.classList.add('sidebar-collapsed');
         }
 
-        // Toggle sidebar (desktop)
+        // Toggle sidebar
         toggleBtn.addEventListener('click', function() {
           const isCollapsed = sidebar.classList.toggle('collapsed');
           mainContainer.classList.toggle('sidebar-collapsed');
           localStorage.setItem('sidebarCollapsed', isCollapsed);
         });
-
-        // Toggle sidebar (mobile)
-        if (mobileToggle) {
-          mobileToggle.addEventListener('click', function() {
-            const isCollapsed = sidebar.classList.toggle('collapsed');
-            mainContainer.classList.toggle('sidebar-collapsed');
-            this.classList.toggle('active');
-          });
-        }
 
         // ========================================================================
         // Generate Table of Contents
@@ -195,15 +168,6 @@
                   top: targetPos,
                   behavior: 'smooth'
                 });
-
-                // On mobile, close the sidebar after clicking a link
-                if (window.innerWidth < 768) {
-                  sidebar.classList.add('collapsed');
-                  mainContainer.classList.add('sidebar-collapsed');
-                  if (mobileToggle) {
-                    mobileToggle.classList.remove('active');
-                  }
-                }
               }
             });
           });
@@ -234,43 +198,6 @@
             scrollTimeout = setTimeout(updateActiveSection, 50);
           });
 
-          // Auto-collapse sidebar on mobile
-          if (window.innerWidth < 768) {
-            sidebar.classList.add('collapsed');
-            mainContainer.classList.add('sidebar-collapsed');
-          }
-
-          // Close sidebar when clicking outside on mobile
-          document.addEventListener('click', function(e) {
-            if (window.innerWidth < 768) {
-              const clickedOutside = !sidebar.contains(e.target) &&
-                                    !mobileToggle.contains(e.target);
-              if (clickedOutside && !sidebar.classList.contains('collapsed')) {
-                sidebar.classList.add('collapsed');
-                mainContainer.classList.add('sidebar-collapsed');
-                if (mobileToggle) {
-                  mobileToggle.classList.remove('active');
-                }
-              }
-            }
-          });
-
-          // Handle window resize
-          let resizeTimeout;
-          window.addEventListener('resize', function() {
-            if (resizeTimeout) {
-              clearTimeout(resizeTimeout);
-            }
-            resizeTimeout = setTimeout(function() {
-              if (window.innerWidth < 768 && !sidebar.classList.contains('collapsed')) {
-                sidebar.classList.add('collapsed');
-                mainContainer.classList.add('sidebar-collapsed');
-                if (mobileToggle) {
-                  mobileToggle.classList.remove('active');
-                }
-              }
-            }, 100);
-          });
         }
       })();
     </script>
