@@ -4,31 +4,10 @@ title: LoRA Craft Documentation
 ---
 
 <div class="content-logo">
-  <img src="lora_craft.png" alt="LoRA Craft">
   <h1>LoRA Craft</h1>
+  <img src="lora_craft.png" alt="LoRA Craft">
   <p>Craft your own LoRA adapters with LoRA Craft - A web-based interface for fine-tuning language models using GRPO</p>
 </div>
-
-## Table of Contents
-
-1. [Overview](#overview)
-2. [Prerequisites](#prerequisites)
-3. [Installation](#installation)
-4. [Quick Start](#quick-start)
-5. [User Guide](#user-guide)
-   - [Step 1: Model Selection](#step-1-model-selection)
-   - [Step 2: Dataset Configuration](#step-2-dataset-configuration)
-   - [Step 3: Training Configuration](#step-3-training-configuration)
-   - [Step 4: Reward Functions](#step-4-reward-functions)
-   - [Step 5: Training & Monitoring](#step-5-training--monitoring)
-   - [Step 6: Model Export](#step-6-model-export)
-   - [Step 7: Testing Models](#step-7-testing-models)
-6. [Key Concepts](#key-concepts)
-7. [Troubleshooting](#troubleshooting)
-8. [Technical Reference](#technical-reference)
-9. [Appendix](#appendix)
-
----
 
 ## Overview
 

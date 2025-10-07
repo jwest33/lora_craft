@@ -116,31 +116,31 @@ body {
 /* Logo at top of main content */
 .content-logo {
   text-align: center;
-  margin-bottom: 1rem;
-  padding-bottom: 1rem;
-  border-bottom: 2px solid var(--border-color);
-}
-
-.content-logo img {
-  width: 160px;
-  height: 160px;
-  display: block;
-  margin: 0 auto 1rem;
-  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.6));
+  margin-bottom: 1.25rem;
+  padding-bottom: 0;
 }
 
 .content-logo h1 {
-  font-size: 2.5rem;
-  margin: 0 0 0.5rem 0;
+  font-size: 2rem;
+  margin: 0 0 0.75rem 0;
   background: var(--gradient-primary);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
+.content-logo img {
+  width: 120px;
+  height: 120px;
+  display: block;
+  margin: 0 auto 0.75rem;
+  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.6));
+  border: none !important;
+}
+
 .content-logo p {
   color: var(--text-secondary);
-  font-size: 1.1rem;
+  font-size: 1rem;
   margin: 0;
 }
 
@@ -211,6 +211,12 @@ body {
   border: 1px solid var(--border-color);
 }
 
+/* Content logo image should have no border */
+.content-logo img {
+  border: none !important;
+  border-radius: 0 !important;
+}
+
 /* Center images in divs */
 div[align="center"] img {
   margin-left: auto;
@@ -219,10 +225,10 @@ div[align="center"] img {
 
 /* Code blocks */
 .main-content pre {
-  background-color: #0f172a;
+  background-color: #0f172a !important;
   border-radius: 8px;
   padding: 1rem;
-  overflow-x: auto;
+  overflow: hidden;
   box-shadow: var(--shadow-md);
   border: 1px solid var(--border-color);
   margin: 1.25rem 0;
@@ -231,9 +237,25 @@ div[align="center"] img {
 .main-content pre code {
   font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
   font-size: 0.9rem;
-  color: #e2e8f0;
-  background: transparent;
+  color: #e2e8f0 !important;
+  background: #0f172a !important;
   padding: 0;
+  display: block;
+  overflow-x: auto;
+}
+
+/* Override any highlighter backgrounds */
+.main-content pre code * {
+  background: transparent !important;
+}
+
+.main-content .highlight {
+  background-color: #0f172a !important;
+  border-radius: 8px;
+}
+
+.main-content .highlight pre {
+  background-color: #0f172a !important;
 }
 
 /* Inline code */
@@ -547,10 +569,10 @@ div[align="center"] img {
   border-radius: 12px;
   margin: 0 auto 0.75rem;
   display: block;
-  box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.3);
   background: var(--bg-card);
   padding: 0.5rem;
-  border: 2px solid var(--primary);
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .sidebar-title {
@@ -686,19 +708,7 @@ div[align="center"] img {
   transform: translateX(-50%);
 }
 
-/* Hide the original TOC section in content */
-.main-content > h2:first-of-type {
-  display: none;
-}
-
-.main-content > h2:first-of-type + ol,
-.main-content > h2:first-of-type + ul {
-  display: none;
-}
-
-.main-content > h2:first-of-type + hr {
-  display: none;
-}
+/* Hide the original TOC section in content - keeping "Overview" visible */
 
 /* Smooth scrolling */
 html {
