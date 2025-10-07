@@ -79,8 +79,8 @@ LoRA Craft is a web-based application that enables fine-tuning of large language
 ### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/jwest33/gpro_lora.git
-cd gpro_lora
+git clone https://github.com/jwest33/lora_craft.git
+cd lora_craft
 ```
 
 ### Step 2: Install PyTorch with CUDA Support
@@ -123,7 +123,7 @@ You should see `CUDA available: True`.
 
 1. Navigate to the project directory:
    ```bash
-   cd gpro_lora
+   cd lora_craft
    ```
 
 2. Start the Flask server:
@@ -1002,8 +1002,8 @@ lora_craft/
 - [LM Studio](https://lmstudio.ai/)
 
 **Community & Support**
-- [GitHub Issues](https://github.com/jwest33/gpro_lora/issues)
-- [Discussions](https://github.com/jwest33/gpro_lora/discussions)
+- [GitHub Issues](https://github.com/jwest33/lora_craft/issues)
+- [Discussions](https://github.com/jwest33/lora_craft/discussions)
 
 ---
 
