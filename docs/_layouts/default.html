@@ -195,6 +195,15 @@
                   top: targetPos,
                   behavior: 'smooth'
                 });
+
+                // On mobile, close the sidebar after clicking a link
+                if (window.innerWidth < 768) {
+                  sidebar.classList.add('collapsed');
+                  mainContainer.classList.add('sidebar-collapsed');
+                  if (mobileToggle) {
+                    mobileToggle.classList.remove('active');
+                  }
+                }
               }
             });
           });
