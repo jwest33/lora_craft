@@ -3,8 +3,8 @@
 # Site settings
 title: LoRA Craft
 description: Craft your own LoRA adapters with LoRA Craft - A web-based interface for fine-tuning language models using GRPO
-url: "https://jwest33.github.io"
-baseurl: "/lora_craft"
+url: "https://loracraft.org"
+baseurl: ""
 
 # Theme
 theme: jekyll-theme-cayman
