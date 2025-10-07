@@ -344,7 +344,7 @@ def create_app(config=None):
             }
 
             # Try to load metrics from session info if available
-            from core.session_registry import session_registry
+            session_registry = current_app.session_registry
             session_id = path.name if path.exists() else None
             if session_id:
                 session = session_registry.get_session(session_id)

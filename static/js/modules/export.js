@@ -15,6 +15,12 @@
             this.setupEventListeners();
             this.loadExportableModels();
             this.displayTrainedModelCards();
+
+            // Set initial format options display
+            const formatSelect = document.getElementById('export-format');
+            if (formatSelect && formatSelect.value) {
+                this.updateFormatOptions(formatSelect.value);
+            }
         },
 
         // Setup export-related event listeners
@@ -205,93 +211,35 @@
 
         // Update format-specific options
         updateFormatOptions(format) {
-            const optionsContainer = document.getElementById('format-options');
-            if (!optionsContainer) return;
+            // Hide all format-specific option sections
+            const formatOptions = document.querySelectorAll('.format-option');
+            formatOptions.forEach(option => {
+                option.style.display = 'none';
+            });
 
-            let optionsHtml = '';
-
+            // Show the appropriate format-specific options
+            let optionsId = null;
             switch (format) {
                 case 'gguf':
-                    optionsHtml = `
-                        <div class="mb-3">
-                            <label class="form-label">GGUF Options</label>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="gguf-f16" checked>
-                                <label class="form-check-label" for="gguf-f16">
-                                    Use F16 precision
-                                </label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="gguf-metadata">
-                                <label class="form-check-label" for="gguf-metadata">
-                                    Include training metadata
-                                </label>
-                            </div>
-                        </div>
-                    `;
+                    optionsId = 'gguf-options';
                     break;
-
-                case 'onnx':
-                    optionsHtml = `
-                        <div class="mb-3">
-                            <label class="form-label">ONNX Options</label>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="onnx-optimize" checked>
-                                <label class="form-check-label" for="onnx-optimize">
-                                    Optimize for inference
-                                </label>
-                            </div>
-                            <select class="form-select mt-2" id="onnx-opset">
-                                <option value="14">ONNX OpSet 14</option>
-                                <option value="15" selected>ONNX OpSet 15</option>
-                                <option value="16">ONNX OpSet 16</option>
-                            </select>
-                        </div>
-                    `;
-                    break;
-
                 case 'safetensors':
-                    optionsHtml = `
-                        <div class="mb-3">
-                            <label class="form-label">SafeTensors Options</label>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="st-metadata" checked>
-                                <label class="form-check-label" for="st-metadata">
-                                    Include metadata
-                                </label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="st-compress">
-                                <label class="form-check-label" for="st-compress">
-                                    Compress output
-                                </label>
-                            </div>
-                        </div>
-                    `;
+                    optionsId = 'safetensors-options';
                     break;
-
                 case 'pytorch':
-                    optionsHtml = `
-                        <div class="mb-3">
-                            <label class="form-label">PyTorch Options</label>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="pt-state-dict" checked>
-                                <label class="form-check-label" for="pt-state-dict">
-                                    Export state dict only
-                                </label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="pt-trace">
-                                <label class="form-check-label" for="pt-trace">
-                                    Include traced model
-                                </label>
-                            </div>
-                        </div>
-                    `;
+                    optionsId = 'pytorch-options';
+                    break;
+                case 'onnx':
+                    optionsId = 'onnx-options';
                     break;
             }
 
-            optionsContainer.innerHTML = optionsHtml;
+            if (optionsId) {
+                const optionsElement = document.getElementById(optionsId);
+                if (optionsElement) {
+                    optionsElement.style.display = 'block';
+                }
+            }
         },
 
         // Toggle quantization options

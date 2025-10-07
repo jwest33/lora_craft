@@ -152,7 +152,7 @@ You should see `CUDA available: True`.
 
 ### Step 1: Model Selection
 
-![Model Selection](example_model_selection.jpg)
+![Model Selection](example_model_selection.png)
 
 The Model Configuration page allows you to select the base model for fine-tuning.
 
@@ -185,7 +185,7 @@ Select a model size based on your available VRAM:
 
 ### Step 2: Dataset Configuration
 
-![Dataset Selection](example_dataset_selection.jpg)
+![Dataset Selection](example_dataset_selection.png)
 
 Configure the training data for your model.
 
@@ -224,7 +224,7 @@ The system auto-detects common field names (question, answer, prompt, completion
 
 #### System Prompt Configuration
 
-![System Prompt](example_save_system_prompt.jpg)
+![System Prompt](example_save_system_prompt.png)
 
 Define the instruction format for your model:
 - **Template Type**: Choose GRPO Default or create custom templates
@@ -287,7 +287,7 @@ Pre-training helps the model learn output formatting before reinforcement learni
 
 ### Step 4: Reward Functions
 
-![Reward Catalog](example_reward_catalog.jpg)
+![Reward Catalog](example_reward_catalog.png)
 
 Reward functions evaluate model outputs and guide training. Choose functions that match your task.
 
@@ -335,7 +335,7 @@ Reward functions evaluate model outputs and guide training. Choose functions tha
 
 #### Configuring Reward Functions
 
-![Reward Function Mapping](example_reward_function_mapping.jpg)
+![Reward Function Mapping](example_reward_function_mapping.png)
 
 1. **Select Algorithm Type**: GRPO (standard), GSPO (sequence-level), or OR-GRPO (robust variant)
 
@@ -353,7 +353,7 @@ Reward functions evaluate model outputs and guide training. Choose functions tha
 
 ### Step 5: Training & Monitoring
 
-![Training Metrics](example_training_metrics.jpg)
+![Training Metrics](example_training_metrics.png)
 
 Once training starts, monitor progress through real-time metrics.
 
@@ -457,7 +457,7 @@ ollama run my-model
 
 ### Step 7: Testing Models
 
-![Testing Model](example_stock_trade_question.jpg)
+![Testing Model](example_stock_trade_question.png)
 
 Test your fine-tuned model with custom prompts.
 
