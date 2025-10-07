@@ -32,7 +32,8 @@ class ModelExporter:
 
     GGUF_QUANTIZATIONS = {
         'f16': 'No quantization (largest, best quality)',
-        'q8_0': '8-bit quantization (very good quality)',
+        'q8_k': '8-bit K-quant (best quality, minimal quality loss)',
+        'q8_0': '8-bit quantization legacy (very good quality)',
         'q6_k': '6-bit quantization (good quality)',
         'q5_k_m': '5-bit quantization (balanced)',
         'q4_k_m': '4-bit quantization (recommended)',

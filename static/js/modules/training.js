@@ -708,18 +708,33 @@
         handleTrainingProgress(data) {
             this.trainingProgress = data;
 
-            // Update progress bar
-            const progressBar = document.getElementById('training-progress-bar');
-            if (progressBar) {
-                const percentage = (data.current_step / data.total_steps) * 100;
-                progressBar.style.width = `${percentage}%`;
-                progressBar.textContent = `${Math.round(percentage)}%`;
+            // Support both property name variations (current_step or step)
+            const currentStep = data.current_step !== undefined ? data.current_step : data.step;
+            const totalSteps = data.total_steps;
+
+            // Update progress bar using new HTML element IDs
+            if (currentStep !== undefined && totalSteps) {
+                const progressContainer = document.getElementById('training-progress-container');
+                const progressBar = document.getElementById('training-progress-bar-inner');
+                const progressStats = document.getElementById('progress-stats');
+
+                if (progressContainer && progressBar && progressStats) {
+                    // Show progress container
+                    progressContainer.style.display = 'block';
+
+                    // Calculate percentage
+                    const percentage = Math.min(100, Math.max(0, (currentStep / totalSteps) * 100));
+
+                    // Update progress bar
+                    progressBar.style.width = `${percentage}%`;
+                    progressBar.setAttribute('aria-valuenow', percentage);
+
+                    // Update stats text
+                    progressStats.textContent = `${percentage.toFixed(1)}% (${currentStep}/${totalSteps})`;
+                }
             }
 
-            // Update stats
-            this.updateTrainingStats(data);
-
-            // Update charts
+            // Update charts if metrics are provided
             if (data.metrics) {
                 this.updateCharts(data.metrics);
             }

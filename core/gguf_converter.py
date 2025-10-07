@@ -13,6 +13,27 @@ class GGUFConverter:
     """Handle conversion of models to GGUF format using llama.cpp tools."""
 
     @staticmethod
+    def map_quantization_type(quant_type: str) -> str:
+        """Map UI quantization type to llama.cpp format.
+
+        Args:
+            quant_type: Quantization type from UI (e.g., 'q4_k_m', 'f16')
+
+        Returns:
+            Quantization type in llama.cpp format (e.g., 'Q4_K_M', 'f16')
+        """
+        # llama.cpp's convert script expects uppercase for K-quants
+        # but lowercase for simple quants like f16, f32, q8_0, q4_0
+        quant_type = quant_type.lower()
+
+        # K-quants need to be uppercase
+        if '_k' in quant_type:
+            return quant_type.upper()
+
+        # Simple quants stay lowercase
+        return quant_type
+
+    @staticmethod
     def find_llama_cpp() -> Optional[Path]:
         """Find llama.cpp installation.
 
@@ -100,23 +121,26 @@ class GGUFConverter:
         if progress_callback:
             progress_callback(f"Converting to GGUF {quantization.upper()} format...")
 
+        # Map quantization type to llama.cpp format
+        mapped_quant = GGUFConverter.map_quantization_type(quantization)
+
         # Build the command based on the script type
         cmd = [
             sys.executable,
             str(convert_script),
             str(model_dir),
             "--outfile", str(output_file),
-            "--outtype", quantization.lower()
+            "--outtype", mapped_quant
         ]
 
-        logger.info(f"Running: {' '.join(cmd)}")
+        logger.info(f"Running: {' '.join(cmd)} (original quant: {quantization}, mapped: {mapped_quant})")
         result = subprocess.run(cmd, capture_output=True, text=True)
 
         if result.returncode != 0:
-            logger.warning(f"Initial conversion failed: {result.stderr}")
+            logger.warning(f"Initial conversion failed with quantization {mapped_quant}: {result.stderr}")
 
             # If the error is about outtype, try without it (older script format)
-            if "--outtype" in result.stderr or "unrecognized arguments" in result.stderr:
+            if "--outtype" in result.stderr or "unrecognized arguments" in result.stderr or "invalid choice" in result.stderr:
                 if progress_callback:
                     progress_callback("Retrying with older script format...")
 
@@ -143,11 +167,13 @@ class GGUFConverter:
                         if progress_callback:
                             progress_callback(f"Quantizing to {quantization}...")
 
+                        # Use mapped quantization for quantize tool
+                        mapped_quant = GGUFConverter.map_quantization_type(quantization)
                         result = subprocess.run([
                             str(quantize_exe),
                             str(f16_file),
                             str(output_file),
-                            quantization
+                            mapped_quant
                         ], capture_output=True, text=True)
 
                         if result.returncode == 0:
@@ -189,8 +215,14 @@ class GGUFConverter:
         quant_info = {
             "f32": ("32-bit floating point (full precision)", "~4GB per billion parameters"),
             "f16": ("16-bit floating point (half precision)", "~2GB per billion parameters"),
-            "q8_0": ("8-bit quantization (excellent quality)", "~1GB per billion parameters"),
+            "q8_k": ("8-bit K-quant (best quality, minimal quality loss, newer format)", "~1GB per billion parameters"),
+            "q8_0": ("8-bit quantization (excellent quality, legacy format)", "~1GB per billion parameters"),
+            "q6_k": ("6-bit K-quant (very good quality, good compression)", "~0.75GB per billion parameters"),
+            "q5_k_m": ("5-bit K-quant medium (good quality, balanced)", "~0.625GB per billion parameters"),
+            "q4_k_m": ("4-bit K-quant medium (recommended, good quality/size balance)", "~0.5GB per billion parameters"),
+            "q4_0": ("4-bit quantization (legacy, smaller size)", "~0.5GB per billion parameters"),
+            "q3_k_m": ("3-bit K-quant medium (smallest, noticeable quality loss)", "~0.375GB per billion parameters"),
             "auto": ("Automatic selection by converter", "Varies based on model"),
         }
 
-        return quant_info.get(quantization, ("Unknown quantization", "Unknown size"))
+        return quant_info.get(quantization.lower(), ("Unknown quantization", "Unknown size"))

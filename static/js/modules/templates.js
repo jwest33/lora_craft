@@ -592,6 +592,71 @@
             }
 
             return true;
+        },
+
+        // Handle chat template type change
+        onChatTemplateTypeChange() {
+            const chatTemplateType = document.getElementById('chat-template-type');
+            const chatTemplateEditor = document.getElementById('chat-template-editor');
+
+            if (!chatTemplateType || !chatTemplateEditor) return;
+
+            // Show custom editor only if 'custom' is selected
+            if (chatTemplateType.value === 'custom') {
+                chatTemplateEditor.style.display = 'block';
+            } else {
+                chatTemplateEditor.style.display = 'none';
+            }
+        },
+
+        // Validate chat template
+        validateChatTemplate() {
+            const chatTemplate = document.getElementById('custom-chat-template');
+            const validationDiv = document.getElementById('chat-template-validation');
+
+            if (!chatTemplate || !validationDiv) return;
+
+            const template = chatTemplate.value.trim();
+
+            if (!template) {
+                validationDiv.innerHTML = '<div class="alert alert-warning"><i class="fas fa-exclamation-triangle"></i> Template cannot be empty</div>';
+                return false;
+            }
+
+            // Basic Jinja2 syntax validation
+            const openBraces = (template.match(/\{\{|\{%/g) || []).length;
+            const closeBraces = (template.match(/\}\}|%\}/g) || []).length;
+
+            if (openBraces !== closeBraces) {
+                validationDiv.innerHTML = '<div class="alert alert-danger"><i class="fas fa-times-circle"></i> Unbalanced Jinja2 braces</div>';
+                return false;
+            }
+
+            validationDiv.innerHTML = '<div class="alert alert-success"><i class="fas fa-check-circle"></i> Template syntax looks valid</div>';
+            return true;
+        },
+
+        // Save chat template
+        saveChatTemplate() {
+            if (!this.validateChatTemplate()) {
+                CoreModule.showAlert('Please fix template validation errors first', 'warning');
+                return;
+            }
+
+            const chatTemplate = document.getElementById('custom-chat-template')?.value;
+            const chatTemplateHidden = document.getElementById('chat-template');
+
+            if (chatTemplateHidden && chatTemplate) {
+                chatTemplateHidden.value = chatTemplate;
+            }
+
+            CoreModule.showAlert('Chat template saved', 'success');
+        },
+
+        // Load chat template
+        loadChatTemplate() {
+            // This could be expanded to load from saved templates in localStorage
+            CoreModule.showAlert('Load template functionality coming soon', 'info');
         }
     };
 

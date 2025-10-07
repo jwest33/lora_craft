@@ -591,10 +591,13 @@ Then, provide your solution between &lt;SOLUTION&gt;&lt;/SOLUTION&gt;</textarea>
                                     <!-- Chat Template Presets -->
                                     <div class="mb-3">
                                         <label class="form-label">Template Type</label>
-                                        <select class="form-select" id="chat-template-type" onchange="onChatTemplateTypeChange()">
-                                            <option value="grpo">GRPO Default (Reasoning)</option>
+                                        <select class="form-select" id="chat-template-type" onchange="onChatTemplateTypeChange()" disabled>
+                                            <option value="grpo" selected>GRPO Default (Reasoning)</option>
                                             <option value="custom">Custom Template</option>
                                         </select>
+                                        <small class="form-text text-muted">
+                                            <i class="fas fa-info-circle"></i> Template type is fixed for GRPO training
+                                        </small>
                                     </div>
 
                                     <!-- Chat Template Editor (shown for Custom mode) -->
@@ -1811,7 +1814,8 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                                             <label class="form-label fw-semibold">Quantization Type</label>
                                                             <select id="gguf-quantization" class="form-select">
                                                                 <option value="f16">F16 - No quantization (largest, best quality)</option>
-                                                                <option value="q8_0">Q8_0 - 8-bit quantization (very good quality)</option>
+                                                                <option value="q8_k">Q8_K - 8-bit K-quant (best quality, minimal loss)</option>
+                                                                <option value="q8_0">Q8_0 - 8-bit legacy (very good quality)</option>
                                                                 <option value="q6_k">Q6_K - 6-bit quantization (good quality)</option>
                                                                 <option value="q5_k_m">Q5_K_M - 5-bit quantization (balanced)</option>
                                                                 <option value="q4_k_m" selected>Q4_K_M - 4-bit quantization (recommended)</option>

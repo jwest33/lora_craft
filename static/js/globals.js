@@ -155,6 +155,14 @@
         }
     };
 
+    window.onChatTemplateTypeChange = function() {
+        if (window.TemplatesModule && TemplatesModule.onChatTemplateTypeChange) {
+            TemplatesModule.onChatTemplateTypeChange();
+        } else {
+            console.error('TemplatesModule.onChatTemplateTypeChange not available');
+        }
+    };
+
     // ========================================
     // Config Module Functions
     // ========================================
