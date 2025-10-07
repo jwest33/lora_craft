@@ -1,7 +1,7 @@
 <div align="center">
   <img src="static/images/lora_craft.png" alt="LoRA Craft" width="200"/>
   <h1>LoRA Craft</h1>
-  <p>Web-based interface for fine-tuning language models using GRPO (Group Relative Policy Optimization)</p>
+  <p>Craft your own LoRA adapters with LoRA Craft - A web-based interface for fine-tuning language models using GRPO (Group Relative Policy Optimization)</p>
 </div>
 
 ---

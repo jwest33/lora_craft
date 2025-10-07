@@ -3,14 +3,6 @@ layout: default
 title: LoRA Craft Documentation
 ---
 
-<div align="center">
-  <img src="lora_craft.png" alt="LoRA Craft" width="200"/>
-  <h1>LoRA Craft</h1>
-  <p>Web-based interface for fine-tuning language models using GRPO (Group Relative Policy Optimization)</p>
-</div>
-
----
-
 ## Table of Contents
 
 1. [Overview](#overview)
