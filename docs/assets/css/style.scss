@@ -643,6 +643,27 @@ div[align="center"] img {
 
 }
 
+/* Mobile/Portrait - Auto-collapse sidebar */
+@media screen and (max-width: 768px) {
+  /* Sidebar defaults to collapsed on mobile */
+  .sidebar {
+    transform: translateX(-100%);
+  }
+
+  .main-container {
+    margin-left: 0;
+  }
+
+  /* Only show expanded if explicitly toggled */
+  .sidebar:not(.collapsed) {
+    transform: translateX(0);
+  }
+
+  .main-container:not(.sidebar-collapsed) {
+    margin-left: 0; /* Keep content full-width even when sidebar is open on mobile */
+  }
+}
+
 
 @media screen and (max-width: 42em) {
   .main-content {
@@ -694,7 +715,7 @@ div[align="center"] img {
   position: fixed;
   top: 1rem;
   left: 1rem;
-  z-index: 999;
+  z-index: 1001;
   background: linear-gradient(135deg, var(--primary), var(--primary-light));
   color: white;
   border: none;
@@ -706,7 +727,7 @@ div[align="center"] img {
   align-items: center;
   justify-content: center;
   box-shadow: var(--shadow-lg);
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sidebar-toggle:hover {

@@ -59,8 +59,13 @@
         const toggleBtn = document.getElementById('sidebar-toggle');
         const sidebarNav = document.getElementById('sidebar-nav');
 
-        // Check saved state
-        const sidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+        // Check if viewport is portrait/mobile (vertically rectangular)
+        const isMobile = window.innerWidth < 768;
+
+        // Check saved state, but default to collapsed on mobile
+        const savedState = localStorage.getItem('sidebarCollapsed');
+        const sidebarCollapsed = savedState !== null ? savedState === 'true' : isMobile;
+
         if (sidebarCollapsed) {
           sidebar.classList.add('collapsed');
           mainContainer.classList.add('sidebar-collapsed');
