@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Features - LoRA Craft | LoRA Craft</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Features - LoRA Craft" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Craft your own LoRA adapters with LoRA Craft - A web-based interface for fine-tuning language models using GRPO" />
+<meta property="og:description" content="Craft your own LoRA adapters with LoRA Craft - A web-based interface for fine-tuning language models using GRPO" />
+<link rel="canonical" href="http://localhost:4000/features.html" />
+<meta property="og:url" content="http://localhost:4000/features.html" />
+<meta property="og:site_name" content="LoRA Craft" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Features - LoRA Craft" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Craft your own LoRA adapters with LoRA Craft - A web-based interface for fine-tuning language models using GRPO","headline":"Features - LoRA Craft","url":"http://localhost:4000/features.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+    <link rel="stylesheet" href="/assets/css/style.css?v=2e6e5b5b61282c5b3dab83ea6dfaca95f3af9b0b">
+    <link rel="icon" type="image/png" href="/lora_craft.png">
+    <!--[if lt IE 9]>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
+    <![endif]-->
+    <!-- start custom head snippets, customize with your own _includes/head-custom.html file -->
+
+<!-- Setup Google Analytics -->
+
+
+
+<!-- You can set your favicon here -->
+<!-- link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" -->
+
+<!-- end custom head snippets -->
+
+  </head>
+  <body>
+    <!-- Sidebar Toggle Button -->
+    <button id="sidebar-toggle" class="sidebar-toggle" aria-label="Toggle Sidebar">
+      <span class="toggle-icon">☰</span>
+    </button>
+
+    <!-- Sidebar Navigation -->
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <img src="/lora_craft.png" alt="LoRA Craft" class="sidebar-logo">
+        <h2 class="sidebar-title">LoRA Craft</h2>
+        <p class="sidebar-tagline">Fine-tuning with GRPO</p>
+      </div>
+
+      <nav class="sidebar-nav" id="sidebar-nav">
+        <!-- Page Navigation -->
+        <div class="page-nav">
+          <a href="/index.html" class="page-nav-link ">
+            <span class="nav-icon">⌂</span> Home
+          </a>
+          <a href="/quickstart.html" class="page-nav-link ">
+            <span class="nav-icon">▶</span> Quick Start
+          </a>
+          <a href="/features.html" class="page-nav-link active">
+            <span class="nav-icon">★</span> Features
+          </a>
+          <a href="/use-cases.html" class="page-nav-link ">
+            <span class="nav-icon">◉</span> Use Cases
+          </a>
+          <a href="/documentation.html" class="page-nav-link ">
+            <span class="nav-icon">▤</span> Documentation
+          </a>
+        </div>
+
+        <!-- Table of Contents (current page) -->
+        <div id="toc-container">
+          <!-- TOC will be injected here by JavaScript -->
+        </div>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <div id="main-container" class="main-container">
+      <a id="skip-to-content" href="#content">Skip to the content.</a>
+
+      <main id="content" class="main-content" role="main">
+        <h1 id="features">Features</h1>
+
+<p>LoRA Craft combines cutting-edge reinforcement learning with an intuitive interface to make model fine-tuning accessible to everyone.</p>
+
+<hr />
+
+<h2 id="no-code-training-interface">No-Code Training Interface</h2>
+
+<p><img src="/example_model_selection.png" alt="Model Selection" /></p>
+
+<p>Fine-tune language models through your web browser—no Python scripts, no command-line tools, no complex configurations.</p>
+
+<p><strong>What you get:</strong></p>
+<ul>
+  <li><strong>Visual configuration</strong>: Point-and-click setup for models, datasets, and training parameters</li>
+  <li><strong>Smart defaults</strong>: Pre-configured settings optimized for common use cases</li>
+  <li><strong>Guided workflow</strong>: Step-by-step process from model selection to deployment</li>
+  <li><strong>Live validation</strong>: Instant feedback on configuration errors before training starts</li>
+</ul>
+
+<hr />
+
+<h2 id="grpo">GRPO Reinforcement Learning</h2>
+
+<p>LoRA Craft uses <strong>Group Relative Policy Optimization (GRPO)</strong>, a state-of-the-art reinforcement learning algorithm that goes beyond traditional supervised fine-tuning.</p>
+
+<h3 id="how-grpo-works">How GRPO Works</h3>
+
+<p>Unlike supervised learning (which teaches models to imitate examples), GRPO teaches models to maximize rewards:</p>
+
+<ol>
+  <li><strong>Generate</strong>: Model creates multiple responses for each prompt</li>
+  <li><strong>Evaluate</strong>: Reward function scores each response based on your criteria</li>
+  <li><strong>Learn</strong>: Model increases probability of high-reward responses</li>
+  <li><strong>Iterate</strong>: Process repeats until model consistently produces quality outputs</li>
+</ol>
+
+<h3 id="benefits-over-supervised-learning">Benefits Over Supervised Learning</h3>
+
+<ul>
+  <li><strong>Task optimization</strong>: Models learn to optimize for specific objectives (correctness, format, style)</li>
+  <li><strong>Better generalization</strong>: Goes beyond memorizing training examples</li>
+  <li><strong>Quality improvement</strong>: Can surpass the quality of training data</li>
+  <li><strong>Flexible evaluation</strong>: Use any reward function that matches your goals</li>
+</ul>
+
+<h3 id="algorithm-variants">Algorithm Variants</h3>
+
+<ul>
+  <li><strong>GRPO</strong>: Token-level importance weighting (default, most granular)</li>
+  <li><strong>GSPO</strong>: Sequence-level optimization (simpler, faster)</li>
+  <li><strong>OR-GRPO</strong>: Outlier-robust variant (handles noisy rewards better)</li>
+</ul>
+
+<hr />
+
+<h2 id="pre-built-reward-functions">Pre-Built Reward Functions</h2>
+
+<p><img src="/example_reward_catalog.png" alt="Reward Catalog" /></p>
+
+<p>Choose from a library of battle-tested reward functions designed for common tasks, or create your own custom rewards.</p>
+
+<h3 id="algorithm-implementation">Algorithm Implementation</h3>
+<p>Rewards correct algorithm implementation with efficiency considerations.</p>
+<ul>
+  <li><strong>Use for</strong>: Code generation, algorithm design, competitive programming</li>
+</ul>
+
+<h3 id="chain-of-thought-reasoning">Chain of Thought Reasoning</h3>
+<p>Rewards step-by-step reasoning processes and logical deduction.</p>
+<ul>
+  <li><strong>Use for</strong>: Math problems, logical puzzles, complex analysis</li>
+</ul>
+
+<h3 id="code-generation">Code Generation</h3>
+<p>Rewards well-formatted, syntactically correct code with proper structure.</p>
+<ul>
+  <li><strong>Use for</strong>: Programming tasks, code completion, debugging</li>
+</ul>
+
+<h3 id="math--science">Math &amp; Science</h3>
+<p>Rewards correct mathematical solutions and scientific accuracy.</p>
+<ul>
+  <li><strong>Use for</strong>: STEM education, research assistance, technical Q&amp;A</li>
+</ul>
+
+<h3 id="question-answering">Question Answering</h3>
+<p>Rewards accurate, relevant, and concise answers to questions.</p>
+<ul>
+  <li><strong>Use for</strong>: Information retrieval, customer support, knowledge systems</li>
+</ul>
+
+<h3 id="creative-writing">Creative Writing</h3>
+<p>Rewards engaging text with good flow, vocabulary, and originality.</p>
+<ul>
+  <li><strong>Use for</strong>: Content generation, storytelling, marketing copy</li>
+</ul>
+
+<h3 id="custom-rewards">Custom Rewards</h3>
+<p>Build your own reward functions with Python for any task:</p>
+<ul>
+  <li>Citation formatting (APA/MLA)</li>
+  <li>Concise summarization</li>
+  <li>Translation quality</li>
+  <li>Sentiment control</li>
+  <li>Domain-specific requirements</li>
+</ul>
+
+<hr />
+
+<h2 id="real-time-training-monitoring">Real-Time Training Monitoring</h2>
+
+<p><img src="/example_training_metrics.png" alt="Training Metrics" /></p>
+
+<p>Watch your model learn with live metrics delivered via WebSocket connections.</p>
+
+<h3 id="interactive-dashboard">Interactive Dashboard</h3>
+
+<p><strong>Top Metrics Bar</strong></p>
+<ul>
+  <li><strong>KL Divergence</strong>: How much the model deviates from base model</li>
+  <li><strong>Completion Length</strong>: Average response length in tokens</li>
+  <li><strong>Clipped Ratio</strong>: Training stability indicator</li>
+  <li><strong>Gradient Norm</strong>: Model update magnitude</li>
+</ul>
+
+<p><strong>Live Charts</strong></p>
+<ul>
+  <li><strong>Reward Metrics</strong>: Mean and standard deviation of rewards over time</li>
+  <li><strong>Training Loss</strong>: Primary optimization objective</li>
+  <li><strong>KL Divergence</strong>: Tracks model deviation throughout training</li>
+  <li><strong>Completion Statistics</strong>: Min, max, and mean response lengths</li>
+  <li><strong>Policy Clip Ratios</strong>: PPO-style clipping metrics</li>
+  <li><strong>Learning Rate Schedule</strong>: Visualize LR changes over steps</li>
+</ul>
+
+<h3 id="training-controls">Training Controls</h3>
+
+<ul>
+  <li><strong>Stop Training</strong>: Gracefully halt and save checkpoint</li>
+  <li><strong>View Logs</strong>: Access detailed training output</li>
+  <li><strong>Session Management</strong>: Track multiple concurrent training runs</li>
+  <li><strong>GPU Monitoring</strong>: Real-time VRAM usage and utilization</li>
+</ul>
+
+<hr />
+
+<h2 id="lora-adapter-training">LoRA Adapter Training</h2>
+
+<p>LoRA (Low-Rank Adaptation) enables efficient fine-tuning on consumer hardware.</p>
+
+<h3 id="how-lora-works">How LoRA Works</h3>
+
+<p>Instead of updating billions of parameters, LoRA adds small “adapter” layers:</p>
+<ul>
+  <li>Adapters are 1-2% the size of the full model</li>
+  <li>Base model stays frozen during training</li>
+  <li>Multiple adapters can be swapped for different tasks</li>
+</ul>
+
+<h3 id="memory-efficiency">Memory Efficiency</h3>
+
+<p>Train large models on modest GPUs:</p>
+<ul>
+  <li><strong>8GB VRAM</strong>: 0.6B - 1.7B parameter models</li>
+  <li><strong>12GB VRAM</strong>: 3B - 4B parameter models</li>
+  <li><strong>16GB+ VRAM</strong>: 7B - 8B parameter models</li>
+</ul>
+
+<h3 id="configurable-parameters">Configurable Parameters</h3>
+
+<ul>
+  <li><strong>LoRA Rank</strong>: Adapter capacity (8-32 typical)</li>
+  <li><strong>LoRA Alpha</strong>: Scaling factor (usually 2× rank)</li>
+  <li><strong>LoRA Dropout</strong>: Regularization (0.0-0.1 typical)</li>
+  <li><strong>Target Modules</strong>: Which layers to adapt</li>
+</ul>
+
+<hr />
+
+<h2 id="flexible-dataset-support">Flexible Dataset Support</h2>
+
+<p><img src="/example_dataset_selection.png" alt="Dataset Selection" /></p>
+
+<p>Train on curated public datasets or upload your own custom data.</p>
+
+<h3 id="public-dataset-library">Public Dataset Library</h3>
+
+<p>Browse 15+ curated datasets with filtering and preview:</p>
+<ul>
+  <li><strong>Math</strong>: GSM8K, OpenMath, Orca Math (350K+ problems)</li>
+  <li><strong>Coding</strong>: Code Alpaca, Programming problems (20K+ examples)</li>
+  <li><strong>General</strong>: Alpaca, Dolly, instruction datasets (100K+ samples)</li>
+  <li><strong>Q&amp;A</strong>: SQuAD v2, TriviaQA (130K+ questions)</li>
+</ul>
+
+<h3 id="custom-dataset-upload">Custom Dataset Upload</h3>
+
+<p>Upload your own data in multiple formats:</p>
+<ul>
+  <li><strong>JSON</strong>: List of objects or nested structures</li>
+  <li><strong>JSONL</strong>: One JSON object per line</li>
+  <li><strong>CSV</strong>: Comma-separated with headers</li>
+  <li><strong>Parquet</strong>: Apache Parquet files</li>
+</ul>
+
+<p><strong>Smart Field Mapping</strong></p>
+<ul>
+  <li>Auto-detects common field names (instruction, response, question, answer)</li>
+  <li>Manual mapping for custom schemas</li>
+  <li>Preview samples before training</li>
+</ul>
+
+<h3 id="system-prompt-configuration">System Prompt Configuration</h3>
+
+<p><img src="/example_save_system_prompt.png" alt="System Prompt" /></p>
+
+<p>Define instruction format and output structure:</p>
+<ul>
+  <li><strong>Template type</strong>: GRPO default or custom formats</li>
+  <li><strong>System message</strong>: High-level model instructions</li>
+  <li><strong>Reasoning markers</strong>: Tags for structured thinking (<code class="language-plaintext highlighter-rouge">&lt;start_working_out&gt;</code>)</li>
+  <li><strong>Solution markers</strong>: Tags for final answers (<code class="language-plaintext highlighter-rouge">&lt;SOLUTION&gt;</code>)</li>
+</ul>
+
+<hr />
+
+<h2 id="model-export--deployment">Model Export &amp; Deployment</h2>
+
+<p>After training, export models in multiple formats for deployment anywhere.</p>
+
+<h3 id="huggingface-format">HuggingFace Format</h3>
+
+<p>Standard Transformers-compatible format:</p>
+<ul>
+  <li>Base model + LoRA adapter weights</li>
+  <li>Compatible with Python inference</li>
+  <li>Ready for HuggingFace Hub upload</li>
+  <li>Location: <code class="language-plaintext highlighter-rouge">outputs/&lt;session_id&gt;/</code></li>
+</ul>
+
+<h3 id="gguf-format">GGUF Format</h3>
+
+<p>Optimized for llama.cpp ecosystem (Ollama, LM Studio):</p>
+<ul>
+  <li><strong>Q4_K_M</strong>: 4-bit quantization (balanced quality/size)</li>
+  <li><strong>Q5_K_M</strong>: 5-bit quantization (higher quality)</li>
+  <li><strong>Q8_0</strong>: 8-bit quantization (minimal quality loss)</li>
+  <li><strong>F16</strong>: 16-bit float (no quantization)</li>
+</ul>
+
+<p><strong>Size Comparison for 7B Models:</strong></p>
+<ul>
+  <li>Q4_K_M: ~4GB</li>
+  <li>Q5_K_M: ~5GB</li>
+  <li>Q8_0: ~8GB</li>
+  <li>F16: ~14GB</li>
+</ul>
+
+<h3 id="deployment-targets">Deployment Targets</h3>
+
+<p><strong>llama.cpp</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>./main <span class="nt">-m</span> model.gguf <span class="nt">-p</span> <span class="s2">"Your prompt"</span>
+</code></pre></div></div>
+
+<p><strong>Ollama</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>ollama create mymodel <span class="nt">-f</span> Modelfile
+ollama run mymodel
+</code></pre></div></div>
+
+<p><strong>LM Studio</strong>
+Import GGUF files directly through the UI</p>
+
+<hr />
+
+<h2 id="configuration-management">Configuration Management</h2>
+
+<p>Save and reuse training configurations for reproducibility.</p>
+
+<p><strong>Features:</strong></p>
+<ul>
+  <li><strong>Save configs</strong>: Store complete training setups with names</li>
+  <li><strong>Load configs</strong>: Quickly restore previous configurations</li>
+  <li><strong>Share configs</strong>: JSON format for team collaboration</li>
+  <li><strong>Version control</strong>: Track configuration changes</li>
+</ul>
+
+<p><strong>Saved Parameters:</strong></p>
+<ul>
+  <li>Model selection and LoRA settings</li>
+  <li>Dataset paths and field mappings</li>
+  <li>Training hyperparameters</li>
+  <li>Reward function configuration</li>
+  <li>System prompt templates</li>
+</ul>
+
+<hr />
+
+<h2 id="advanced-training-options">Advanced Training Options</h2>
+
+<h3 id="pre-training-phase">Pre-Training Phase</h3>
+
+<p>Optional supervised fine-tuning before GRPO:</p>
+<ul>
+  <li>Helps model learn output format</li>
+  <li>Improves GRPO training stability</li>
+  <li>Configurable epochs and learning rate</li>
+  <li>Can limit samples for quick adaptation</li>
+</ul>
+
+<h3 id="hyperparameter-control">Hyperparameter Control</h3>
+
+<p>Fine-tune training behavior:</p>
+<ul>
+  <li><strong>Batch size</strong>: Memory vs. training speed tradeoff</li>
+  <li><strong>Gradient accumulation</strong>: Simulate larger batches</li>
+  <li><strong>Learning rate scheduling</strong>: Constant, linear, cosine decay</li>
+  <li><strong>KL penalty</strong>: Control model deviation from base</li>
+  <li><strong>Clip range</strong>: PPO-style gradient clipping</li>
+  <li><strong>Warmup steps</strong>: Gradual LR increase at start</li>
+</ul>
+
+<h3 id="generation-parameters">Generation Parameters</h3>
+
+<p>Control model outputs during training:</p>
+<ul>
+  <li><strong>Max sequence length</strong>: Input token limit (1024-4096)</li>
+  <li><strong>Max new tokens</strong>: Response length limit (256-1024)</li>
+  <li><strong>Temperature</strong>: Randomness in generation (0.1-1.0)</li>
+  <li><strong>Top-P</strong>: Nucleus sampling threshold (0.9-0.95)</li>
+</ul>
+
+<hr />
+
+<h2 id="next-steps">Next Steps</h2>
+
+<div class="feature-cta">
+  <div>
+    <h3>Ready to start training?</h3>
+    <p>Follow our quick start guide to fine-tune your first model</p>
+  </div>
+  <a href="quickstart.html" class="btn-primary">Quick Start →</a>
+</div>
+
+<div class="feature-cta">
+  <div>
+    <h3>See it in action</h3>
+    <p>Explore real-world use cases and example configurations</p>
+  </div>
+  <a href="use-cases.html" class="btn-secondary">Use Cases →</a>
+</div>
+
+
+        <footer class="site-footer">
+          <div class="site-footer-avatar">
+            <img src="/icon.png" alt="jwest33" class="avatar-image">
+          </div>
+          
+            <span class="site-footer-owner"><a href="https://github.com/jwest33/lora_craft">lora_craft</a> is maintained by <a href="https://github.com/jwest33">jwest33</a>.</span>
+          
+          <span class="site-footer-credits">This page was generated by <a href="https://pages.github.com">GitHub Pages</a>.</span>
+        </footer>
+      </main>
+    </div>
+
+    <script>
+      // ========================================================================
+      // Sidebar Functionality
+      // ========================================================================
+
+      (function() {
+        const sidebar = document.getElementById('sidebar');
+        const mainContainer = document.getElementById('main-container');
+        const toggleBtn = document.getElementById('sidebar-toggle');
+        const sidebarNav = document.getElementById('sidebar-nav');
+
+        // Check if viewport is portrait/mobile (vertically rectangular)
+        const isMobile = window.innerWidth < 768;
+
+        // Check saved state, but default to collapsed on mobile
+        const savedState = localStorage.getItem('sidebarCollapsed');
+        const sidebarCollapsed = savedState !== null ? savedState === 'true' : isMobile;
+
+        if (sidebarCollapsed) {
+          sidebar.classList.add('collapsed');
+          mainContainer.classList.add('sidebar-collapsed');
+        }
+
+        // Toggle sidebar
+        toggleBtn.addEventListener('click', function() {
+          const isCollapsed = sidebar.classList.toggle('collapsed');
+          mainContainer.classList.toggle('sidebar-collapsed');
+          localStorage.setItem('sidebarCollapsed', isCollapsed);
+        });
+
+        // ========================================================================
+        // Generate Table of Contents
+        // ========================================================================
+
+        function generateTOC() {
+          const content = document.querySelector('.main-content');
+          const headings = content.querySelectorAll('h2, h3');
+          const toc = document.createElement('ul');
+          toc.className = 'toc-list';
+
+          let currentH2 = null;
+
+          headings.forEach((heading, index) => {
+            // Skip the "Table of Contents" heading itself
+            if (heading.textContent.trim() === 'Table of Contents') {
+              return;
+            }
+
+            const li = document.createElement('li');
+            const a = document.createElement('a');
+
+            // Create ID if it doesn't exist
+            if (!heading.id) {
+              heading.id = 'heading-' + index;
+            }
+
+            a.href = '#' + heading.id;
+            a.textContent = heading.textContent;
+            a.className = 'toc-link';
+
+            if (heading.tagName === 'H2') {
+              li.className = 'toc-item toc-h2';
+              li.appendChild(a);
+              toc.appendChild(li);
+              currentH2 = li;
+            } else if (heading.tagName === 'H3' && currentH2) {
+              let sublist = currentH2.querySelector('.toc-sublist');
+              if (!sublist) {
+                sublist = document.createElement('ul');
+                sublist.className = 'toc-sublist';
+                currentH2.appendChild(sublist);
+              }
+              li.className = 'toc-item toc-h3';
+              li.appendChild(a);
+              sublist.appendChild(li);
+            }
+          });
+
+          const tocContainer = document.getElementById('toc-container');
+          if (tocContainer && toc.children.length > 0) {
+            // Add a separator before TOC
+            const separator = document.createElement('div');
+            separator.className = 'toc-separator';
+            separator.innerHTML = '<span>On This Page</span>';
+            tocContainer.appendChild(separator);
+            tocContainer.appendChild(toc);
+          }
+        }
+
+        // ========================================================================
+        // Active Section Highlighting
+        // ========================================================================
+
+        function updateActiveSection() {
+          const headings = document.querySelectorAll('.main-content h2, .main-content h3');
+          const tocLinks = document.querySelectorAll('.toc-link');
+
+          if (headings.length === 0 || tocLinks.length === 0) return;
+
+          let currentActive = null;
+          const scrollPos = window.scrollY + 100; // Offset for better UX
+
+          // Check if we're at or near the bottom of the page
+          const windowHeight = window.innerHeight;
+          const documentHeight = document.documentElement.scrollHeight;
+          const isNearBottom = (window.scrollY + windowHeight) >= (documentHeight - 50);
+
+          // If at bottom, activate the last heading
+          if (isNearBottom && headings.length > 0) {
+            currentActive = headings[headings.length - 1].id;
+          } else {
+            // Normal scroll behavior - find the current heading
+            headings.forEach(heading => {
+              if (heading.offsetTop <= scrollPos) {
+                currentActive = heading.id;
+              }
+            });
+          }
+
+          tocLinks.forEach(link => {
+            const href = link.getAttribute('href').substring(1);
+            if (href === currentActive) {
+              link.classList.add('active');
+            } else {
+              link.classList.remove('active');
+            }
+          });
+        }
+
+        // ========================================================================
+        // Smooth Scrolling
+        // ========================================================================
+
+        function enableSmoothScrolling() {
+          document.querySelectorAll('.toc-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+              e.preventDefault();
+              const targetId = this.getAttribute('href').substring(1);
+              const target = document.getElementById(targetId);
+              if (target) {
+                const offset = 80; // Account for header
+                const targetPos = target.offsetTop - offset;
+                window.scrollTo({
+                  top: targetPos,
+                  behavior: 'smooth'
+                });
+              }
+            });
+          });
+        }
+
+        // ========================================================================
+        // Initialize
+        // ========================================================================
+
+        // Wait for content to load
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', init);
+        } else {
+          init();
+        }
+
+        function init() {
+          generateTOC();
+          enableSmoothScrolling();
+          updateActiveSection();
+          initImageModal();
+
+          // Update active section on scroll (throttled)
+          let scrollTimeout;
+          window.addEventListener('scroll', function() {
+            if (scrollTimeout) {
+              clearTimeout(scrollTimeout);
+            }
+            scrollTimeout = setTimeout(updateActiveSection, 50);
+          });
+
+        }
+
+        // ========================================================================
+        // Image Modal/Lightbox
+        // ========================================================================
+
+        function initImageModal() {
+          // Create modal element
+          const modal = document.createElement('div');
+          modal.className = 'image-modal';
+          modal.innerHTML = `
+            <div class="modal-content">
+              <button class="modal-close" aria-label="Close">&times;</button>
+              <img class="modal-image" src="" alt="">
+            </div>
+          `;
+          document.body.appendChild(modal);
+
+          const modalImage = modal.querySelector('.modal-image');
+          const closeButton = modal.querySelector('.modal-close');
+
+          // Add click listeners to all clickable images
+          document.querySelectorAll('.clickable-image').forEach(img => {
+            img.addEventListener('click', function() {
+              modalImage.src = this.src;
+              modalImage.alt = this.alt;
+              modal.classList.add('active');
+              document.body.style.overflow = 'hidden'; // Prevent scrolling
+            });
+          });
+
+          // Close modal on close button click
+          closeButton.addEventListener('click', function(e) {
+            e.stopPropagation();
+            closeModal();
+          });
+
+          // Close modal on background click
+          modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+              closeModal();
+            }
+          });
+
+          // Close modal on ESC key
+          document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && modal.classList.contains('active')) {
+              closeModal();
+            }
+          });
+
+          function closeModal() {
+            modal.classList.add('closing');
+            setTimeout(() => {
+              modal.classList.remove('active', 'closing');
+              document.body.style.overflow = ''; // Restore scrolling
+            }, 300); // Match animation duration
+          }
+        }
+      })();
+    </script>
+  </body>
+</html>

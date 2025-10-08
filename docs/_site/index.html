@@ -1,17 +1,43 @@
 <!DOCTYPE html>
-<html lang="{{ site.lang | default: 'en-US' }}">
+<html lang="en-US">
   <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
-{% seo %}
-    <link rel="stylesheet" href="{{ '/assets/css/style.css?v=' | append: site.github.build_revision | relative_url }}">
-    <link rel="icon" type="image/png" href="{{ '/lora_craft.png' | relative_url }}">
+<!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>LoRA Craft - LLM Fine-Tuning | LoRA Craft</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="LoRA Craft - LLM Fine-Tuning" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Craft your own LoRA adapters with LoRA Craft - A web-based interface for fine-tuning language models using GRPO" />
+<meta property="og:description" content="Craft your own LoRA adapters with LoRA Craft - A web-based interface for fine-tuning language models using GRPO" />
+<link rel="canonical" href="http://localhost:4000/" />
+<meta property="og:url" content="http://localhost:4000/" />
+<meta property="og:site_name" content="LoRA Craft" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="LoRA Craft - LLM Fine-Tuning" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebSite","description":"Craft your own LoRA adapters with LoRA Craft - A web-based interface for fine-tuning language models using GRPO","headline":"LoRA Craft - LLM Fine-Tuning","name":"LoRA Craft","url":"http://localhost:4000/"}</script>
+<!-- End Jekyll SEO tag -->
+
+    <link rel="stylesheet" href="/assets/css/style.css?v=2e6e5b5b61282c5b3dab83ea6dfaca95f3af9b0b">
+    <link rel="icon" type="image/png" href="/lora_craft.png">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
-    {% include head-custom.html %}
+    <!-- start custom head snippets, customize with your own _includes/head-custom.html file -->
+
+<!-- Setup Google Analytics -->
+
+
+
+<!-- You can set your favicon here -->
+<!-- link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" -->
+
+<!-- end custom head snippets -->
+
   </head>
   <body>
     <!-- Sidebar Toggle Button -->
@@ -22,7 +48,7 @@
     <!-- Sidebar Navigation -->
     <aside id="sidebar" class="sidebar">
       <div class="sidebar-header">
-        <img src="{{ '/lora_craft.png' | relative_url }}" alt="LoRA Craft" class="sidebar-logo">
+        <img src="/lora_craft.png" alt="LoRA Craft" class="sidebar-logo">
         <h2 class="sidebar-title">LoRA Craft</h2>
         <p class="sidebar-tagline">Fine-tuning with GRPO</p>
       </div>
@@ -30,19 +56,19 @@
       <nav class="sidebar-nav" id="sidebar-nav">
         <!-- Page Navigation -->
         <div class="page-nav">
-          <a href="{{ '/index.html' | relative_url }}" class="page-nav-link {% if page.url == '/' or page.url == '/index.html' %}active{% endif %}">
+          <a href="/index.html" class="page-nav-link active">
             <span class="nav-icon">⌂</span> Home
           </a>
-          <a href="{{ '/quickstart.html' | relative_url }}" class="page-nav-link {% if page.url contains 'quickstart' %}active{% endif %}">
+          <a href="/quickstart.html" class="page-nav-link ">
             <span class="nav-icon">▶</span> Quick Start
           </a>
-          <a href="{{ '/features.html' | relative_url }}" class="page-nav-link {% if page.url contains 'features' %}active{% endif %}">
+          <a href="/features.html" class="page-nav-link ">
             <span class="nav-icon">★</span> Features
           </a>
-          <a href="{{ '/use-cases.html' | relative_url }}" class="page-nav-link {% if page.url contains 'use-cases' %}active{% endif %}">
+          <a href="/use-cases.html" class="page-nav-link ">
             <span class="nav-icon">◉</span> Use Cases
           </a>
-          <a href="{{ '/documentation.html' | relative_url }}" class="page-nav-link {% if page.url contains 'documentation' %}active{% endif %}">
+          <a href="/documentation.html" class="page-nav-link ">
             <span class="nav-icon">▤</span> Documentation
           </a>
         </div>
@@ -59,15 +85,191 @@
       <a id="skip-to-content" href="#content">Skip to the content.</a>
 
       <main id="content" class="main-content" role="main">
-        {{ content }}
+        <div class="hero-section">
+  <div class="content-logo">
+    <img src="lora_craft.png" alt="LoRA Craft" />
+    <h1>LoRA Craft</h1>
+  </div>
+
+  <p class="hero-description">
+    Transform pre-trained language models into specialized assistants with a web-based interface.
+    No ML expertise required—just choose your model, dataset, and reward function.
+  </p>
+
+  <div class="cta-buttons">
+    <a href="quickstart.html" class="btn-primary">Get Started</a>
+    <a href="https://github.com/jwest33/lora_craft" class="btn-secondary" target="_blank">
+      <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+      </svg>
+      View on GitHub
+    </a>
+  </div>
+</div>
+
+<h2 id="what-is-lora-craft">What is LoRA Craft?</h2>
+
+<p>LoRA Craft is a web-based application for fine-tuning large language models using reinforcement learning. It combines GRPO (Group Relative Policy Optimization) with LoRA adapters to enable efficient training on consumer GPUs, requiring no machine learning expertise or code.</p>
+
+<hr />
+
+<h2 id="why-choose-lora-craft">Why Choose LoRA Craft?</h2>
+
+<div class="benefits-grid">
+  <div class="benefit-card">
+    <div class="benefit-icon">◎</div>
+    <h3>No-Code Training</h3>
+    <p>Configure and train models through an intuitive web interface. No Python scripts, no command-line complexity—just point, click, and train.</p>
+  </div>
+
+  <div class="benefit-card">
+    <div class="benefit-icon">▸</div>
+    <h3>Efficient Fine-Tuning</h3>
+    <p>Uses LoRA adapters to train on consumer GPUs (4-8GB VRAM). Fine-tune 7B models on your desktop with GRPO reinforcement learning.</p>
+  </div>
+
+  <div class="benefit-card">
+    <div class="benefit-icon">▥</div>
+    <h3>Real-Time Monitoring</h3>
+    <p>Watch your model improve with live metrics: rewards, loss, KL divergence, and more. Interactive charts show training progress as it happens.</p>
+  </div>
+
+  <div class="benefit-card">
+    <div class="benefit-icon">◆</div>
+    <h3>Ready-to-Use Rewards</h3>
+    <p>Choose from pre-built reward functions for math, coding, reasoning, and more. Or create custom rewards for your specific task.</p>
+  </div>
+</div>
+
+<hr />
+
+<h2 id="see-it-in-action">See It In Action</h2>
+
+<div class="screenshot-showcase">
+  <div class="screenshot-item">
+    <img src="example_model_selection.png" alt="Model Selection Interface" class="clickable-image" />
+    <h4>1. Select Your Model</h4>
+    <p>Choose from Qwen, Llama, Mistral, and Phi models. Configure LoRA parameters or use recommended defaults.</p>
+  </div>
+
+  <div class="screenshot-item">
+    <img src="example_dataset_selection.png" alt="Dataset Configuration" class="clickable-image" />
+    <h4>2. Choose Your Dataset</h4>
+    <p>Browse curated datasets or upload your own. Auto-detects field mappings for instant configuration.</p>
+  </div>
+
+  <div class="screenshot-item">
+    <img src="example_reward_catalog.png" alt="Reward Function Library" class="clickable-image" />
+    <h4>3. Pick a Reward Function</h4>
+    <p>Select from categorized reward functions optimized for math, coding, reasoning, and creative tasks.</p>
+  </div>
+
+  <div class="screenshot-item">
+    <img src="example_training_metrics.png" alt="Training Dashboard" class="clickable-image" />
+    <h4>4. Monitor Training</h4>
+    <p>Track real-time metrics with interactive charts. Watch rewards increase and loss decrease as your model learns.</p>
+  </div>
+
+  <div class="screenshot-item">
+    <img src="example_stock_trade_question.png" alt="Model Testing Interface" class="clickable-image" />
+    <h4>5. Test &amp; Compare Models</h4>
+    <p>Evaluate your fine-tuned models against base models with interactive testing, side-by-side comparison, batch testing, and reward function evaluation.</p>
+  </div>
+</div>
+
+<hr />
+
+<h2 id="popular-use-cases">Popular Use Cases</h2>
+
+<div class="use-cases-grid">
+  <div class="use-case-card">
+    <h3>∑ Math &amp; Science</h3>
+    <p>Train models to solve equations, prove theorems, and explain scientific concepts with step-by-step reasoning.</p>
+    <a href="use-cases.html#math-science">Learn more →</a>
+  </div>
+
+  <div class="use-case-card">
+    <h3>‹/› Code Generation</h3>
+    <p>Create coding assistants that generate clean, efficient code with proper documentation and error handling.</p>
+    <a href="use-cases.html#coding">Learn more →</a>
+  </div>
+
+  <div class="use-case-card">
+    <h3>? Question Answering</h3>
+    <p>Build specialized Q&amp;A systems for domains like medicine, law, or customer support with accurate, relevant answers.</p>
+    <a href="use-cases.html#qa">Learn more →</a>
+  </div>
+
+  <div class="use-case-card">
+    <h3>✎ Custom Tasks</h3>
+    <p>Fine-tune for any task with custom reward functions: summarization, translation, creative writing, and more.</p>
+    <a href="use-cases.html#custom">Learn more →</a>
+  </div>
+</div>
+
+<hr />
+
+<h2 id="what-you-can-do">What You Can Do</h2>
+
+<ul>
+  <li><strong>Fine-tune for specific tasks</strong>: Math reasoning, code generation, question answering, instruction-following</li>
+  <li><strong>Use curated datasets</strong>: Alpaca, GSM8K, OpenMath, Code Alpaca, SQuAD, and 15+ more</li>
+  <li><strong>Upload custom data</strong>: Train on your own JSON, JSONL, CSV, or Parquet datasets</li>
+  <li><strong>Monitor in real-time</strong>: Track loss, rewards, KL divergence, and other metrics through WebSocket-based updates</li>
+  <li><strong>Test and compare models</strong>: Interactive evaluation interface with side-by-side comparisons and batch testing</li>
+  <li><strong>Export anywhere</strong>: Convert models to GGUF format for llama.cpp, Ollama, or LM Studio</li>
+  <li><strong>Save configurations</strong>: Reuse training setups for reproducibility across experiments</li>
+</ul>
+
+<hr />
+
+<h2 id="powered-by-grpo">Powered by GRPO</h2>
+
+<p>LoRA Craft uses <strong>Group Relative Policy Optimization (GRPO)</strong>, a reinforcement learning algorithm that teaches models to maximize rewards rather than just imitate examples.</p>
+
+<p><strong>How it works:</strong></p>
+<ol>
+  <li>Model generates multiple responses for each prompt</li>
+  <li>Reward function scores each response based on your criteria</li>
+  <li>Model learns to prefer high-reward responses</li>
+  <li>Training continues until the model consistently produces quality outputs</li>
+</ol>
+
+<p>This approach enables models to learn complex behaviors and improve beyond the quality of training data.</p>
+
+<p><a href="features.html#grpo">Learn more about GRPO →</a></p>
+
+<hr />
+
+<h2 id="ready-to-get-started">Ready to Get Started?</h2>
+
+<div class="final-cta">
+  <h3>Start fine-tuning your first model in minutes</h3>
+  <p>Follow our quick start guide for a step-by-step walkthrough from installation to your first trained model.</p>
+  <a href="quickstart.html" class="btn-primary">Quick Start Guide</a>
+  <a href="documentation.html" class="btn-secondary">Full Documentation</a>
+</div>
+
+<hr />
+
+<h2 id="open-source--community-driven">Open Source &amp; Community-Driven</h2>
+
+<p>LoRA Craft is MIT licensed and built with:</p>
+<ul>
+  <li><a href="https://github.com/unslothai/unsloth">Unsloth</a> - Optimized training framework</li>
+  <li><a href="https://huggingface.co/docs/transformers/">HuggingFace Transformers</a> - Model library</li>
+  <li><a href="https://github.com/QwenLM/Qwen">Qwen</a> - High-performance language models (<a href="https://qwen.readthedocs.io/">Documentation</a>)</li>
+  <li><a href="https://flask.palletsprojects.com/">Flask</a> - Web framework</li>
+</ul>
+
 
         <footer class="site-footer">
           <div class="site-footer-avatar">
-            <img src="{{ '/icon.png' | relative_url }}" alt="jwest33" class="avatar-image">
+            <img src="/icon.png" alt="jwest33" class="avatar-image">
           </div>
-          {% if site.github.is_project_page %}
-            <span class="site-footer-owner"><a href="{{ site.github.repository_url }}">{{ site.github.repository_name }}</a> is maintained by <a href="{{ site.github.owner_url }}">{{ site.github.owner_name }}</a>.</span>
-          {% endif %}
+          
+            <span class="site-footer-owner"><a href="https://github.com/jwest33/lora_craft">lora_craft</a> is maintained by <a href="https://github.com/jwest33">jwest33</a>.</span>
+          
           <span class="site-footer-credits">This page was generated by <a href="https://pages.github.com">GitHub Pages</a>.</span>
         </footer>
       </main>

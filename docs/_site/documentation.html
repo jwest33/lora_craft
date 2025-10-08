@@ -1,0 +1,1429 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Documentation - LoRA Craft | LoRA Craft</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Documentation - LoRA Craft" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Craft your own LoRA adapters with LoRA Craft - A web-based interface for fine-tuning language models using GRPO" />
+<meta property="og:description" content="Craft your own LoRA adapters with LoRA Craft - A web-based interface for fine-tuning language models using GRPO" />
+<link rel="canonical" href="http://localhost:4000/documentation.html" />
+<meta property="og:url" content="http://localhost:4000/documentation.html" />
+<meta property="og:site_name" content="LoRA Craft" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Documentation - LoRA Craft" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Craft your own LoRA adapters with LoRA Craft - A web-based interface for fine-tuning language models using GRPO","headline":"Documentation - LoRA Craft","url":"http://localhost:4000/documentation.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+    <link rel="stylesheet" href="/assets/css/style.css?v=2e6e5b5b61282c5b3dab83ea6dfaca95f3af9b0b">
+    <link rel="icon" type="image/png" href="/lora_craft.png">
+    <!--[if lt IE 9]>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
+    <![endif]-->
+    <!-- start custom head snippets, customize with your own _includes/head-custom.html file -->
+
+<!-- Setup Google Analytics -->
+
+
+
+<!-- You can set your favicon here -->
+<!-- link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" -->
+
+<!-- end custom head snippets -->
+
+  </head>
+  <body>
+    <!-- Sidebar Toggle Button -->
+    <button id="sidebar-toggle" class="sidebar-toggle" aria-label="Toggle Sidebar">
+      <span class="toggle-icon">☰</span>
+    </button>
+
+    <!-- Sidebar Navigation -->
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <img src="/lora_craft.png" alt="LoRA Craft" class="sidebar-logo">
+        <h2 class="sidebar-title">LoRA Craft</h2>
+        <p class="sidebar-tagline">Fine-tuning with GRPO</p>
+      </div>
+
+      <nav class="sidebar-nav" id="sidebar-nav">
+        <!-- Page Navigation -->
+        <div class="page-nav">
+          <a href="/index.html" class="page-nav-link ">
+            <span class="nav-icon">⌂</span> Home
+          </a>
+          <a href="/quickstart.html" class="page-nav-link ">
+            <span class="nav-icon">▶</span> Quick Start
+          </a>
+          <a href="/features.html" class="page-nav-link ">
+            <span class="nav-icon">★</span> Features
+          </a>
+          <a href="/use-cases.html" class="page-nav-link ">
+            <span class="nav-icon">◉</span> Use Cases
+          </a>
+          <a href="/documentation.html" class="page-nav-link active">
+            <span class="nav-icon">▤</span> Documentation
+          </a>
+        </div>
+
+        <!-- Table of Contents (current page) -->
+        <div id="toc-container">
+          <!-- TOC will be injected here by JavaScript -->
+        </div>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <div id="main-container" class="main-container">
+      <a id="skip-to-content" href="#content">Skip to the content.</a>
+
+      <main id="content" class="main-content" role="main">
+        <h1 id="documentation">Documentation</h1>
+
+<p>Complete technical guide for installing, configuring, and using LoRA Craft.</p>
+
+<hr />
+
+<h2 id="table-of-contents">Table of Contents</h2>
+
+<ol>
+  <li><a href="#prerequisites">Prerequisites</a></li>
+  <li><a href="#installation">Installation</a></li>
+  <li><a href="#user-guide">User Guide</a></li>
+  <li><a href="#key-concepts">Key Concepts</a></li>
+  <li><a href="#troubleshooting">Troubleshooting</a></li>
+  <li><a href="#technical-reference">Technical Reference</a></li>
+  <li><a href="#glossary">Glossary</a></li>
+</ol>
+
+<hr />
+
+<h2 id="prerequisites">Prerequisites</h2>
+
+<h3 id="hardware-requirements">Hardware Requirements</h3>
+
+<ul>
+  <li><strong>GPU</strong>: NVIDIA GPU with CUDA support (minimum 8GB VRAM recommended)
+    <ul>
+      <li>8GB VRAM: Small models (0.6B - 1.7B parameters)</li>
+      <li>12GB VRAM: Medium models (3B - 4B parameters)</li>
+      <li>16GB+ VRAM: Large models (7B - 8B parameters)</li>
+    </ul>
+  </li>
+  <li><strong>RAM</strong>: Minimum 32GB system memory</li>
+  <li><strong>Storage</strong>: At least 20GB free disk space for models and datasets</li>
+</ul>
+
+<h3 id="software-requirements">Software Requirements</h3>
+
+<ul>
+  <li><strong>Operating System</strong>: Windows, Linux, or macOS</li>
+  <li><strong>Python</strong>: Version 3.11 or higher</li>
+  <li><strong>CUDA</strong>: CUDA Toolkit 12.8 or compatible version</li>
+  <li><strong>Git</strong>: For cloning the repository</li>
+</ul>
+
+<hr />
+
+<h2 id="installation">Installation</h2>
+
+<h3 id="step-1-clone-the-repository">Step 1: Clone the Repository</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git clone https://github.com/jwest33/lora_craft.git
+<span class="nb">cd </span>lora_craft
+</code></pre></div></div>
+
+<h3 id="step-2-install-pytorch-with-cuda-support">Step 2: Install PyTorch with CUDA Support</h3>
+
+<p>Install PyTorch with CUDA 12.8 support:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pip <span class="nb">install </span>torch torchvision <span class="nt">--index-url</span> https://download.pytorch.org/whl/cu128
+</code></pre></div></div>
+
+<p>For other CUDA versions, visit <a href="https://pytorch.org/get-started/locally/">PyTorch’s installation page</a>.</p>
+
+<h3 id="step-3-install-dependencies">Step 3: Install Dependencies</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pip <span class="nb">install</span> <span class="nt">-r</span> requirements.txt
+</code></pre></div></div>
+
+<p>This will install all required packages including:</p>
+<ul>
+  <li>Unsloth (optimized training framework)</li>
+  <li>Transformers and PEFT (model handling)</li>
+  <li>Flask and SocketIO (web interface)</li>
+  <li>Training utilities (accelerate, TRL, bitsandbytes)</li>
+</ul>
+
+<h3 id="step-4-verify-installation">Step 4: Verify Installation</h3>
+
+<p>Check that your GPU is accessible:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">python</span> <span class="o">-</span><span class="n">c</span> <span class="s">"import torch; print(f'CUDA available: {torch.cuda.is_available()}')"</span>
+</code></pre></div></div>
+
+<p>You should see <code class="language-plaintext highlighter-rouge">CUDA available: True</code>.</p>
+
+<hr />
+
+<h2 id="user-guide">User Guide</h2>
+
+<h3 id="step-1-model-selection">Step 1: Model Selection</h3>
+
+<p><img src="/example_model_selection.png" alt="Model Selection" /></p>
+
+<p>The Model Configuration page allows you to select the base model for fine-tuning.</p>
+
+<h4 id="quick-setup-options">Quick Setup Options</h4>
+
+<ul>
+  <li><strong>Recommended</strong>: Uses best default settings for most use cases</li>
+  <li><strong>Custom</strong>: Configure LoRA parameters (rank, alpha, dropout)</li>
+  <li><strong>Advanced</strong>: Full control over all training parameters</li>
+</ul>
+
+<h4 id="model-family">Model Family</h4>
+
+<p>Choose from several model families:</p>
+<ul>
+  <li><strong>Qwen3</strong>: Efficient models ranging from 0.6B to 8B parameters</li>
+  <li><strong>Llama</strong>: Popular open-source models</li>
+  <li><strong>Mistral</strong>: High-quality instruction-following models</li>
+  <li><strong>Phi</strong>: Microsoft’s compact models</li>
+</ul>
+
+<h4 id="model-size-selection">Model Size Selection</h4>
+
+<p>Select a model size based on your available VRAM:</p>
+<ul>
+  <li><strong>0.6B - 1.7B</strong>: Works on 4GB+ VRAM</li>
+  <li><strong>3B - 4B</strong>: Requires 8GB+ VRAM</li>
+  <li><strong>7B - 8B</strong>: Requires 16GB+ VRAM</li>
+</ul>
+
+<h4 id="lora-configuration-customadvanced">LoRA Configuration (Custom/Advanced)</h4>
+
+<ul>
+  <li><strong>LoRA Rank</strong>: Controls adapter capacity (typical: 8-32)</li>
+  <li><strong>LoRA Alpha</strong>: Scaling factor for adapter (typically 2x rank)</li>
+  <li><strong>LoRA Dropout</strong>: Regularization to prevent overfitting (typical: 0.0-0.1)</li>
+</ul>
+
+<h3 id="step-2-dataset-configuration">Step 2: Dataset Configuration</h3>
+
+<p><img src="/example_dataset_selection.png" alt="Dataset Selection" /></p>
+
+<p>Configure the training data for your model.</p>
+
+<h4 id="dataset-source-options">Dataset Source Options</h4>
+
+<ol>
+  <li><strong>Public Datasets</strong>: Browse curated datasets from HuggingFace
+    <ul>
+      <li>Filter by category: Math, Coding, General, Q&amp;A</li>
+      <li>View dataset size and sample count</li>
+      <li>Preview dataset samples before training</li>
+    </ul>
+  </li>
+  <li><strong>Custom HF Dataset</strong>: Enter any HuggingFace dataset path
+    <ul>
+      <li>Format: <code class="language-plaintext highlighter-rouge">username/dataset-name</code></li>
+      <li>Specify split (train, test, validation)</li>
+    </ul>
+  </li>
+  <li><strong>Upload File</strong>: Use your own data
+    <ul>
+      <li>Supported formats: JSON, JSONL, CSV, Parquet</li>
+      <li>Maximum size: 10GB</li>
+    </ul>
+  </li>
+</ol>
+
+<h4 id="popular-datasets">Popular Datasets</h4>
+
+<ul>
+  <li><strong>Alpaca</strong> (52K samples): General instruction-following</li>
+  <li><strong>GSM8K</strong> (8.5K problems): Grade school math reasoning</li>
+  <li><strong>OpenMath Reasoning</strong> (100K problems): Advanced math problems</li>
+  <li><strong>Code Alpaca</strong> (20K examples): Code generation tasks</li>
+  <li><strong>Dolly 15k</strong> (15K samples): Diverse instruction tasks</li>
+  <li><strong>Orca Math</strong> (200K problems): Math word problems</li>
+  <li><strong>SQuAD v2</strong> (130K questions): Question answering</li>
+</ul>
+
+<h4 id="field-mapping">Field Mapping</h4>
+
+<p>Map your dataset columns to expected fields:</p>
+<ul>
+  <li><strong>Instruction</strong>: The input prompt or question</li>
+  <li><strong>Response</strong>: The expected output or answer</li>
+</ul>
+
+<p>The system auto-detects common field names (question, answer, prompt, completion, etc.).</p>
+
+<h4 id="system-prompt-configuration">System Prompt Configuration</h4>
+
+<p><img src="/example_save_system_prompt.png" alt="System Prompt" /></p>
+
+<p>Define the instruction format for your model:</p>
+<ul>
+  <li><strong>Template Type</strong>: Choose GRPO Default or create custom templates</li>
+  <li><strong>System Prompt</strong>: Instructions given to the model</li>
+  <li><strong>Reasoning Markers</strong>: Tags to structure model thinking process</li>
+  <li><strong>Solution Markers</strong>: Tags to identify final answers</li>
+</ul>
+
+<h3 id="step-3-training-configuration">Step 3: Training Configuration</h3>
+
+<p>Configure hyperparameters for the training process.</p>
+
+<h4 id="essential-parameters">Essential Parameters</h4>
+
+<p><strong>Training Duration</strong></p>
+<ul>
+  <li><strong>Epochs</strong>: Number of complete passes through the dataset (typical: 1-5)</li>
+  <li><strong>Samples Per Epoch</strong>: Limit samples per epoch, or use “All” for full dataset</li>
+</ul>
+
+<p><strong>Batch Settings</strong></p>
+<ul>
+  <li><strong>Batch Size</strong>: Samples processed simultaneously (typical: 1-4)</li>
+  <li><strong>Gradient Accumulation Steps</strong>: Effective batch size multiplier (typical: 4-8)
+    <ul>
+      <li>Effective batch size = batch_size × gradient_accumulation_steps</li>
+    </ul>
+  </li>
+</ul>
+
+<p><strong>Learning Rate</strong></p>
+<ul>
+  <li><strong>Learning Rate</strong>: Step size for model updates (typical: 5e-5 to 5e-4)</li>
+  <li><strong>Warmup Steps</strong>: Gradual learning rate increase at start (typical: 10-100)</li>
+  <li><strong>LR Scheduler</strong>: Learning rate adjustment strategy
+    <ul>
+      <li><code class="language-plaintext highlighter-rouge">constant</code>: No change during training</li>
+      <li><code class="language-plaintext highlighter-rouge">linear</code>: Linear decay from peak to zero</li>
+      <li><code class="language-plaintext highlighter-rouge">cosine</code>: Smooth cosine decay</li>
+    </ul>
+  </li>
+</ul>
+
+<p><strong>Optimization</strong></p>
+<ul>
+  <li><strong>Optimizer</strong>: Algorithm for updating model weights
+    <ul>
+      <li><code class="language-plaintext highlighter-rouge">paged_adamw_32bit</code>: Memory-efficient (recommended)</li>
+      <li><code class="language-plaintext highlighter-rouge">adamw_8bit</code>: More memory-efficient</li>
+    </ul>
+  </li>
+  <li><strong>Weight Decay</strong>: Regularization to prevent overfitting (typical: 0.001-0.01)</li>
+  <li><strong>Max Gradient Norm</strong>: Gradient clipping threshold (typical: 0.3-1.0)</li>
+</ul>
+
+<h4 id="grpo-specific-parameters">GRPO-Specific Parameters</h4>
+
+<ul>
+  <li><strong>KL Penalty</strong>: Prevents model from deviating too far from base model (typical: 0.01-0.1)</li>
+  <li><strong>Clip Range</strong>: PPO-style clipping for stable training (typical: 0.2)</li>
+  <li><strong>Importance Sampling Level</strong>: Token-level or sequence-level weighting</li>
+</ul>
+
+<h4 id="generation-parameters">Generation Parameters</h4>
+
+<ul>
+  <li><strong>Max Sequence Length</strong>: Maximum input length in tokens (typical: 1024-4096)</li>
+  <li><strong>Max New Tokens</strong>: Maximum generated response length (typical: 256-1024)</li>
+  <li><strong>Temperature</strong>: Randomness in generation (0.7 = balanced, lower = deterministic)</li>
+  <li><strong>Top-P</strong>: Nucleus sampling threshold (typical: 0.9-0.95)</li>
+</ul>
+
+<h4 id="pre-training-phase">Pre-training Phase</h4>
+
+<p>Optional supervised fine-tuning phase before GRPO:</p>
+<ul>
+  <li><strong>Enabled</strong>: Toggle pre-training on/off</li>
+  <li><strong>Epochs</strong>: Number of pre-training epochs (typical: 1-2)</li>
+  <li><strong>Max Samples</strong>: Limit pre-training samples (or use “All”)</li>
+  <li><strong>Learning Rate</strong>: Separate learning rate for pre-training (typical: 5e-5)</li>
+</ul>
+
+<p>Pre-training helps the model learn output formatting before reinforcement learning.</p>
+
+<h3 id="step-4-reward-functions">Step 4: Reward Functions</h3>
+
+<p><img src="/example_reward_catalog.png" alt="Reward Catalog" /></p>
+
+<p>Reward functions evaluate model outputs and guide training. Choose functions that match your task.</p>
+
+<h4 id="reward-function-categories">Reward Function Categories</h4>
+
+<p><strong>Algorithm Implementation</strong></p>
+<ul>
+  <li>Rewards correct algorithm implementation with efficiency considerations</li>
+  <li>Use for: Code generation, algorithm design</li>
+</ul>
+
+<p><strong>Chain of Thought</strong></p>
+<ul>
+  <li>Rewards step-by-step reasoning processes</li>
+  <li>Use for: Math problems, logical reasoning, complex analysis</li>
+</ul>
+
+<p><strong>Citation Format</strong></p>
+<ul>
+  <li>Rewards proper citation formatting (APA/MLA style)</li>
+  <li>Use for: Academic writing, research tasks</li>
+</ul>
+
+<p><strong>Code Generation</strong></p>
+<ul>
+  <li>Rewards well-formatted code with proper syntax and structure</li>
+  <li>Use for: Programming tasks, code completion</li>
+</ul>
+
+<p><strong>Concise Summarization</strong></p>
+<ul>
+  <li>Rewards accurate, concise summaries that capture key points</li>
+  <li>Use for: Text summarization, data reporting</li>
+</ul>
+
+<p><strong>Creative Writing</strong></p>
+<ul>
+  <li>Rewards engaging text with good flow and vocabulary</li>
+  <li>Use for: Content generation, storytelling</li>
+</ul>
+
+<p><strong>Math &amp; Science</strong></p>
+<ul>
+  <li>Rewards correct mathematical solutions and scientific accuracy</li>
+  <li>Use for: Math problems, scientific reasoning</li>
+</ul>
+
+<p><strong>Programming</strong></p>
+<ul>
+  <li>Rewards executable, efficient code</li>
+  <li>Use for: Software development tasks</li>
+</ul>
+
+<p><strong>Reasoning</strong></p>
+<ul>
+  <li>Rewards logical reasoning and inference</li>
+  <li>Use for: General problem-solving</li>
+</ul>
+
+<p><strong>Question Answering</strong></p>
+<ul>
+  <li>Rewards accurate, relevant answers</li>
+  <li>Use for: Q&amp;A systems, information retrieval</li>
+</ul>
+
+<h4 id="configuring-reward-functions">Configuring Reward Functions</h4>
+
+<p><img src="/example_reward_function_mapping.png" alt="Reward Function Mapping" /></p>
+
+<ol>
+  <li>
+    <p><strong>Select Algorithm Type</strong>: GRPO (standard), GSPO (sequence-level), or OR-GRPO (robust variant)</p>
+  </li>
+  <li><strong>Choose Reward Source</strong>:
+    <ul>
+      <li><strong>Quick Start</strong>: Auto-configured based on dataset</li>
+      <li><strong>Preset Library</strong>: Browse categorized reward functions</li>
+      <li><strong>Custom Builder</strong>: Create custom reward logic (advanced)</li>
+    </ul>
+  </li>
+  <li><strong>Map Dataset Fields</strong>:
+    <ul>
+      <li><strong>Instruction</strong>: Field containing the input prompt</li>
+      <li><strong>Response</strong>: Field containing the expected output</li>
+      <li>Additional fields may be required depending on the reward function</li>
+    </ul>
+  </li>
+  <li><strong>Test Reward</strong>: Verify reward function works with sample data before training</li>
+</ol>
+
+<h3 id="step-5-training--monitoring">Step 5: Training &amp; Monitoring</h3>
+
+<p><img src="/example_training_metrics.png" alt="Training Metrics" /></p>
+
+<p>Once training starts, monitor progress through real-time metrics.</p>
+
+<h4 id="training-metrics-dashboard">Training Metrics Dashboard</h4>
+
+<p><strong>Top Metrics Bar</strong></p>
+<ul>
+  <li><strong>KL Divergence</strong>: Measures model deviation from base model (lower is more conservative)</li>
+  <li><strong>Completion Length</strong>: Average length of generated responses</li>
+  <li><strong>Clipped Ratio</strong>: Percentage of updates clipped by PPO (indicates training stability)</li>
+  <li><strong>Clip Reason</strong>: Whether clipping is due to min or max bounds</li>
+  <li><strong>Grad Norm</strong>: Gradient magnitude (monitors training health)</li>
+</ul>
+
+<p><strong>Reward Metrics Chart</strong></p>
+<ul>
+  <li><strong>Mean Reward</strong>: Average reward across training samples</li>
+  <li><strong>Reward Std</strong>: Standard deviation of rewards (measures consistency)</li>
+  <li>Tracks how well the model is learning to maximize rewards</li>
+</ul>
+
+<p><strong>Training Loss Chart</strong></p>
+<ul>
+  <li><strong>Training Loss</strong>: Primary optimization objective</li>
+  <li><strong>Validation Loss</strong>: Performance on held-out data (if validation set provided)</li>
+  <li>Both should decrease over time</li>
+</ul>
+
+<p><strong>KL Divergence Chart</strong></p>
+<ul>
+  <li>Tracks how much the model diverges from the base model</li>
+  <li>Should remain relatively stable (controlled by KL penalty)</li>
+</ul>
+
+<p><strong>Completion Length Statistics</strong></p>
+<ul>
+  <li><strong>Mean Length</strong>: Average response length</li>
+  <li><strong>Min Length</strong>: Shortest response</li>
+  <li><strong>Max Length</strong>: Longest response</li>
+  <li>Helps identify if model is generating appropriate response lengths</li>
+</ul>
+
+<p><strong>Policy Clip Ratios</strong></p>
+<ul>
+  <li><strong>Target Mean</strong>: Desired clip ratio</li>
+  <li><strong>Clip Mean</strong>: Actual clip ratio</li>
+  <li><strong>Clip Median</strong>: Median clip ratio</li>
+  <li>Indicates training stability (high clipping = aggressive updates)</li>
+</ul>
+
+<p><strong>Learning Rate Schedule</strong></p>
+<ul>
+  <li>Shows learning rate over training steps</li>
+  <li>Helps verify scheduler configuration</li>
+</ul>
+
+<h4 id="training-controls">Training Controls</h4>
+
+<ul>
+  <li><strong>Stop Training</strong>: Gracefully halt training and save current checkpoint</li>
+  <li><strong>View Logs</strong>: Access detailed training logs</li>
+  <li><strong>Session Management</strong>: Track multiple training sessions</li>
+</ul>
+
+<h4 id="training-sessions">Training Sessions</h4>
+
+<p>The left sidebar shows all training sessions:</p>
+<ul>
+  <li>Active sessions show real-time status</li>
+  <li>Completed sessions remain available for review</li>
+  <li>Click a session to view its metrics and model path</li>
+</ul>
+
+<h3 id="step-6-model-export">Step 6: Model Export</h3>
+
+<p>After training completes, export your model for deployment.</p>
+
+<h4 id="export-formats">Export Formats</h4>
+
+<p><strong>HuggingFace Format</strong></p>
+<ul>
+  <li>Standard format for Transformers library</li>
+  <li>Includes base model + LoRA adapter</li>
+  <li>Location: <code class="language-plaintext highlighter-rouge">outputs/&lt;session_id&gt;/</code></li>
+</ul>
+
+<p><strong>GGUF Format</strong></p>
+<ul>
+  <li>Optimized format for llama.cpp, Ollama, LM Studio</li>
+  <li>Multiple quantization levels available:
+    <ul>
+      <li><strong>Q4_K_M</strong>: 4-bit quantization (balanced)</li>
+      <li><strong>Q5_K_M</strong>: 5-bit quantization (higher quality)</li>
+      <li><strong>Q8_0</strong>: 8-bit quantization (best quality)</li>
+      <li><strong>F16</strong>: 16-bit floating point (no quantization)</li>
+    </ul>
+  </li>
+  <li>Location: <code class="language-plaintext highlighter-rouge">exports/&lt;session_id&gt;/</code></li>
+</ul>
+
+<h4 id="quantization-options">Quantization Options</h4>
+
+<p>Quantization reduces model size for deployment:</p>
+<ul>
+  <li><strong>Q4_K_M</strong>: ~4GB for 7B model (recommended for most users)</li>
+  <li><strong>Q5_K_M</strong>: ~5GB for 7B model (better quality)</li>
+  <li><strong>Q8_0</strong>: ~8GB for 7B model (minimal quality loss)</li>
+  <li><strong>F16</strong>: ~14GB for 7B model (no quality loss)</li>
+</ul>
+
+<h4 id="using-exported-models">Using Exported Models</h4>
+
+<p><strong>With llama.cpp</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>./main <span class="nt">-m</span> exports/&lt;session_id&gt;/model-q4_k_m.gguf <span class="nt">-p</span> <span class="s2">"Your prompt here"</span>
+</code></pre></div></div>
+
+<p><strong>With Ollama</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>ollama create my-model <span class="nt">-f</span> exports/&lt;session_id&gt;/Modelfile
+ollama run my-model
+</code></pre></div></div>
+
+<p><strong>With LM Studio</strong></p>
+<ul>
+  <li>Open LM Studio</li>
+  <li>Navigate to “Local Models”</li>
+  <li>Click “Import” and select your GGUF file</li>
+</ul>
+
+<h3 id="step-7-testing-models">Step 7: Testing Models</h3>
+
+<p><img src="/example_stock_trade_question.png" alt="Testing Model" /></p>
+
+<p>Test your fine-tuned model with custom prompts.</p>
+
+<h4 id="interactive-testing">Interactive Testing</h4>
+
+<ol>
+  <li><strong>Select Model</strong>: Choose from trained models or active training sessions</li>
+  <li><strong>Enter Prompt</strong>: Type or paste your test question</li>
+  <li><strong>Configure Generation</strong>:
+    <ul>
+      <li><strong>Temperature</strong>: Control randomness (0.1 = deterministic, 1.0 = creative)</li>
+      <li><strong>Max Tokens</strong>: Maximum response length</li>
+      <li><strong>Top-P</strong>: Nucleus sampling threshold</li>
+    </ul>
+  </li>
+  <li><strong>Generate</strong>: Click “Test Model” to generate response</li>
+</ol>
+
+<h4 id="batch-testing">Batch Testing</h4>
+
+<p>Test multiple prompts at once:</p>
+<ol>
+  <li>Upload a file with test prompts (one per line)</li>
+  <li>Configure generation parameters</li>
+  <li>Run batch test</li>
+  <li>Export results to JSON or CSV</li>
+</ol>
+
+<h4 id="evaluation-with-reward-functions">Evaluation with Reward Functions</h4>
+
+<p>Evaluate model outputs using the same reward functions from training:</p>
+<ol>
+  <li>Select reward function</li>
+  <li>Enter prompt and expected response</li>
+  <li>Generate model output</li>
+  <li>View reward score and feedback</li>
+</ol>
+
+<p>This helps quantify model improvement on your specific task.</p>
+
+<hr />
+
+<h2 id="key-concepts">Key Concepts</h2>
+
+<h3 id="what-is-grpo-group-relative-policy-optimization">What is GRPO (Group Relative Policy Optimization)?</h3>
+
+<p>GRPO is a reinforcement learning algorithm for training language models. Unlike supervised learning (which simply teaches the model to imitate examples), GRPO teaches the model to maximize rewards.</p>
+
+<p><strong>How GRPO Works:</strong></p>
+<ol>
+  <li>Model generates multiple responses for each prompt</li>
+  <li>Reward function scores each response</li>
+  <li>Model learns to increase probability of high-reward responses</li>
+  <li>Model learns to decrease probability of low-reward responses</li>
+</ol>
+
+<p><strong>Benefits:</strong></p>
+<ul>
+  <li>Models learn to optimize for specific objectives (correctness, format, style)</li>
+  <li>Better generalization than pure supervised learning</li>
+  <li>Can improve beyond training data quality</li>
+</ul>
+
+<p><strong>GRPO vs Other Algorithms:</strong></p>
+<ul>
+  <li><strong>GRPO</strong>: Token-level importance weighting (standard)</li>
+  <li><strong>GSPO</strong>: Sequence-level optimization (simpler, less granular)</li>
+  <li><strong>OR-GRPO</strong>: Outlier-robust variant (handles noisy rewards better)</li>
+</ul>
+
+<h3 id="what-are-lora-adapters">What are LoRA Adapters?</h3>
+
+<p>LoRA (Low-Rank Adaptation) is a parameter-efficient fine-tuning method.</p>
+
+<p><strong>Key Concepts:</strong></p>
+<ul>
+  <li>Instead of updating all model parameters (billions), LoRA adds small “adapter” layers</li>
+  <li>Adapters are typically 1-2% the size of the full model</li>
+  <li>Base model remains frozen, only adapters are trained</li>
+  <li>Multiple adapters can be applied to the same base model</li>
+</ul>
+
+<p><strong>Benefits:</strong></p>
+<ul>
+  <li><strong>Memory Efficient</strong>: Train on consumer GPUs (4-8GB VRAM)</li>
+  <li><strong>Fast Training</strong>: Fewer parameters to update</li>
+  <li><strong>Easy Sharing</strong>: Adapter files are small (typically 10-100MB)</li>
+  <li><strong>Modular</strong>: Switch adapters for different tasks</li>
+</ul>
+
+<p><strong>LoRA Parameters:</strong></p>
+<ul>
+  <li><strong>Rank</strong>: Number of dimensions in adapter (higher = more capacity, slower training)</li>
+  <li><strong>Alpha</strong>: Scaling factor (controls adapter influence)</li>
+  <li><strong>Dropout</strong>: Regularization to prevent overfitting</li>
+</ul>
+
+<h3 id="understanding-reward-functions">Understanding Reward Functions</h3>
+
+<p>Reward functions are Python functions that evaluate model outputs and return scores.</p>
+
+<p><strong>Components of a Reward Function:</strong></p>
+<ol>
+  <li><strong>Input</strong>: Model’s generated response + reference data</li>
+  <li><strong>Evaluation Logic</strong>: Checks correctness, format, quality</li>
+  <li><strong>Output</strong>: Numerical score (typically 0.0 to 1.0)</li>
+</ol>
+
+<p><strong>Example: Math Reward Function</strong></p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">math_reward</span><span class="p">(</span><span class="n">response</span><span class="p">,</span> <span class="n">expected_answer</span><span class="p">):</span>
+    <span class="c1"># Extract answer from response
+</span>    <span class="n">model_answer</span> <span class="o">=</span> <span class="n">extract_solution</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
+
+    <span class="c1"># Check correctness
+</span>    <span class="k">if</span> <span class="n">model_answer</span> <span class="o">==</span> <span class="n">expected_answer</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mf">1.0</span>  <span class="c1"># Correct
+</span>    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mf">0.0</span>  <span class="c1"># Incorrect
+</span></code></pre></div></div>
+
+<p><strong>Types of Reward Functions:</strong></p>
+<ul>
+  <li><strong>Exact Match</strong>: Binary reward (correct/incorrect)</li>
+  <li><strong>Partial Credit</strong>: Gradual scoring (0.0 to 1.0)</li>
+  <li><strong>Multi-Component</strong>: Combines multiple criteria (correctness + format + efficiency)</li>
+  <li><strong>Heuristic</strong>: Rule-based evaluation</li>
+  <li><strong>Model-Based</strong>: Uses another model to evaluate quality</li>
+</ul>
+
+<p><strong>Best Practices:</strong></p>
+<ul>
+  <li>Start with simple, interpretable reward functions</li>
+  <li>Ensure rewards align with your desired behavior</li>
+  <li>Test rewards on sample data before training</li>
+  <li>Monitor reward distributions during training</li>
+</ul>
+
+<h3 id="understanding-system-prompts">Understanding System Prompts</h3>
+
+<p>System prompts define the instruction format and expected output structure.</p>
+
+<p><strong>Components:</strong></p>
+<ul>
+  <li><strong>System Message</strong>: High-level instructions for the model</li>
+  <li><strong>Instruction Template</strong>: How to format input prompts</li>
+  <li><strong>Response Template</strong>: Expected output structure</li>
+  <li><strong>Special Markers</strong>: Tags for reasoning and solutions</li>
+</ul>
+
+<p><strong>Example System Prompt (GRPO Default):</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>You are given a problem.
+Think about the problem and provide your working out.
+Place it between &lt;start_working_out&gt; and &lt;end_working_out&gt;.
+Then, provide your solution between &lt;SOLUTION&gt;&lt;/SOLUTION&gt;
+</code></pre></div></div>
+
+<p><strong>Why Use Structured Outputs?</strong></p>
+<ul>
+  <li>Separates reasoning from final answer</li>
+  <li>Makes reward function evaluation easier</li>
+  <li>Improves model interpretability</li>
+  <li>Enables extraction of specific components</li>
+</ul>
+
+<hr />
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+
+<h3 id="gpu-memory-issues">GPU Memory Issues</h3>
+
+<p><strong>Problem</strong>: “CUDA out of memory” error during training</p>
+
+<p><strong>Solutions:</strong></p>
+<ol>
+  <li>Reduce batch size to 1</li>
+  <li>Increase gradient accumulation steps (maintains effective batch size)</li>
+  <li>Reduce max sequence length (e.g., 2048 → 1024)</li>
+  <li>Use smaller model (e.g., 1.7B instead of 4B)</li>
+  <li>Enable gradient checkpointing (trades compute for memory)</li>
+  <li>Use 8-bit or 4-bit quantization (reduces memory usage)</li>
+</ol>
+
+<h3 id="training-not-starting">Training Not Starting</h3>
+
+<p><strong>Problem</strong>: Training session created but doesn’t start</p>
+
+<p><strong>Solutions:</strong></p>
+<ol>
+  <li>Check logs folder for error messages (<code class="language-plaintext highlighter-rouge">logs/</code>)</li>
+  <li>Verify dataset downloaded successfully (check <code class="language-plaintext highlighter-rouge">cache/</code> folder)</li>
+  <li>Ensure reward function is properly configured</li>
+  <li>Check that all required fields are mapped</li>
+  <li>Restart the Flask server and try again</li>
+</ol>
+
+<h3 id="dataset-loading-errors">Dataset Loading Errors</h3>
+
+<p><strong>Problem</strong>: “Failed to load dataset” error</p>
+
+<p><strong>Solutions:</strong></p>
+<ol>
+  <li>Verify dataset name is correct (case-sensitive)</li>
+  <li>Check internet connection for HuggingFace downloads</li>
+  <li>For uploaded files, verify format:
+    <ul>
+      <li>JSON: Must be list of objects or object with data field</li>
+      <li>JSONL: One JSON object per line</li>
+      <li>CSV: Must have column headers</li>
+      <li>Parquet: Standard Apache Parquet format</li>
+    </ul>
+  </li>
+  <li>Ensure instruction and response fields exist in dataset</li>
+</ol>
+
+<h3 id="slow-training-speed">Slow Training Speed</h3>
+
+<p><strong>Problem</strong>: Training is slower than expected</p>
+
+<p><strong>Solutions:</strong></p>
+<ol>
+  <li>Verify GPU is being used: Check system monitoring (top bar should show GPU usage)</li>
+  <li>Reduce gradient accumulation steps (increases update frequency)</li>
+  <li>Enable flash attention if using supported model (Llama, Mistral)</li>
+  <li>Disable gradient checkpointing if memory allows</li>
+  <li>Use larger batch size if VRAM permits</li>
+  <li>Check that CUDA and PyTorch are properly installed</li>
+</ol>
+
+<h3 id="model-generation-quality-issues">Model Generation Quality Issues</h3>
+
+<p><strong>Problem</strong>: Model outputs are nonsensical or low quality</p>
+
+<p><strong>Solutions:</strong></p>
+<ol>
+  <li><strong>Check reward signal</strong>: Ensure rewards are varying (not all 0.0 or 1.0)</li>
+  <li><strong>Increase pre-training epochs</strong>: Model needs to learn format first</li>
+  <li><strong>Adjust KL penalty</strong>: Lower values allow more deviation from base model</li>
+  <li><strong>Verify dataset quality</strong>: Check that training data is clean and relevant</li>
+  <li><strong>Increase training epochs</strong>: Model may need more training time</li>
+  <li><strong>Check system prompt</strong>: Ensure it clearly describes expected output format</li>
+  <li><strong>Test with different temperatures</strong>: Lower temperature (0.3-0.5) for more deterministic outputs</li>
+</ol>
+
+<h3 id="websocket-connection-issues">WebSocket Connection Issues</h3>
+
+<p><strong>Problem</strong>: Real-time metrics not updating</p>
+
+<p><strong>Solutions:</strong></p>
+<ol>
+  <li>Refresh browser page</li>
+  <li>Check browser console for WebSocket errors (F12)</li>
+  <li>Verify Flask server is running</li>
+  <li>Check firewall settings (port 5000 must be accessible)</li>
+  <li>Try a different browser (Chrome/Firefox recommended)</li>
+</ol>
+
+<h3 id="export-failures">Export Failures</h3>
+
+<p><strong>Problem</strong>: GGUF export fails or produces invalid files</p>
+
+<p><strong>Solutions:</strong></p>
+<ol>
+  <li>Ensure training completed successfully</li>
+  <li>Check that model checkpoint exists (<code class="language-plaintext highlighter-rouge">outputs/&lt;session_id&gt;/</code>)</li>
+  <li>Verify sufficient disk space for export</li>
+  <li>Check logs for llama.cpp converter errors</li>
+  <li>Try exporting with different quantization level</li>
+</ol>
+
+<hr />
+
+<h2 id="technical-reference">Technical Reference</h2>
+
+<h3 id="api-endpoints">API Endpoints</h3>
+
+<p>The Flask server provides RESTful API endpoints for programmatic access.</p>
+
+<h4 id="training-endpoints">Training Endpoints</h4>
+
+<p><strong>Start Training</strong></p>
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">POST /api/training/start
+Content-Type: application/json
+
+{
+  "session_id": "unique-id",
+  "config": { ... training configuration ... }
+}
+</span></code></pre></div></div>
+
+<p><strong>Stop Training</strong></p>
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">POST /api/training/stop
+Content-Type: application/json
+
+{
+  "session_id": "session-id-to-stop"
+}
+</span></code></pre></div></div>
+
+<p><strong>List Training Sessions</strong></p>
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">GET /api/training/sessions
+</span></code></pre></div></div>
+
+<h4 id="dataset-endpoints">Dataset Endpoints</h4>
+
+<p><strong>List Datasets</strong></p>
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">GET /api/datasets/list
+</span></code></pre></div></div>
+
+<p><strong>Upload Dataset</strong></p>
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">POST /api/datasets/upload
+Content-Type: multipart/form-data
+
+file=@dataset.json
+</span></code></pre></div></div>
+
+<p><strong>Preview Dataset</strong></p>
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">POST /api/datasets/preview
+Content-Type: application/json
+
+{
+  "path": "tatsu-lab/alpaca",
+  "samples": 5
+}
+</span></code></pre></div></div>
+
+<h4 id="model-endpoints">Model Endpoints</h4>
+
+<p><strong>Test Model</strong></p>
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">POST /api/models/test
+Content-Type: application/json
+
+{
+  "model_path": "outputs/session-id/",
+  "prompt": "What is 2+2?",
+  "temperature": 0.7,
+  "max_tokens": 256
+}
+</span></code></pre></div></div>
+
+<p><strong>List Trained Models</strong></p>
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">GET /api/models/list
+</span></code></pre></div></div>
+
+<p><strong>Export Model</strong></p>
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">POST /api/exports/create
+Content-Type: application/json
+
+{
+  "session_id": "session-id",
+  "format": "gguf",
+  "quantization": "q4_k_m"
+}
+</span></code></pre></div></div>
+
+<h4 id="configuration-endpoints">Configuration Endpoints</h4>
+
+<p><strong>Save Configuration</strong></p>
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">POST /api/configs/save
+Content-Type: application/json
+
+{
+  "name": "my-config",
+  "config": { ... configuration object ... }
+}
+</span></code></pre></div></div>
+
+<p><strong>Load Configuration</strong></p>
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">GET /api/configs/load?name=my-config
+</span></code></pre></div></div>
+
+<p><strong>List Configurations</strong></p>
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">GET /api/configs/list
+</span></code></pre></div></div>
+
+<h3 id="websocket-events">WebSocket Events</h3>
+
+<p>Real-time updates are delivered via Socket.IO.</p>
+
+<p><strong>Connect to Socket</strong></p>
+<div class="language-javascript highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">socket</span> <span class="o">=</span> <span class="nx">io</span><span class="p">(</span><span class="dl">'</span><span class="s1">http://localhost:5000</span><span class="dl">'</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p><strong>Subscribe to Training Updates</strong></p>
+<div class="language-javascript highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nx">socket</span><span class="p">.</span><span class="nx">on</span><span class="p">(</span><span class="dl">'</span><span class="s1">training_update</span><span class="dl">'</span><span class="p">,</span> <span class="p">(</span><span class="nx">data</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="dl">'</span><span class="s1">Step:</span><span class="dl">'</span><span class="p">,</span> <span class="nx">data</span><span class="p">.</span><span class="nx">step</span><span class="p">);</span>
+  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="dl">'</span><span class="s1">Loss:</span><span class="dl">'</span><span class="p">,</span> <span class="nx">data</span><span class="p">.</span><span class="nx">loss</span><span class="p">);</span>
+  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="dl">'</span><span class="s1">Reward:</span><span class="dl">'</span><span class="p">,</span> <span class="nx">data</span><span class="p">.</span><span class="nx">reward</span><span class="p">);</span>
+<span class="p">});</span>
+</code></pre></div></div>
+
+<p><strong>Subscribe to System Updates</strong></p>
+<div class="language-javascript highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nx">socket</span><span class="p">.</span><span class="nx">on</span><span class="p">(</span><span class="dl">'</span><span class="s1">system_update</span><span class="dl">'</span><span class="p">,</span> <span class="p">(</span><span class="nx">data</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="dl">'</span><span class="s1">GPU Memory:</span><span class="dl">'</span><span class="p">,</span> <span class="nx">data</span><span class="p">.</span><span class="nx">gpu_memory</span><span class="p">);</span>
+  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="dl">'</span><span class="s1">GPU Utilization:</span><span class="dl">'</span><span class="p">,</span> <span class="nx">data</span><span class="p">.</span><span class="nx">gpu_utilization</span><span class="p">);</span>
+<span class="p">});</span>
+</code></pre></div></div>
+
+<h3 id="configuration-file-format">Configuration File Format</h3>
+
+<p>Saved configurations are stored as JSON in the <code class="language-plaintext highlighter-rouge">configs/</code> directory.</p>
+
+<p><strong>Example Configuration:</strong></p>
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"math-reasoning-config"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"model"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"unsloth/Qwen3-1.7B"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"lora_rank"</span><span class="p">:</span><span class="w"> </span><span class="mi">16</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"lora_alpha"</span><span class="p">:</span><span class="w"> </span><span class="mi">32</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"lora_dropout"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.0</span><span class="w">
+  </span><span class="p">},</span><span class="w">
+  </span><span class="nl">"dataset"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"source"</span><span class="p">:</span><span class="w"> </span><span class="s2">"openai/gsm8k"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"split"</span><span class="p">:</span><span class="w"> </span><span class="s2">"train"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"instruction_field"</span><span class="p">:</span><span class="w"> </span><span class="s2">"question"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"response_field"</span><span class="p">:</span><span class="w"> </span><span class="s2">"answer"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"max_samples"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="w">
+  </span><span class="p">},</span><span class="w">
+  </span><span class="nl">"training"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"num_epochs"</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"batch_size"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"gradient_accumulation_steps"</span><span class="p">:</span><span class="w"> </span><span class="mi">8</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"learning_rate"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.0002</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"warmup_steps"</span><span class="p">:</span><span class="w"> </span><span class="mi">10</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"weight_decay"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.001</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"max_grad_norm"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.3</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"lr_scheduler_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"constant"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"optim"</span><span class="p">:</span><span class="w"> </span><span class="s2">"paged_adamw_32bit"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"max_sequence_length"</span><span class="p">:</span><span class="w"> </span><span class="mi">2048</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"max_new_tokens"</span><span class="p">:</span><span class="w"> </span><span class="mi">512</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"temperature"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.7</span><span class="w">
+  </span><span class="p">},</span><span class="w">
+  </span><span class="nl">"grpo"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"kl_penalty"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.05</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"clip_range"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.2</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"importance_sampling_level"</span><span class="p">:</span><span class="w"> </span><span class="s2">"token"</span><span class="w">
+  </span><span class="p">},</span><span class="w">
+  </span><span class="nl">"reward"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"preset"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"preset_name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"math"</span><span class="w">
+  </span><span class="p">},</span><span class="w">
+  </span><span class="nl">"pre_training"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"enabled"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"epochs"</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"max_samples"</span><span class="p">:</span><span class="w"> </span><span class="mi">100</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"learning_rate"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.00005</span><span class="w">
+  </span><span class="p">}</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<h3 id="supported-dataset-formats">Supported Dataset Formats</h3>
+
+<p><strong>JSON Format</strong></p>
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">[</span><span class="w">
+  </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"instruction"</span><span class="p">:</span><span class="w"> </span><span class="s2">"What is the capital of France?"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"response"</span><span class="p">:</span><span class="w"> </span><span class="s2">"The capital of France is Paris."</span><span class="w">
+  </span><span class="p">},</span><span class="w">
+  </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"instruction"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Solve 2+2"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"response"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2+2 = 4"</span><span class="w">
+  </span><span class="p">}</span><span class="w">
+</span><span class="p">]</span><span class="w">
+</span></code></pre></div></div>
+
+<p><strong>JSONL Format</strong></p>
+<pre><code class="language-jsonl">{"instruction": "What is the capital of France?", "response": "The capital of France is Paris."}
+{"instruction": "Solve 2+2", "response": "2+2 = 4"}
+</code></pre>
+
+<p><strong>CSV Format</strong></p>
+<pre><code class="language-csv">instruction,response
+"What is the capital of France?","The capital of France is Paris."
+"Solve 2+2","2+2 = 4"
+</code></pre>
+
+<p><strong>Parquet Format</strong></p>
+<ul>
+  <li>Standard Apache Parquet files with <code class="language-plaintext highlighter-rouge">instruction</code> and <code class="language-plaintext highlighter-rouge">response</code> columns</li>
+  <li>Supports nested structures and efficient compression</li>
+</ul>
+
+<h3 id="directory-structure">Directory Structure</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>lora_craft/
+├── cache/              # Cached datasets from HuggingFace
+├── configs/            # Saved training configurations
+├── core/               # Core training logic
+├── docs/               # Documentation and example images
+├── exports/            # Exported models (GGUF, etc.)
+├── logs/               # Application and training logs
+├── outputs/            # Training outputs (model checkpoints)
+├── routes/             # Flask API routes
+├── services/           # Business logic services
+├── static/             # Static web assets (CSS, JS, images)
+├── templates/          # HTML templates
+├── uploads/            # Uploaded dataset files
+├── utils/              # Utility functions
+├── websockets/         # WebSocket handlers
+├── flask_app.py        # Application entry point
+├── app_factory.py      # Flask application factory
+├── constants.py        # Application constants
+└── requirements.txt    # Python dependencies
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="glossary">Glossary</h2>
+
+<p><strong>Adapter</strong>: Small trainable module added to a frozen base model (see LoRA)</p>
+
+<p><strong>Base Model</strong>: Pre-trained language model before fine-tuning</p>
+
+<p><strong>Batch Size</strong>: Number of samples processed simultaneously during training</p>
+
+<p><strong>CUDA</strong>: NVIDIA’s parallel computing platform for GPU acceleration</p>
+
+<p><strong>Epoch</strong>: One complete pass through the entire training dataset</p>
+
+<p><strong>Fine-tuning</strong>: Training a pre-trained model on new data for a specific task</p>
+
+<p><strong>GGUF</strong>: File format for quantized models (used by llama.cpp ecosystem)</p>
+
+<p><strong>Gradient Accumulation</strong>: Technique to simulate larger batch sizes with limited memory</p>
+
+<p><strong>Gradient Clipping</strong>: Technique to prevent exploding gradients by limiting their magnitude</p>
+
+<p><strong>GRPO</strong>: Group Relative Policy Optimization (reinforcement learning algorithm)</p>
+
+<p><strong>KL Divergence</strong>: Measure of how much the fine-tuned model differs from the base model</p>
+
+<p><strong>Learning Rate</strong>: Step size for model parameter updates</p>
+
+<p><strong>LoRA</strong>: Low-Rank Adaptation (parameter-efficient fine-tuning method)</p>
+
+<p><strong>Quantization</strong>: Reducing model precision (e.g., from 16-bit to 4-bit) to save memory</p>
+
+<p><strong>Reinforcement Learning</strong>: Training paradigm where model learns from reward signals</p>
+
+<p><strong>Reward Function</strong>: Function that evaluates model outputs and assigns scores</p>
+
+<p><strong>System Prompt</strong>: Instructions that define expected model behavior and output format</p>
+
+<p><strong>Token</strong>: Smallest unit of text processed by language models (roughly 3/4 of a word)</p>
+
+<p><strong>VRAM</strong>: Video RAM (GPU memory)</p>
+
+<p><strong>Warmup</strong>: Gradual increase of learning rate at training start</p>
+
+<hr />
+
+<h2 id="additional-resources">Additional Resources</h2>
+
+<p><strong>Documentation</strong></p>
+<ul>
+  <li><a href="https://docs.unsloth.ai/">Unsloth Documentation</a></li>
+  <li><a href="https://huggingface.co/docs/transformers/">HuggingFace Transformers</a></li>
+  <li><a href="https://huggingface.co/docs/peft/">PEFT Library</a></li>
+  <li><a href="https://huggingface.co/docs/trl/">TRL (Transformer Reinforcement Learning)</a></li>
+</ul>
+
+<p><strong>Model Sources</strong></p>
+<ul>
+  <li><a href="https://huggingface.co/models">HuggingFace Model Hub</a></li>
+  <li><a href="https://huggingface.co/unsloth">Unsloth Model Zoo</a></li>
+</ul>
+
+<p><strong>Dataset Sources</strong></p>
+<ul>
+  <li><a href="https://huggingface.co/datasets">HuggingFace Datasets</a></li>
+  <li><a href="https://github.com/openai">OpenAI Datasets</a></li>
+</ul>
+
+<p><strong>Deployment Tools</strong></p>
+<ul>
+  <li><a href="https://github.com/ggerganov/llama.cpp">llama.cpp</a></li>
+  <li><a href="https://ollama.ai/">Ollama</a></li>
+  <li><a href="https://lmstudio.ai/">LM Studio</a></li>
+</ul>
+
+<p><strong>Community &amp; Support</strong></p>
+<ul>
+  <li><a href="https://github.com/jwest33/lora_craft/issues">GitHub Issues</a></li>
+  <li><a href="https://github.com/jwest33/lora_craft/discussions">Discussions</a></li>
+</ul>
+
+<hr />
+
+<p><strong>License</strong>: MIT</p>
+
+<p><strong>Acknowledgments</strong>: Built with Unsloth, HuggingFace Transformers, and Flask.</p>
+
+
+        <footer class="site-footer">
+          <div class="site-footer-avatar">
+            <img src="/icon.png" alt="jwest33" class="avatar-image">
+          </div>
+          
+            <span class="site-footer-owner"><a href="https://github.com/jwest33/lora_craft">lora_craft</a> is maintained by <a href="https://github.com/jwest33">jwest33</a>.</span>
+          
+          <span class="site-footer-credits">This page was generated by <a href="https://pages.github.com">GitHub Pages</a>.</span>
+        </footer>
+      </main>
+    </div>
+
+    <script>
+      // ========================================================================
+      // Sidebar Functionality
+      // ========================================================================
+
+      (function() {
+        const sidebar = document.getElementById('sidebar');
+        const mainContainer = document.getElementById('main-container');
+        const toggleBtn = document.getElementById('sidebar-toggle');
+        const sidebarNav = document.getElementById('sidebar-nav');
+
+        // Check if viewport is portrait/mobile (vertically rectangular)
+        const isMobile = window.innerWidth < 768;
+
+        // Check saved state, but default to collapsed on mobile
+        const savedState = localStorage.getItem('sidebarCollapsed');
+        const sidebarCollapsed = savedState !== null ? savedState === 'true' : isMobile;
+
+        if (sidebarCollapsed) {
+          sidebar.classList.add('collapsed');
+          mainContainer.classList.add('sidebar-collapsed');
+        }
+
+        // Toggle sidebar
+        toggleBtn.addEventListener('click', function() {
+          const isCollapsed = sidebar.classList.toggle('collapsed');
+          mainContainer.classList.toggle('sidebar-collapsed');
+          localStorage.setItem('sidebarCollapsed', isCollapsed);
+        });
+
+        // ========================================================================
+        // Generate Table of Contents
+        // ========================================================================
+
+        function generateTOC() {
+          const content = document.querySelector('.main-content');
+          const headings = content.querySelectorAll('h2, h3');
+          const toc = document.createElement('ul');
+          toc.className = 'toc-list';
+
+          let currentH2 = null;
+
+          headings.forEach((heading, index) => {
+            // Skip the "Table of Contents" heading itself
+            if (heading.textContent.trim() === 'Table of Contents') {
+              return;
+            }
+
+            const li = document.createElement('li');
+            const a = document.createElement('a');
+
+            // Create ID if it doesn't exist
+            if (!heading.id) {
+              heading.id = 'heading-' + index;
+            }
+
+            a.href = '#' + heading.id;
+            a.textContent = heading.textContent;
+            a.className = 'toc-link';
+
+            if (heading.tagName === 'H2') {
+              li.className = 'toc-item toc-h2';
+              li.appendChild(a);
+              toc.appendChild(li);
+              currentH2 = li;
+            } else if (heading.tagName === 'H3' && currentH2) {
+              let sublist = currentH2.querySelector('.toc-sublist');
+              if (!sublist) {
+                sublist = document.createElement('ul');
+                sublist.className = 'toc-sublist';
+                currentH2.appendChild(sublist);
+              }
+              li.className = 'toc-item toc-h3';
+              li.appendChild(a);
+              sublist.appendChild(li);
+            }
+          });
+
+          const tocContainer = document.getElementById('toc-container');
+          if (tocContainer && toc.children.length > 0) {
+            // Add a separator before TOC
+            const separator = document.createElement('div');
+            separator.className = 'toc-separator';
+            separator.innerHTML = '<span>On This Page</span>';
+            tocContainer.appendChild(separator);
+            tocContainer.appendChild(toc);
+          }
+        }
+
+        // ========================================================================
+        // Active Section Highlighting
+        // ========================================================================
+
+        function updateActiveSection() {
+          const headings = document.querySelectorAll('.main-content h2, .main-content h3');
+          const tocLinks = document.querySelectorAll('.toc-link');
+
+          if (headings.length === 0 || tocLinks.length === 0) return;
+
+          let currentActive = null;
+          const scrollPos = window.scrollY + 100; // Offset for better UX
+
+          // Check if we're at or near the bottom of the page
+          const windowHeight = window.innerHeight;
+          const documentHeight = document.documentElement.scrollHeight;
+          const isNearBottom = (window.scrollY + windowHeight) >= (documentHeight - 50);
+
+          // If at bottom, activate the last heading
+          if (isNearBottom && headings.length > 0) {
+            currentActive = headings[headings.length - 1].id;
+          } else {
+            // Normal scroll behavior - find the current heading
+            headings.forEach(heading => {
+              if (heading.offsetTop <= scrollPos) {
+                currentActive = heading.id;
+              }
+            });
+          }
+
+          tocLinks.forEach(link => {
+            const href = link.getAttribute('href').substring(1);
+            if (href === currentActive) {
+              link.classList.add('active');
+            } else {
+              link.classList.remove('active');
+            }
+          });
+        }
+
+        // ========================================================================
+        // Smooth Scrolling
+        // ========================================================================
+
+        function enableSmoothScrolling() {
+          document.querySelectorAll('.toc-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+              e.preventDefault();
+              const targetId = this.getAttribute('href').substring(1);
+              const target = document.getElementById(targetId);
+              if (target) {
+                const offset = 80; // Account for header
+                const targetPos = target.offsetTop - offset;
+                window.scrollTo({
+                  top: targetPos,
+                  behavior: 'smooth'
+                });
+              }
+            });
+          });
+        }
+
+        // ========================================================================
+        // Initialize
+        // ========================================================================
+
+        // Wait for content to load
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', init);
+        } else {
+          init();
+        }
+
+        function init() {
+          generateTOC();
+          enableSmoothScrolling();
+          updateActiveSection();
+          initImageModal();
+
+          // Update active section on scroll (throttled)
+          let scrollTimeout;
+          window.addEventListener('scroll', function() {
+            if (scrollTimeout) {
+              clearTimeout(scrollTimeout);
+            }
+            scrollTimeout = setTimeout(updateActiveSection, 50);
+          });
+
+        }
+
+        // ========================================================================
+        // Image Modal/Lightbox
+        // ========================================================================
+
+        function initImageModal() {
+          // Create modal element
+          const modal = document.createElement('div');
+          modal.className = 'image-modal';
+          modal.innerHTML = `
+            <div class="modal-content">
+              <button class="modal-close" aria-label="Close">&times;</button>
+              <img class="modal-image" src="" alt="">
+            </div>
+          `;
+          document.body.appendChild(modal);
+
+          const modalImage = modal.querySelector('.modal-image');
+          const closeButton = modal.querySelector('.modal-close');
+
+          // Add click listeners to all clickable images
+          document.querySelectorAll('.clickable-image').forEach(img => {
+            img.addEventListener('click', function() {
+              modalImage.src = this.src;
+              modalImage.alt = this.alt;
+              modal.classList.add('active');
+              document.body.style.overflow = 'hidden'; // Prevent scrolling
+            });
+          });
+
+          // Close modal on close button click
+          closeButton.addEventListener('click', function(e) {
+            e.stopPropagation();
+            closeModal();
+          });
+
+          // Close modal on background click
+          modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+              closeModal();
+            }
+          });
+
+          // Close modal on ESC key
+          document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && modal.classList.contains('active')) {
+              closeModal();
+            }
+          });
+
+          function closeModal() {
+            modal.classList.add('closing');
+            setTimeout(() => {
+              modal.classList.remove('active', 'closing');
+              document.body.style.overflow = ''; // Restore scrolling
+            }, 300); // Match animation duration
+          }
+        }
+      })();
+    </script>
+  </body>
+</html>

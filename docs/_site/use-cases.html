@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Use Cases - LoRA Craft | LoRA Craft</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Use Cases - LoRA Craft" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Craft your own LoRA adapters with LoRA Craft - A web-based interface for fine-tuning language models using GRPO" />
+<meta property="og:description" content="Craft your own LoRA adapters with LoRA Craft - A web-based interface for fine-tuning language models using GRPO" />
+<link rel="canonical" href="http://localhost:4000/use-cases.html" />
+<meta property="og:url" content="http://localhost:4000/use-cases.html" />
+<meta property="og:site_name" content="LoRA Craft" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Use Cases - LoRA Craft" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Craft your own LoRA adapters with LoRA Craft - A web-based interface for fine-tuning language models using GRPO","headline":"Use Cases - LoRA Craft","url":"http://localhost:4000/use-cases.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+    <link rel="stylesheet" href="/assets/css/style.css?v=2e6e5b5b61282c5b3dab83ea6dfaca95f3af9b0b">
+    <link rel="icon" type="image/png" href="/lora_craft.png">
+    <!--[if lt IE 9]>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
+    <![endif]-->
+    <!-- start custom head snippets, customize with your own _includes/head-custom.html file -->
+
+<!-- Setup Google Analytics -->
+
+
+
+<!-- You can set your favicon here -->
+<!-- link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" -->
+
+<!-- end custom head snippets -->
+
+  </head>
+  <body>
+    <!-- Sidebar Toggle Button -->
+    <button id="sidebar-toggle" class="sidebar-toggle" aria-label="Toggle Sidebar">
+      <span class="toggle-icon">☰</span>
+    </button>
+
+    <!-- Sidebar Navigation -->
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <img src="/lora_craft.png" alt="LoRA Craft" class="sidebar-logo">
+        <h2 class="sidebar-title">LoRA Craft</h2>
+        <p class="sidebar-tagline">Fine-tuning with GRPO</p>
+      </div>
+
+      <nav class="sidebar-nav" id="sidebar-nav">
+        <!-- Page Navigation -->
+        <div class="page-nav">
+          <a href="/index.html" class="page-nav-link ">
+            <span class="nav-icon">⌂</span> Home
+          </a>
+          <a href="/quickstart.html" class="page-nav-link ">
+            <span class="nav-icon">▶</span> Quick Start
+          </a>
+          <a href="/features.html" class="page-nav-link ">
+            <span class="nav-icon">★</span> Features
+          </a>
+          <a href="/use-cases.html" class="page-nav-link active">
+            <span class="nav-icon">◉</span> Use Cases
+          </a>
+          <a href="/documentation.html" class="page-nav-link ">
+            <span class="nav-icon">▤</span> Documentation
+          </a>
+        </div>
+
+        <!-- Table of Contents (current page) -->
+        <div id="toc-container">
+          <!-- TOC will be injected here by JavaScript -->
+        </div>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <div id="main-container" class="main-container">
+      <a id="skip-to-content" href="#content">Skip to the content.</a>
+
+      <main id="content" class="main-content" role="main">
+        <h1 id="use-cases">Use Cases</h1>
+
+<p>Explore real-world applications for fine-tuned language models with LoRA Craft.</p>
+
+<hr />
+
+<h2 id="math-science">Math &amp; Science Education</h2>
+
+<p>Train models to solve mathematical problems, explain scientific concepts, and provide step-by-step reasoning.</p>
+
+<h3 id="example-application-math-tutoring-assistant">Example Application: Math Tutoring Assistant</h3>
+
+<p><strong>The Challenge:</strong>
+Students need help with math homework but want detailed explanations, not just answers. Generic LLMs often skip steps or make calculation errors.</p>
+
+<p><strong>The Solution:</strong>
+Fine-tune a model on math problem datasets with a reward function that values:</p>
+<ul>
+  <li>Correct final answers</li>
+  <li>Step-by-step reasoning</li>
+  <li>Clear explanations of concepts</li>
+</ul>
+
+<h3 id="recommended-configuration">Recommended Configuration</h3>
+
+<p><strong>Model:</strong> Qwen3 1.5B or Llama 3.2 3B</p>
+<ul>
+  <li>Fast inference for interactive tutoring</li>
+  <li>Strong baseline math capabilities</li>
+</ul>
+
+<p><strong>Dataset Options:</strong></p>
+<ul>
+  <li><strong>GSM8K</strong> (8.5K problems): Grade school math word problems</li>
+  <li><strong>OpenMath</strong> (100K problems): Advanced mathematical reasoning</li>
+  <li><strong>Orca Math</strong> (200K problems): Diverse difficulty levels</li>
+</ul>
+
+<p><strong>Reward Function:</strong> Math &amp; Science</p>
+<ul>
+  <li>Validates numerical accuracy</li>
+  <li>Rewards showing work</li>
+  <li>Penalizes calculation errors</li>
+</ul>
+
+<p><strong>Training Tips:</strong></p>
+<ul>
+  <li>Use pre-training to teach output format (reasoning → answer)</li>
+  <li>Enable chain-of-thought markers in system prompt</li>
+  <li>Train for 3-5 epochs on full dataset for production use</li>
+</ul>
+
+<h3 id="expected-results">Expected Results</h3>
+
+<p><strong>Before Fine-tuning:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Q: If a shirt costs $25 and is on sale for 20% off, what's the final price?
+A: The final price would be around $20.
+</code></pre></div></div>
+
+<p><strong>After Fine-tuning:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Q: If a shirt costs $25 and is on sale for 20% off, what's the final price?
+
+A: &lt;start_working_out&gt;
+Original price: $25
+Discount: 20% of $25 = 0.20 × $25 = $5
+Final price: $25 - $5 = $20
+&lt;end_working_out&gt;
+
+&lt;SOLUTION&gt;$20&lt;/SOLUTION&gt;
+</code></pre></div></div>
+
+<h3 id="real-world-applications">Real-World Applications</h3>
+
+<ul>
+  <li><strong>Homework help chatbots</strong>: Interactive tutoring for students</li>
+  <li><strong>STEM education platforms</strong>: Automated problem explanations</li>
+  <li><strong>Test preparation tools</strong>: Practice with instant feedback</li>
+  <li><strong>Research assistants</strong>: Scientific calculation verification</li>
+</ul>
+
+<hr />
+
+<h2 id="coding">Code Generation &amp; Programming</h2>
+
+<p>Create AI coding assistants that generate clean, efficient code with proper documentation.</p>
+
+<h3 id="example-application-python-code-assistant">Example Application: Python Code Assistant</h3>
+
+<p><strong>The Challenge:</strong>
+Developers need code snippets that are not only syntactically correct but also follow best practices, include error handling, and are well-documented.</p>
+
+<p><strong>The Solution:</strong>
+Fine-tune on code datasets with rewards for:</p>
+<ul>
+  <li>Syntactic correctness</li>
+  <li>PEP 8 style compliance</li>
+  <li>Proper error handling</li>
+  <li>Inline documentation</li>
+</ul>
+
+<h3 id="recommended-configuration-1">Recommended Configuration</h3>
+
+<p><strong>Model:</strong> Qwen3 3B or Mistral 7B</p>
+<ul>
+  <li>Larger context for complex code</li>
+  <li>Better instruction following</li>
+</ul>
+
+<p><strong>Dataset Options:</strong></p>
+<ul>
+  <li><strong>Code Alpaca</strong> (20K examples): General programming tasks</li>
+  <li><strong>Custom dataset</strong>: Your specific codebase patterns</li>
+  <li><strong>GitHub repos</strong>: Domain-specific code examples</li>
+</ul>
+
+<p><strong>Reward Function:</strong> Code Generation or Programming</p>
+<ul>
+  <li>Validates syntax via AST parsing</li>
+  <li>Checks for common anti-patterns</li>
+  <li>Rewards documentation and type hints</li>
+</ul>
+
+<p><strong>Training Tips:</strong></p>
+<ul>
+  <li>Include diverse programming tasks (CRUD, algorithms, data processing)</li>
+  <li>Use temperature 0.3-0.5 for more deterministic outputs</li>
+  <li>Test on held-out code problems for validation</li>
+</ul>
+
+<h3 id="expected-results-1">Expected Results</h3>
+
+<p><strong>Before Fine-tuning:</strong></p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">read_file</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+    <span class="n">f</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">f</span><span class="p">.</span><span class="n">read</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">data</span>
+</code></pre></div></div>
+
+<p><strong>After Fine-tuning:</strong></p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">read_file</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="s">"""
+    Read and return the contents of a file.
+
+    Args:
+        path: Path to the file to read
+
+    Returns:
+        File contents as a string
+
+    Raises:
+        FileNotFoundError: If the file doesn't exist
+        IOError: If there's an error reading the file
+    """</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s">'r'</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s">'utf-8'</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">f</span><span class="p">.</span><span class="n">read</span><span class="p">()</span>
+    <span class="k">except</span> <span class="nb">FileNotFoundError</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="nb">FileNotFoundError</span><span class="p">(</span><span class="sa">f</span><span class="s">"File not found: </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s">"</span><span class="p">)</span>
+    <span class="k">except</span> <span class="nb">IOError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="nb">IOError</span><span class="p">(</span><span class="sa">f</span><span class="s">"Error reading file </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s">"</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="real-world-applications-1">Real-World Applications</h3>
+
+<ul>
+  <li><strong>IDE assistants</strong>: Code completion and generation</li>
+  <li><strong>Code review tools</strong>: Suggest improvements and best practices</li>
+  <li><strong>Documentation generators</strong>: Auto-generate docstrings</li>
+  <li><strong>Boilerplate creators</strong>: Generate standard project structures</li>
+  <li><strong>Bug fixers</strong>: Identify and correct common errors</li>
+</ul>
+
+<hr />
+
+<h2 id="qa">Question Answering Systems</h2>
+
+<p>Build specialized Q&amp;A models for specific domains with accurate, relevant answers.</p>
+
+<h3 id="example-application-customer-support-bot">Example Application: Customer Support Bot</h3>
+
+<p><strong>The Challenge:</strong>
+Customer support teams need to answer repetitive questions quickly while maintaining accuracy and helpful tone.</p>
+
+<p><strong>The Solution:</strong>
+Fine-tune on your FAQ data and support tickets with rewards for:</p>
+<ul>
+  <li>Answer accuracy</li>
+  <li>Relevant information inclusion</li>
+  <li>Concise, helpful responses</li>
+  <li>Professional tone</li>
+</ul>
+
+<h3 id="recommended-configuration-2">Recommended Configuration</h3>
+
+<p><strong>Model:</strong> Llama 3.2 3B or Qwen3 1.5B</p>
+<ul>
+  <li>Balance between quality and inference speed</li>
+  <li>Good for high-volume requests</li>
+</ul>
+
+<p><strong>Dataset Options:</strong></p>
+<ul>
+  <li><strong>SQuAD v2</strong> (130K questions): Reading comprehension baseline</li>
+  <li><strong>Custom FAQ dataset</strong>: Your company’s actual questions</li>
+  <li><strong>Support ticket history</strong>: Real customer interactions</li>
+</ul>
+
+<p><strong>Reward Function:</strong> Question Answering</p>
+<ul>
+  <li>Validates factual accuracy</li>
+  <li>Rewards relevant details</li>
+  <li>Penalizes hallucinations</li>
+</ul>
+
+<p><strong>Training Tips:</strong></p>
+<ul>
+  <li>Include “I don’t know” examples for unanswerable questions</li>
+  <li>Use domain-specific terminology in system prompt</li>
+  <li>Fine-tune on actual customer question patterns</li>
+</ul>
+
+<h3 id="expected-results-2">Expected Results</h3>
+
+<p><strong>Before Fine-tuning:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Q: What's your return policy?
+A: You can return items. Check our website for more details.
+</code></pre></div></div>
+
+<p><strong>After Fine-tuning:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Q: What's your return policy?
+A: We offer a 30-day return window for unused items in original packaging.
+To initiate a return:
+1. Log into your account
+2. Go to Order History
+3. Select the item and click "Return"
+4. Print the prepaid shipping label
+
+Refunds are processed within 5-7 business days of receiving the return.
+For damaged or defective items, returns are accepted beyond 30 days.
+</code></pre></div></div>
+
+<h3 id="real-world-applications-2">Real-World Applications</h3>
+
+<ul>
+  <li><strong>Customer support automation</strong>: Reduce ticket volume</li>
+  <li><strong>Knowledge base assistants</strong>: Internal company Q&amp;A</li>
+  <li><strong>Medical Q&amp;A</strong>: Patient information systems (with medical datasets)</li>
+  <li><strong>Legal research</strong>: Case law and regulation queries</li>
+  <li><strong>Technical documentation</strong>: Developer help systems</li>
+</ul>
+
+<hr />
+
+<h2 id="custom">Custom Domain Applications</h2>
+
+<p>Fine-tune for specialized tasks with custom reward functions and datasets.</p>
+
+<h3 id="example-1-medical-report-summarization">Example 1: Medical Report Summarization</h3>
+
+<p><strong>Application:</strong> Summarize lengthy medical reports for doctors.</p>
+
+<p><strong>Configuration:</strong></p>
+<ul>
+  <li><strong>Model:</strong> Llama 3.2 3B</li>
+  <li><strong>Dataset:</strong> Medical reports with human-written summaries</li>
+  <li><strong>Reward:</strong> Concise Summarization + Medical Accuracy</li>
+  <li><strong>Special considerations:</strong> HIPAA compliance, medical terminology</li>
+</ul>
+
+<p><strong>Key Metrics:</strong></p>
+<ul>
+  <li>Summary conciseness (target: 20% of original length)</li>
+  <li>Retention of critical findings</li>
+  <li>Proper medical terminology usage</li>
+</ul>
+
+<h3 id="example-2-legal-document-analysis">Example 2: Legal Document Analysis</h3>
+
+<p><strong>Application:</strong> Extract key clauses and obligations from contracts.</p>
+
+<p><strong>Configuration:</strong></p>
+<ul>
+  <li><strong>Model:</strong> Mistral 7B (large context window)</li>
+  <li><strong>Dataset:</strong> Annotated legal contracts</li>
+  <li><strong>Reward:</strong> Custom legal extraction reward</li>
+  <li><strong>Special considerations:</strong> Precision over recall</li>
+</ul>
+
+<p><strong>Key Metrics:</strong></p>
+<ul>
+  <li>Clause identification accuracy</li>
+  <li>Obligation extraction completeness</li>
+  <li>Legal terminology precision</li>
+</ul>
+
+<h3 id="example-3-creative-content-generation">Example 3: Creative Content Generation</h3>
+
+<p><strong>Application:</strong> Generate marketing copy with specific brand voice.</p>
+
+<p><strong>Configuration:</strong></p>
+<ul>
+  <li><strong>Model:</strong> Qwen3 3B</li>
+  <li><strong>Dataset:</strong> Approved marketing materials</li>
+  <li><strong>Reward:</strong> Creative Writing + Brand Consistency</li>
+  <li><strong>Special considerations:</strong> Tone matching, keyword inclusion</li>
+</ul>
+
+<p><strong>Key Metrics:</strong></p>
+<ul>
+  <li>Brand voice consistency score</li>
+  <li>Engagement predicted metrics</li>
+  <li>SEO keyword integration</li>
+</ul>
+
+<h3 id="example-4-language-translation">Example 4: Language Translation</h3>
+
+<p><strong>Application:</strong> Domain-specific translation (technical, medical, legal).</p>
+
+<p><strong>Configuration:</strong></p>
+<ul>
+  <li><strong>Model:</strong> Qwen3 3B or larger</li>
+  <li><strong>Dataset:</strong> Parallel corpus in your domain</li>
+  <li><strong>Reward:</strong> Custom translation quality metric (BLEU + domain terms)</li>
+  <li><strong>Special considerations:</strong> Preserve technical terms, cultural adaptation</li>
+</ul>
+
+<p><strong>Key Metrics:</strong></p>
+<ul>
+  <li>BLEU/METEOR scores</li>
+  <li>Domain terminology accuracy</li>
+  <li>Fluency in target language</li>
+</ul>
+
+<hr />
+
+<h2 id="building-custom-reward-functions">Building Custom Reward Functions</h2>
+
+<p>For specialized applications, you’ll need custom reward functions. Here’s how:</p>
+
+<h3 id="1-define-success-criteria">1. Define Success Criteria</h3>
+
+<p>What makes a “good” output for your task?</p>
+<ul>
+  <li>Specific format requirements?</li>
+  <li>Factual accuracy constraints?</li>
+  <li>Style or tone preferences?</li>
+  <li>Length limitations?</li>
+</ul>
+
+<h3 id="2-implement-reward-logic">2. Implement Reward Logic</h3>
+
+<p>Example: Product description generator</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">product_description_reward</span><span class="p">(</span><span class="n">response</span><span class="p">,</span> <span class="n">reference_data</span><span class="p">):</span>
+    <span class="n">score</span> <span class="o">=</span> <span class="mf">0.0</span>
+
+    <span class="c1"># Check length (100-200 words ideal)
+</span>    <span class="n">word_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">response</span><span class="p">.</span><span class="n">split</span><span class="p">())</span>
+    <span class="k">if</span> <span class="mi">100</span> <span class="o">&lt;=</span> <span class="n">word_count</span> <span class="o">&lt;=</span> <span class="mi">200</span><span class="p">:</span>
+        <span class="n">score</span> <span class="o">+=</span> <span class="mf">0.3</span>
+
+    <span class="c1"># Check for required elements
+</span>    <span class="n">required_elements</span> <span class="o">=</span> <span class="p">[</span><span class="s">'features'</span><span class="p">,</span> <span class="s">'benefits'</span><span class="p">,</span> <span class="s">'use case'</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="n">required_elements</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">element</span><span class="p">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="n">response</span><span class="p">.</span><span class="n">lower</span><span class="p">():</span>
+            <span class="n">score</span> <span class="o">+=</span> <span class="mf">0.2</span>
+
+    <span class="c1"># Check sentiment (should be positive)
+</span>    <span class="n">sentiment</span> <span class="o">=</span> <span class="n">analyze_sentiment</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>  <span class="c1"># Custom function
+</span>    <span class="k">if</span> <span class="n">sentiment</span> <span class="o">&gt;</span> <span class="mf">0.5</span><span class="p">:</span>
+        <span class="n">score</span> <span class="o">+=</span> <span class="mf">0.3</span>
+
+    <span class="k">return</span> <span class="nb">min</span><span class="p">(</span><span class="n">score</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="3-test-thoroughly">3. Test Thoroughly</h3>
+
+<p>Before training:</p>
+<ul>
+  <li>Test reward on 20+ diverse examples</li>
+  <li>Verify score distribution (not all 0.0 or 1.0)</li>
+  <li>Check edge cases</li>
+  <li>Compare with human judgments</li>
+</ul>
+
+<h3 id="4-iterate-based-on-results">4. Iterate Based on Results</h3>
+
+<p>After training:</p>
+<ul>
+  <li>Review model outputs</li>
+  <li>Adjust reward weights</li>
+  <li>Add new criteria if needed</li>
+  <li>Re-train with updated reward</li>
+</ul>
+
+<hr />
+
+<h2 id="getting-started-with-your-use-case">Getting Started with Your Use Case</h2>
+
+<h3 id="1-define-your-task">1. Define Your Task</h3>
+
+<ul>
+  <li>What inputs does the model receive?</li>
+  <li>What outputs should it produce?</li>
+  <li>What makes an output “good”?</li>
+</ul>
+
+<h3 id="2-gather-data">2. Gather Data</h3>
+
+<ul>
+  <li>Minimum 500 examples for initial testing</li>
+  <li>2,000+ for production deployment</li>
+  <li>Include diverse examples and edge cases</li>
+</ul>
+
+<h3 id="3-choose-starting-point">3. Choose Starting Point</h3>
+
+<ul>
+  <li>Similar use case from this page</li>
+  <li>Closest pre-built reward function</li>
+  <li>Model size based on complexity</li>
+</ul>
+
+<h3 id="4-iterate-quickly">4. Iterate Quickly</h3>
+
+<ul>
+  <li>Start with small subset (100-500 samples)</li>
+  <li>Train for 1-2 epochs</li>
+  <li>Evaluate and adjust</li>
+  <li>Scale up when satisfied</li>
+</ul>
+
+<h3 id="5-measure-success">5. Measure Success</h3>
+
+<p>Define metrics before training:</p>
+<ul>
+  <li>Accuracy/F1 for classification</li>
+  <li>BLEU/ROUGE for generation</li>
+  <li>Task-specific metrics</li>
+  <li>Human evaluation criteria</li>
+</ul>
+
+<hr />
+
+<h2 id="need-help-with-your-use-case">Need Help with Your Use Case?</h2>
+
+<ul>
+  <li><strong>Share in Discussions</strong>: <a href="https://github.com/jwest33/lora_craft/discussions">GitHub Discussions</a></li>
+  <li><strong>Request Features</strong>: <a href="https://github.com/jwest33/lora_craft/issues">GitHub Issues</a></li>
+  <li><strong>Read the Docs</strong>: <a href="documentation.html">Technical Reference</a></li>
+</ul>
+
+<p>Have a success story? We’d love to hear it! Share your results in our community discussions.</p>
+
+
+        <footer class="site-footer">
+          <div class="site-footer-avatar">
+            <img src="/icon.png" alt="jwest33" class="avatar-image">
+          </div>
+          
+            <span class="site-footer-owner"><a href="https://github.com/jwest33/lora_craft">lora_craft</a> is maintained by <a href="https://github.com/jwest33">jwest33</a>.</span>
+          
+          <span class="site-footer-credits">This page was generated by <a href="https://pages.github.com">GitHub Pages</a>.</span>
+        </footer>
+      </main>
+    </div>
+
+    <script>
+      // ========================================================================
+      // Sidebar Functionality
+      // ========================================================================
+
+      (function() {
+        const sidebar = document.getElementById('sidebar');
+        const mainContainer = document.getElementById('main-container');
+        const toggleBtn = document.getElementById('sidebar-toggle');
+        const sidebarNav = document.getElementById('sidebar-nav');
+
+        // Check if viewport is portrait/mobile (vertically rectangular)
+        const isMobile = window.innerWidth < 768;
+
+        // Check saved state, but default to collapsed on mobile
+        const savedState = localStorage.getItem('sidebarCollapsed');
+        const sidebarCollapsed = savedState !== null ? savedState === 'true' : isMobile;
+
+        if (sidebarCollapsed) {
+          sidebar.classList.add('collapsed');
+          mainContainer.classList.add('sidebar-collapsed');
+        }
+
+        // Toggle sidebar
+        toggleBtn.addEventListener('click', function() {
+          const isCollapsed = sidebar.classList.toggle('collapsed');
+          mainContainer.classList.toggle('sidebar-collapsed');
+          localStorage.setItem('sidebarCollapsed', isCollapsed);
+        });
+
+        // ========================================================================
+        // Generate Table of Contents
+        // ========================================================================
+
+        function generateTOC() {
+          const content = document.querySelector('.main-content');
+          const headings = content.querySelectorAll('h2, h3');
+          const toc = document.createElement('ul');
+          toc.className = 'toc-list';
+
+          let currentH2 = null;
+
+          headings.forEach((heading, index) => {
+            // Skip the "Table of Contents" heading itself
+            if (heading.textContent.trim() === 'Table of Contents') {
+              return;
+            }
+
+            const li = document.createElement('li');
+            const a = document.createElement('a');
+
+            // Create ID if it doesn't exist
+            if (!heading.id) {
+              heading.id = 'heading-' + index;
+            }
+
+            a.href = '#' + heading.id;
+            a.textContent = heading.textContent;
+            a.className = 'toc-link';
+
+            if (heading.tagName === 'H2') {
+              li.className = 'toc-item toc-h2';
+              li.appendChild(a);
+              toc.appendChild(li);
+              currentH2 = li;
+            } else if (heading.tagName === 'H3' && currentH2) {
+              let sublist = currentH2.querySelector('.toc-sublist');
+              if (!sublist) {
+                sublist = document.createElement('ul');
+                sublist.className = 'toc-sublist';
+                currentH2.appendChild(sublist);
+              }
+              li.className = 'toc-item toc-h3';
+              li.appendChild(a);
+              sublist.appendChild(li);
+            }
+          });
+
+          const tocContainer = document.getElementById('toc-container');
+          if (tocContainer && toc.children.length > 0) {
+            // Add a separator before TOC
+            const separator = document.createElement('div');
+            separator.className = 'toc-separator';
+            separator.innerHTML = '<span>On This Page</span>';
+            tocContainer.appendChild(separator);
+            tocContainer.appendChild(toc);
+          }
+        }
+
+        // ========================================================================
+        // Active Section Highlighting
+        // ========================================================================
+
+        function updateActiveSection() {
+          const headings = document.querySelectorAll('.main-content h2, .main-content h3');
+          const tocLinks = document.querySelectorAll('.toc-link');
+
+          if (headings.length === 0 || tocLinks.length === 0) return;
+
+          let currentActive = null;
+          const scrollPos = window.scrollY + 100; // Offset for better UX
+
+          // Check if we're at or near the bottom of the page
+          const windowHeight = window.innerHeight;
+          const documentHeight = document.documentElement.scrollHeight;
+          const isNearBottom = (window.scrollY + windowHeight) >= (documentHeight - 50);
+
+          // If at bottom, activate the last heading
+          if (isNearBottom && headings.length > 0) {
+            currentActive = headings[headings.length - 1].id;
+          } else {
+            // Normal scroll behavior - find the current heading
+            headings.forEach(heading => {
+              if (heading.offsetTop <= scrollPos) {
+                currentActive = heading.id;
+              }
+            });
+          }
+
+          tocLinks.forEach(link => {
+            const href = link.getAttribute('href').substring(1);
+            if (href === currentActive) {
+              link.classList.add('active');
+            } else {
+              link.classList.remove('active');
+            }
+          });
+        }
+
+        // ========================================================================
+        // Smooth Scrolling
+        // ========================================================================
+
+        function enableSmoothScrolling() {
+          document.querySelectorAll('.toc-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+              e.preventDefault();
+              const targetId = this.getAttribute('href').substring(1);
+              const target = document.getElementById(targetId);
+              if (target) {
+                const offset = 80; // Account for header
+                const targetPos = target.offsetTop - offset;
+                window.scrollTo({
+                  top: targetPos,
+                  behavior: 'smooth'
+                });
+              }
+            });
+          });
+        }
+
+        // ========================================================================
+        // Initialize
+        // ========================================================================
+
+        // Wait for content to load
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', init);
+        } else {
+          init();
+        }
+
+        function init() {
+          generateTOC();
+          enableSmoothScrolling();
+          updateActiveSection();
+          initImageModal();
+
+          // Update active section on scroll (throttled)
+          let scrollTimeout;
+          window.addEventListener('scroll', function() {
+            if (scrollTimeout) {
+              clearTimeout(scrollTimeout);
+            }
+            scrollTimeout = setTimeout(updateActiveSection, 50);
+          });
+
+        }
+
+        // ========================================================================
+        // Image Modal/Lightbox
+        // ========================================================================
+
+        function initImageModal() {
+          // Create modal element
+          const modal = document.createElement('div');
+          modal.className = 'image-modal';
+          modal.innerHTML = `
+            <div class="modal-content">
+              <button class="modal-close" aria-label="Close">&times;</button>
+              <img class="modal-image" src="" alt="">
+            </div>
+          `;
+          document.body.appendChild(modal);
+
+          const modalImage = modal.querySelector('.modal-image');
+          const closeButton = modal.querySelector('.modal-close');
+
+          // Add click listeners to all clickable images
+          document.querySelectorAll('.clickable-image').forEach(img => {
+            img.addEventListener('click', function() {
+              modalImage.src = this.src;
+              modalImage.alt = this.alt;
+              modal.classList.add('active');
+              document.body.style.overflow = 'hidden'; // Prevent scrolling
+            });
+          });
+
+          // Close modal on close button click
+          closeButton.addEventListener('click', function(e) {
+            e.stopPropagation();
+            closeModal();
+          });
+
+          // Close modal on background click
+          modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+              closeModal();
+            }
+          });
+
+          // Close modal on ESC key
+          document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && modal.classList.contains('active')) {
+              closeModal();
+            }
+          });
+
+          function closeModal() {
+            modal.classList.add('closing');
+            setTimeout(() => {
+              modal.classList.remove('active', 'closing');
+              document.body.style.overflow = ''; // Restore scrolling
+            }, 300); // Match animation duration
+          }
+        }
+      })();
+    </script>
+  </body>
+</html>

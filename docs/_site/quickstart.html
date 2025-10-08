@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Quick Start - LoRA Craft | LoRA Craft</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Quick Start - LoRA Craft" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Craft your own LoRA adapters with LoRA Craft - A web-based interface for fine-tuning language models using GRPO" />
+<meta property="og:description" content="Craft your own LoRA adapters with LoRA Craft - A web-based interface for fine-tuning language models using GRPO" />
+<link rel="canonical" href="http://localhost:4000/quickstart.html" />
+<meta property="og:url" content="http://localhost:4000/quickstart.html" />
+<meta property="og:site_name" content="LoRA Craft" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Quick Start - LoRA Craft" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Craft your own LoRA adapters with LoRA Craft - A web-based interface for fine-tuning language models using GRPO","headline":"Quick Start - LoRA Craft","url":"http://localhost:4000/quickstart.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+    <link rel="stylesheet" href="/assets/css/style.css?v=2e6e5b5b61282c5b3dab83ea6dfaca95f3af9b0b">
+    <link rel="icon" type="image/png" href="/lora_craft.png">
+    <!--[if lt IE 9]>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
+    <![endif]-->
+    <!-- start custom head snippets, customize with your own _includes/head-custom.html file -->
+
+<!-- Setup Google Analytics -->
+
+
+
+<!-- You can set your favicon here -->
+<!-- link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" -->
+
+<!-- end custom head snippets -->
+
+  </head>
+  <body>
+    <!-- Sidebar Toggle Button -->
+    <button id="sidebar-toggle" class="sidebar-toggle" aria-label="Toggle Sidebar">
+      <span class="toggle-icon">☰</span>
+    </button>
+
+    <!-- Sidebar Navigation -->
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <img src="/lora_craft.png" alt="LoRA Craft" class="sidebar-logo">
+        <h2 class="sidebar-title">LoRA Craft</h2>
+        <p class="sidebar-tagline">Fine-tuning with GRPO</p>
+      </div>
+
+      <nav class="sidebar-nav" id="sidebar-nav">
+        <!-- Page Navigation -->
+        <div class="page-nav">
+          <a href="/index.html" class="page-nav-link ">
+            <span class="nav-icon">⌂</span> Home
+          </a>
+          <a href="/quickstart.html" class="page-nav-link active">
+            <span class="nav-icon">▶</span> Quick Start
+          </a>
+          <a href="/features.html" class="page-nav-link ">
+            <span class="nav-icon">★</span> Features
+          </a>
+          <a href="/use-cases.html" class="page-nav-link ">
+            <span class="nav-icon">◉</span> Use Cases
+          </a>
+          <a href="/documentation.html" class="page-nav-link ">
+            <span class="nav-icon">▤</span> Documentation
+          </a>
+        </div>
+
+        <!-- Table of Contents (current page) -->
+        <div id="toc-container">
+          <!-- TOC will be injected here by JavaScript -->
+        </div>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <div id="main-container" class="main-container">
+      <a id="skip-to-content" href="#content">Skip to the content.</a>
+
+      <main id="content" class="main-content" role="main">
+        <h1 id="quick-start-guide">Quick Start Guide</h1>
+
+<p>Get from zero to your first fine-tuned model in minutes.</p>
+
+<h2 id="before-you-begin">Before You Begin</h2>
+
+<p>Ensure you have:</p>
+<ul>
+  <li>NVIDIA GPU with 8GB+ VRAM</li>
+  <li>32GB+ System RAM</li>
+  <li>Python 3.11 or higher</li>
+  <li>20GB+ free disk space</li>
+</ul>
+
+<p>Not sure if your system is ready? Check the <a href="documentation.html#prerequisites">Prerequisites</a>.</p>
+
+<hr />
+
+<h2 id="installation">Installation</h2>
+
+<h3 id="1-clone-the-repository">1. Clone the Repository</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git clone https://github.com/jwest33/lora_craft.git
+<span class="nb">cd </span>lora_craft
+</code></pre></div></div>
+
+<h3 id="2-install-pytorch-with-cuda">2. Install PyTorch with CUDA</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pip <span class="nb">install </span>torch torchvision <span class="nt">--index-url</span> https://download.pytorch.org/whl/cu128
+</code></pre></div></div>
+
+<h3 id="3-install-dependencies">3. Install Dependencies</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pip <span class="nb">install</span> <span class="nt">-r</span> requirements.txt
+</code></pre></div></div>
+
+<h3 id="4-verify-gpu-access">4. Verify GPU Access</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>python <span class="nt">-c</span> <span class="s2">"import torch; print(f'CUDA available: {torch.cuda.is_available()}')"</span>
+</code></pre></div></div>
+
+<p>You should see <code class="language-plaintext highlighter-rouge">CUDA available: True</code>.</p>
+
+<hr />
+
+<h2 id="starting-the-application">Starting the Application</h2>
+
+<h3 id="1-launch-the-server">1. Launch the Server</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>python flask_app.py
+</code></pre></div></div>
+
+<h3 id="2-open-the-interface">2. Open the Interface</h3>
+
+<p>Navigate to <code class="language-plaintext highlighter-rouge">http://localhost:5000</code> in your web browser.</p>
+
+<p>You should see the LoRA Craft interface with tabs for Model, Dataset, Config, Reward, and Training.</p>
+
+<hr />
+
+<h2 id="training-your-first-model">Training Your First Model</h2>
+
+<p>Follow this 7-step workflow to train a math reasoning model.</p>
+
+<h3 id="step-1-select-your-model">Step 1: Select Your Model</h3>
+
+<ol>
+  <li>Click the <strong>Model</strong> tab</li>
+  <li>Choose <strong>Recommended</strong> preset</li>
+  <li>Select <strong>Qwen3</strong> model family</li>
+  <li>Choose <strong>Qwen/Qwen2.5-1.5B-Instruct</strong></li>
+  <li>Click <strong>Load Model</strong></li>
+</ol>
+
+<p><strong>Why Qwen3 1.5B?</strong></p>
+<ul>
+  <li>Small enough for most GPUs</li>
+  <li>Fast training (minutes, not hours)</li>
+  <li>Strong baseline performance</li>
+</ul>
+
+<h3 id="step-2-choose-a-dataset">Step 2: Choose a Dataset</h3>
+
+<ol>
+  <li>Click the <strong>Dataset</strong> tab</li>
+  <li>Select <strong>Public Datasets</strong></li>
+  <li>Filter by <strong>Math</strong> category</li>
+  <li>Choose <strong>GSM8K</strong> (8,500 grade school math problems)</li>
+  <li>Click <strong>Load Dataset</strong></li>
+  <li>Preview samples to verify data format</li>
+</ol>
+
+<p><strong>What is GSM8K?</strong></p>
+<ul>
+  <li>Grade school math word problems</li>
+  <li>Requires multi-step reasoning</li>
+  <li>Perfect for testing GRPO training</li>
+</ul>
+
+<h3 id="step-3-configure-training">Step 3: Configure Training</h3>
+
+<ol>
+  <li>Click the <strong>Config</strong> tab</li>
+  <li>Use these beginner-friendly settings:</li>
+</ol>
+
+<p><strong>Training Duration:</strong></p>
+<ul>
+  <li>Epochs: <code class="language-plaintext highlighter-rouge">1</code></li>
+  <li>Samples per epoch: <code class="language-plaintext highlighter-rouge">500</code> (subset for quick test)</li>
+</ul>
+
+<p><strong>Batch Settings:</strong></p>
+<ul>
+  <li>Batch size: <code class="language-plaintext highlighter-rouge">1</code></li>
+  <li>Gradient accumulation: <code class="language-plaintext highlighter-rouge">4</code></li>
+</ul>
+
+<p><strong>Learning Rate:</strong></p>
+<ul>
+  <li>Learning rate: <code class="language-plaintext highlighter-rouge">0.0002</code></li>
+  <li>Warmup steps: <code class="language-plaintext highlighter-rouge">10</code></li>
+  <li>Scheduler: <code class="language-plaintext highlighter-rouge">constant</code></li>
+</ul>
+
+<p><strong>Generation:</strong></p>
+<ul>
+  <li>Max sequence length: <code class="language-plaintext highlighter-rouge">2048</code></li>
+  <li>Max new tokens: <code class="language-plaintext highlighter-rouge">512</code></li>
+  <li>Temperature: <code class="language-plaintext highlighter-rouge">0.7</code></li>
+</ul>
+
+<p><strong>Pre-training:</strong></p>
+<ul>
+  <li>Enabled: <code class="language-plaintext highlighter-rouge">Yes</code></li>
+  <li>Epochs: <code class="language-plaintext highlighter-rouge">1</code></li>
+  <li>Max samples: <code class="language-plaintext highlighter-rouge">100</code></li>
+</ul>
+
+<h3 id="step-4-select-reward-function">Step 4: Select Reward Function</h3>
+
+<ol>
+  <li>Click the <strong>Reward</strong> tab</li>
+  <li>Choose <strong>Preset Library</strong></li>
+  <li>Select <strong>Math &amp; Science</strong> category</li>
+  <li>Pick <strong>Math Problem Solver</strong> reward</li>
+  <li>Verify field mappings:
+    <ul>
+      <li>Instruction → <code class="language-plaintext highlighter-rouge">question</code></li>
+      <li>Response → <code class="language-plaintext highlighter-rouge">answer</code></li>
+    </ul>
+  </li>
+  <li>Click <strong>Test Reward</strong> with a sample to verify</li>
+</ol>
+
+<p><strong>How Rewards Work:</strong>
+The reward function checks if the model’s answer matches the expected solution, rewarding correct answers with 1.0 and incorrect with 0.0.</p>
+
+<h3 id="step-5-start-training">Step 5: Start Training</h3>
+
+<ol>
+  <li>Click the <strong>Training</strong> tab</li>
+  <li>Review your configuration summary</li>
+  <li>Click <strong>Start Training</strong></li>
+  <li>Watch the real-time metrics appear</li>
+</ol>
+
+<p><strong>What to Watch:</strong></p>
+<ul>
+  <li><strong>Mean Reward</strong>: Should increase over time (target: 0.5+)</li>
+  <li><strong>Training Loss</strong>: Should decrease</li>
+  <li><strong>KL Divergence</strong>: Should stay relatively stable (&lt; 0.1)</li>
+</ul>
+
+<p>Training 500 samples on a 1.5B model takes approximately 10-15 minutes on a modern GPU.</p>
+
+<h3 id="step-6-export-your-model">Step 6: Export Your Model</h3>
+
+<p>Once training completes:</p>
+
+<ol>
+  <li>Navigate to the <strong>Export</strong> section</li>
+  <li>Choose format:
+    <ul>
+      <li><strong>HuggingFace</strong>: For Python/API use</li>
+      <li><strong>GGUF (Q4_K_M)</strong>: For llama.cpp/Ollama/LM Studio</li>
+    </ul>
+  </li>
+  <li>Click <strong>Export Model</strong></li>
+  <li>Wait for conversion (1-2 minutes)</li>
+</ol>
+
+<p>Your model is saved in <code class="language-plaintext highlighter-rouge">exports/&lt;session_id&gt;/</code></p>
+
+<h3 id="step-7-test-your-model">Step 7: Test Your Model</h3>
+
+<ol>
+  <li>Click the <strong>Test</strong> tab</li>
+  <li>Select your newly trained model</li>
+  <li>Enter a test problem:
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Sarah has 5 apples. She buys 3 more apples.
+Then she gives 2 apples to her friend.
+How many apples does Sarah have now?
+</code></pre></div>    </div>
+  </li>
+  <li>Click <strong>Generate</strong></li>
+  <li>Compare the output to the base model</li>
+</ol>
+
+<p><strong>Expected Improvement:</strong>
+Your fine-tuned model should show structured reasoning and correct answers more consistently than the base model.</p>
+
+<hr />
+
+<h2 id="quick-workflow-summary">Quick Workflow Summary</h2>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>1. Select Model → Qwen3 1.5B
+2. Load Dataset → GSM8K (Math)
+3. Configure Training → 1 epoch, 500 samples
+4. Choose Reward → Math &amp; Science
+5. Start Training → ~15 minutes
+6. Export Model → GGUF format
+7. Test Output → Verify improvement
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="common-first-time-issues">Common First-Time Issues</h2>
+
+<h3 id="training-is-too-slow">Training is too slow</h3>
+<ul>
+  <li>Reduce samples per epoch to 200</li>
+  <li>Check GPU is being used (metrics should show GPU memory usage)</li>
+  <li>Reduce max sequence length to 1024</li>
+</ul>
+
+<h3 id="out-of-memory-errors">Out of memory errors</h3>
+<ul>
+  <li>Reduce batch size to 1</li>
+  <li>Increase gradient accumulation to 8</li>
+  <li>Use smaller model (Qwen3 0.6B)</li>
+</ul>
+
+<h3 id="rewards-stay-at-00">Rewards stay at 0.0</h3>
+<ul>
+  <li>Check field mappings match your dataset</li>
+  <li>Verify reward function with test button</li>
+  <li>Try a different reward function from presets</li>
+</ul>
+
+<h3 id="model-outputs-are-gibberish">Model outputs are gibberish</h3>
+<ul>
+  <li>Enable pre-training (helps model learn format)</li>
+  <li>Increase pre-training epochs to 2</li>
+  <li>Check system prompt matches expected output format</li>
+</ul>
+
+<hr />
+
+<h2 id="next-steps">Next Steps</h2>
+
+<h3 id="try-different-tasks">Try Different Tasks</h3>
+
+<p><strong>Code Generation</strong></p>
+<ul>
+  <li>Dataset: Code Alpaca</li>
+  <li>Reward: Code Generation</li>
+  <li>Model: Qwen3 1.5B or Phi-2</li>
+</ul>
+
+<p><strong>Question Answering</strong></p>
+<ul>
+  <li>Dataset: SQuAD v2</li>
+  <li>Reward: Question Answering</li>
+  <li>Model: Llama 3.2 3B</li>
+</ul>
+
+<p><strong>Creative Writing</strong></p>
+<ul>
+  <li>Dataset: Alpaca</li>
+  <li>Reward: Creative Writing</li>
+  <li>Model: Mistral 7B</li>
+</ul>
+
+<h3 id="scale-up">Scale Up</h3>
+
+<p>Once comfortable with the basics:</p>
+<ul>
+  <li>Train on full datasets (remove sample limits)</li>
+  <li>Increase epochs to 3-5 for better results</li>
+  <li>Try larger models (3B-7B parameters)</li>
+  <li>Experiment with custom reward functions</li>
+</ul>
+
+<h3 id="deploy-your-models">Deploy Your Models</h3>
+
+<p><strong>Use with Ollama:</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>ollama create math-tutor <span class="nt">-f</span> exports/&lt;session_id&gt;/Modelfile
+ollama run math-tutor <span class="s2">"Solve: 15 × 12 ="</span>
+</code></pre></div></div>
+
+<p><strong>Use with llama.cpp:</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>./main <span class="nt">-m</span> exports/&lt;session_id&gt;/model-q4_k_m.gguf <span class="se">\</span>
+  <span class="nt">-p</span> <span class="s2">"Calculate the area of a circle with radius 7"</span>
+</code></pre></div></div>
+
+<p><strong>Integrate via API:</strong>
+Load your HuggingFace format model in any Python application with the Transformers library.</p>
+
+<hr />
+
+<h2 id="learn-more">Learn More</h2>
+
+<div class="quickstart-nav">
+  <div class="nav-card">
+    <h3>Explore Features</h3>
+    <p>Deep dive into GRPO, reward functions, and advanced training options</p>
+    <a href="features.html">View Features →</a>
+  </div>
+
+  <div class="nav-card">
+    <h3>Read Full Documentation</h3>
+    <p>Complete technical reference, API docs, and troubleshooting</p>
+    <a href="documentation.html">View Docs →</a>
+  </div>
+
+  <div class="nav-card">
+    <h3>See Use Cases</h3>
+    <p>Real-world applications and example configurations</p>
+    <a href="use-cases.html">View Use Cases →</a>
+  </div>
+</div>
+
+<hr />
+
+<h2 id="need-help">Need Help?</h2>
+
+<ul>
+  <li><strong>Documentation</strong>: <a href="documentation.html">Full technical guide</a></li>
+  <li><strong>GitHub Issues</strong>: <a href="https://github.com/jwest33/lora_craft/issues">Report bugs or request features</a></li>
+  <li><strong>Discussions</strong>: <a href="https://github.com/jwest33/lora_craft/discussions">Ask questions and share tips</a></li>
+</ul>
+
+<p>Happy fine-tuning! 🎉</p>
+
+
+        <footer class="site-footer">
+          <div class="site-footer-avatar">
+            <img src="/icon.png" alt="jwest33" class="avatar-image">
+          </div>
+          
+            <span class="site-footer-owner"><a href="https://github.com/jwest33/lora_craft">lora_craft</a> is maintained by <a href="https://github.com/jwest33">jwest33</a>.</span>
+          
+          <span class="site-footer-credits">This page was generated by <a href="https://pages.github.com">GitHub Pages</a>.</span>
+        </footer>
+      </main>
+    </div>
+
+    <script>
+      // ========================================================================
+      // Sidebar Functionality
+      // ========================================================================
+
+      (function() {
+        const sidebar = document.getElementById('sidebar');
+        const mainContainer = document.getElementById('main-container');
+        const toggleBtn = document.getElementById('sidebar-toggle');
+        const sidebarNav = document.getElementById('sidebar-nav');
+
+        // Check if viewport is portrait/mobile (vertically rectangular)
+        const isMobile = window.innerWidth < 768;
+
+        // Check saved state, but default to collapsed on mobile
+        const savedState = localStorage.getItem('sidebarCollapsed');
+        const sidebarCollapsed = savedState !== null ? savedState === 'true' : isMobile;
+
+        if (sidebarCollapsed) {
+          sidebar.classList.add('collapsed');
+          mainContainer.classList.add('sidebar-collapsed');
+        }
+
+        // Toggle sidebar
+        toggleBtn.addEventListener('click', function() {
+          const isCollapsed = sidebar.classList.toggle('collapsed');
+          mainContainer.classList.toggle('sidebar-collapsed');
+          localStorage.setItem('sidebarCollapsed', isCollapsed);
+        });
+
+        // ========================================================================
+        // Generate Table of Contents
+        // ========================================================================
+
+        function generateTOC() {
+          const content = document.querySelector('.main-content');
+          const headings = content.querySelectorAll('h2, h3');
+          const toc = document.createElement('ul');
+          toc.className = 'toc-list';
+
+          let currentH2 = null;
+
+          headings.forEach((heading, index) => {
+            // Skip the "Table of Contents" heading itself
+            if (heading.textContent.trim() === 'Table of Contents') {
+              return;
+            }
+
+            const li = document.createElement('li');
+            const a = document.createElement('a');
+
+            // Create ID if it doesn't exist
+            if (!heading.id) {
+              heading.id = 'heading-' + index;
+            }
+
+            a.href = '#' + heading.id;
+            a.textContent = heading.textContent;
+            a.className = 'toc-link';
+
+            if (heading.tagName === 'H2') {
+              li.className = 'toc-item toc-h2';
+              li.appendChild(a);
+              toc.appendChild(li);
+              currentH2 = li;
+            } else if (heading.tagName === 'H3' && currentH2) {
+              let sublist = currentH2.querySelector('.toc-sublist');
+              if (!sublist) {
+                sublist = document.createElement('ul');
+                sublist.className = 'toc-sublist';
+                currentH2.appendChild(sublist);
+              }
+              li.className = 'toc-item toc-h3';
+              li.appendChild(a);
+              sublist.appendChild(li);
+            }
+          });
+
+          const tocContainer = document.getElementById('toc-container');
+          if (tocContainer && toc.children.length > 0) {
+            // Add a separator before TOC
+            const separator = document.createElement('div');
+            separator.className = 'toc-separator';
+            separator.innerHTML = '<span>On This Page</span>';
+            tocContainer.appendChild(separator);
+            tocContainer.appendChild(toc);
+          }
+        }
+
+        // ========================================================================
+        // Active Section Highlighting
+        // ========================================================================
+
+        function updateActiveSection() {
+          const headings = document.querySelectorAll('.main-content h2, .main-content h3');
+          const tocLinks = document.querySelectorAll('.toc-link');
+
+          if (headings.length === 0 || tocLinks.length === 0) return;
+
+          let currentActive = null;
+          const scrollPos = window.scrollY + 100; // Offset for better UX
+
+          // Check if we're at or near the bottom of the page
+          const windowHeight = window.innerHeight;
+          const documentHeight = document.documentElement.scrollHeight;
+          const isNearBottom = (window.scrollY + windowHeight) >= (documentHeight - 50);
+
+          // If at bottom, activate the last heading
+          if (isNearBottom && headings.length > 0) {
+            currentActive = headings[headings.length - 1].id;
+          } else {
+            // Normal scroll behavior - find the current heading
+            headings.forEach(heading => {
+              if (heading.offsetTop <= scrollPos) {
+                currentActive = heading.id;
+              }
+            });
+          }
+
+          tocLinks.forEach(link => {
+            const href = link.getAttribute('href').substring(1);
+            if (href === currentActive) {
+              link.classList.add('active');
+            } else {
+              link.classList.remove('active');
+            }
+          });
+        }
+
+        // ========================================================================
+        // Smooth Scrolling
+        // ========================================================================
+
+        function enableSmoothScrolling() {
+          document.querySelectorAll('.toc-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+              e.preventDefault();
+              const targetId = this.getAttribute('href').substring(1);
+              const target = document.getElementById(targetId);
+              if (target) {
+                const offset = 80; // Account for header
+                const targetPos = target.offsetTop - offset;
+                window.scrollTo({
+                  top: targetPos,
+                  behavior: 'smooth'
+                });
+              }
+            });
+          });
+        }
+
+        // ========================================================================
+        // Initialize
+        // ========================================================================
+
+        // Wait for content to load
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', init);
+        } else {
+          init();
+        }
+
+        function init() {
+          generateTOC();
+          enableSmoothScrolling();
+          updateActiveSection();
+          initImageModal();
+
+          // Update active section on scroll (throttled)
+          let scrollTimeout;
+          window.addEventListener('scroll', function() {
+            if (scrollTimeout) {
+              clearTimeout(scrollTimeout);
+            }
+            scrollTimeout = setTimeout(updateActiveSection, 50);
+          });
+
+        }
+
+        // ========================================================================
+        // Image Modal/Lightbox
+        // ========================================================================
+
+        function initImageModal() {
+          // Create modal element
+          const modal = document.createElement('div');
+          modal.className = 'image-modal';
+          modal.innerHTML = `
+            <div class="modal-content">
+              <button class="modal-close" aria-label="Close">&times;</button>
+              <img class="modal-image" src="" alt="">
+            </div>
+          `;
+          document.body.appendChild(modal);
+
+          const modalImage = modal.querySelector('.modal-image');
+          const closeButton = modal.querySelector('.modal-close');
+
+          // Add click listeners to all clickable images
+          document.querySelectorAll('.clickable-image').forEach(img => {
+            img.addEventListener('click', function() {
+              modalImage.src = this.src;
+              modalImage.alt = this.alt;
+              modal.classList.add('active');
+              document.body.style.overflow = 'hidden'; // Prevent scrolling
+            });
+          });
+
+          // Close modal on close button click
+          closeButton.addEventListener('click', function(e) {
+            e.stopPropagation();
+            closeModal();
+          });
+
+          // Close modal on background click
+          modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+              closeModal();
+            }
+          });
+
+          // Close modal on ESC key
+          document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && modal.classList.contains('active')) {
+              closeModal();
+            }
+          });
+
+          function closeModal() {
+            modal.classList.add('closing');
+            setTimeout(() => {
+              modal.classList.remove('active', 'closing');
+              document.body.style.overflow = ''; // Restore scrolling
+            }, 300); // Match animation duration
+          }
+        }
+      })();
+    </script>
+  </body>
+</html>
