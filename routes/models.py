@@ -20,6 +20,7 @@ from core import ModelTester, SessionRegistry
 from core.test_history import get_test_history_manager
 from core.batch_tester import get_batch_test_runner
 from utils.logging_config import get_logger
+from constants import MODEL_DEFINITIONS
 
 logger = get_logger(__name__)
 
@@ -35,28 +36,18 @@ model_tester = ModelTester()
 @models_bp.route('/models', methods=['GET'])
 def get_available_models():
     """Get list of available base models."""
-    model_categories = {
-        'qwen': [
-            {'id': 'unsloth/Qwen3-0.6B', 'name': 'Qwen3 0.6B', 'size': '600M', 'vram': '~1.2GB', 'category': 'qwen'},
-            {'id': 'unsloth/Qwen3-1.7B', 'name': 'Qwen3 1.7B', 'size': '1.7B', 'vram': '~3.4GB', 'category': 'qwen'},
-            {'id': 'unsloth/Qwen3-4B', 'name': 'Qwen3 4B', 'size': '4B', 'vram': '~8GB', 'category': 'qwen'},
-            {'id': 'unsloth/Qwen3-8B', 'name': 'Qwen3 8B', 'size': '8B', 'vram': '~16GB', 'category': 'qwen'}
-        ],
-        'llama': [
-            {'id': 'unsloth/Llama-3.2-1B-Instruct', 'name': 'LLaMA 3.2 1B', 'size': '1B', 'vram': '~2GB', 'category': 'llama'},
-            {'id': 'unsloth/Llama-3.2-3B-Instruct', 'name': 'LLaMA 3.2 3B', 'size': '3B', 'vram': '~6GB', 'category': 'llama'}
-        ],
-        'phi': [
-            {'id': 'unsloth/phi-4-reasoning', 'name': 'Phi-4 Reasoning', 'size': '15B', 'vram': '~30GB', 'category': 'phi'}
-        ]
-    }
-
     # Flatten into single array for compatibility with frontend
     all_models = []
-    for category, models in model_categories.items():
+    for category, models in MODEL_DEFINITIONS.items():
         all_models.extend(models)
 
     return jsonify({'models': all_models})
+
+
+@models_bp.route('/models/definitions', methods=['GET'])
+def get_model_definitions():
+    """Get model definitions organized by family for frontend use."""
+    return jsonify({'modelsByFamily': MODEL_DEFINITIONS})
 
 
 @models_bp.route('/models/trained', methods=['GET'])
@@ -202,12 +193,15 @@ def get_testable_models():
                     'checkpoint_path': checkpoint_path
                 })
 
-        # Get base models
-        base_models = [
-            {'id': 'unsloth/Qwen3-0.6B', 'name': 'Qwen3 0.6B', 'type': 'base'},
-            {'id': 'unsloth/Qwen3-1.7B', 'name': 'Qwen3 1.7B', 'type': 'base'},
-            {'id': 'unsloth/Llama-3.2-1B-Instruct', 'name': 'LLaMA 3.2 1B', 'type': 'base'}
-        ]
+        # Get base models from constants (just a few popular ones for testing)
+        base_models = []
+        for category, models in MODEL_DEFINITIONS.items():
+            for model in models[:2]:  # Take first 2 from each category
+                base_models.append({
+                    'id': model['id'],
+                    'name': model['name'],
+                    'type': 'base'
+                })
 
         return jsonify({
             'trained': trained_models,

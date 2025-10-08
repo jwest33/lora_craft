@@ -11,6 +11,8 @@
 1. [Overview](#overview)
 2. [Prerequisites](#prerequisites)
 3. [Installation](#installation)
+   - [Docker Installation (Recommended)](#docker-installation-recommended)
+   - [Native Installation](#native-installation)
 4. [Quick Start](#quick-start)
 5. [User Guide](#user-guide)
    - [Step 1: Model Selection](#step-1-model-selection)
@@ -71,14 +73,63 @@ LoRA Craft is a web-based application that enables fine-tuning of large language
 
 ## Installation
 
-### Step 1: Clone the Repository
+**Choose your installation method:**
+
+- **[Docker Installation](#docker-installation-recommended)** (Recommended) - Easiest setup, works on any system
+- **[Native Installation](#native-installation)** - Direct installation on your system
+
+### Docker Installation (Recommended)
+
+Docker provides the easiest and most reliable way to run LoRA Craft with all dependencies pre-configured.
+
+#### Prerequisites
+- Docker 20.10+ and Docker Compose 2.0+
+- NVIDIA GPU with CUDA support
+- NVIDIA Container Toolkit ([installation guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html))
+
+#### Quick Start
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/lora_craft.git
+cd lora_craft
+
+# Configure environment (optional)
+cp .env.example .env
+# Edit .env to customize settings
+
+# Start the application
+docker compose up -d
+
+# View logs
+docker compose logs -f
+
+# Access at http://localhost:5000
+```
+
+#### What's Included
+- ✅ NVIDIA CUDA 12.8 runtime
+- ✅ Python 3.11 with all dependencies
+- ✅ Automatic GPU detection and configuration
+- ✅ Persistent storage for models and outputs
+- ✅ Production-ready setup with health checks
+
+For detailed Docker setup, configuration, and troubleshooting, see **[Docker Deployment Guide](docs/DOCKER.md)**.
+
+---
+
+### Native Installation
+
+For users who prefer to install directly on their system.
+
+#### Step 1: Clone the Repository
 
 ```bash
 git clone https://github.com/yourusername/lora_craft.git
 cd lora_craft
 ```
 
-### Step 2: Install PyTorch with CUDA Support
+#### Step 2: Install PyTorch with CUDA Support
 
 Install PyTorch with CUDA 12.8 support:
 
@@ -88,7 +139,7 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 
 For other CUDA versions, visit [PyTorch's installation page](https://pytorch.org/get-started/locally/).
 
-### Step 3: Install Dependencies
+#### Step 3: Install Dependencies
 
 ```bash
 pip install -r requirements.txt

@@ -10,6 +10,8 @@ import subprocess
 import os
 import warnings
 
+from constants import MODEL_SIZES
+
 try:
     # nvidia-ml-py package provides the pynvml module
     import pynvml
@@ -84,17 +86,6 @@ class TrainingConfig:
 
 class SystemConfig:
     """System configuration and hardware detection."""
-
-    # Model size estimates (in MB)
-    MODEL_SIZES = {
-        "unsloth/phi-4-reasoning": 30720,  # ~15B params, ~30GB VRAM
-        "unsloth/Qwen3-0.6B": 1229,       # 0.6B params, ~1.2GB VRAM
-        "unsloth/Qwen3-1.7B": 3482,       # 1.7B params, ~3.4GB VRAM
-        "unsloth/Qwen3-4B": 8192,          # 4B params, ~8GB VRAM
-        "unsloth/Qwen3-8B": 16384,         # 8B params, ~16GB VRAM
-        "unsloth/Llama-3.2-1B-Instruct": 2048,  # 1B params, ~2GB VRAM
-        "unsloth/Llama-3.2-3B-Instruct": 6144,  # 3B params, ~6GB VRAM
-    }
 
     def __init__(self):
         """Initialize system configuration."""
@@ -232,7 +223,7 @@ class SystemConfig:
             TrainingConfig with optimized settings
         """
         # Get model memory requirements
-        model_memory = self.MODEL_SIZES.get(model_size, 3482)  # Default to Qwen3-1.7B size
+        model_memory = MODEL_SIZES.get(model_size, 3482)  # Default to Qwen3-1.7B size
 
         # Calculate available memory
         if self.gpu_info:

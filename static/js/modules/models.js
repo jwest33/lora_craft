@@ -6,28 +6,14 @@
     'use strict';
 
     const ModelsModule = {
-        // Model definitions by family
-        modelsByFamily: {
-            qwen: [
-                { id: 'unsloth/Qwen3-0.6B', name: 'Qwen3 0.6B', size: '600M', vram: '~1.2GB' },
-                { id: 'unsloth/Qwen3-1.7B', name: 'Qwen3 1.7B', size: '1.7B', vram: '~3.4GB' },
-                { id: 'unsloth/Qwen3-4B', name: 'Qwen3 4B', size: '4B', vram: '~8GB' },
-                { id: 'unsloth/Qwen3-8B', name: 'Qwen3 8B', size: '8B', vram: '~16GB' }
-            ],
-            llama: [
-                { id: 'unsloth/Llama-3.2-1B-Instruct', name: 'LLaMA 3.2 1B', size: '1B', vram: '~2GB' },
-                { id: 'unsloth/Llama-3.2-3B-Instruct', name: 'LLaMA 3.2 3B', size: '3B', vram: '~6GB' }
-            ],
-            phi: [
-                { id: 'unsloth/phi-4-reasoning', name: 'Phi-4 Reasoning', size: '15B', vram: '~30GB' }
-            ]
-        },
+        // Model definitions by family (loaded from backend)
+        modelsByFamily: {},
 
         // Initialize the module
         init() {
             this.setupEventListeners();
+            this.loadModelDefinitions(); // Load model definitions from backend first
             this.loadAvailableModels();
-            this.updateModelList(); // Initialize model list based on default family
         },
 
         // Setup model-related event listeners
@@ -104,6 +90,23 @@
             if (window.AppState && AppState.setConfigValue) {
                 AppState.setConfigValue('setupMode', mode);
             }
+        },
+
+        // Load model definitions from backend
+        loadModelDefinitions() {
+            fetch('/api/models/definitions')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.modelsByFamily) {
+                        this.modelsByFamily = data.modelsByFamily;
+                        this.updateModelList(); // Initialize model list after loading definitions
+                    }
+                })
+                .catch(error => {
+                    console.error('Failed to load model definitions:', error);
+                    // Fallback to empty object if fetch fails
+                    this.modelsByFamily = {};
+                });
         },
 
         // Update model list based on selected family
