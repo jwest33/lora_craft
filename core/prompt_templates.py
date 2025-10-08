@@ -48,6 +48,7 @@ class TemplateConfig:
     # Additional GRPO settings
     prepend_reasoning_start: bool = False  # For add_generation_prompt
     include_eos_in_response: bool = True  # Include EOS token in responses
+    reasoning_placeholder_template: Optional[str] = None  # Jinja2 template for generating reasoning placeholders
 
     # Format options
     add_bos_token: bool = True

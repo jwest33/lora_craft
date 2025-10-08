@@ -267,6 +267,92 @@ class GRPOModelTrainer:
         else:
             return f"{instruction} {input_text}"
 
+    def _generate_reasoning_placeholder(self, example: Dict[str, Any], template) -> str:
+        """Generate dynamic reasoning placeholder for short responses.
+
+        Uses multiple strategies to create contextually appropriate reasoning:
+        1. Template configuration (reasoning_placeholder_template)
+        2. Instruction-based generation
+        3. Input context extraction
+        4. Domain detection heuristics
+        5. Generic fallback
+
+        Args:
+            example: Dataset example with instruction/input/response fields
+            template: PromptTemplate instance with configuration
+
+        Returns:
+            Generated reasoning placeholder text
+
+        Examples:
+            Template configuration (in JSON):
+            {
+                "reasoning_placeholder_template": "Based on the provided technical indicators and analysis."
+            }
+
+            Advanced Jinja2 template:
+            {
+                "reasoning_placeholder_template": "Analyzing: {{ instruction.split('.')[0] }}"
+            }
+
+            Available variables in template:
+            - instruction: The instruction field from the example
+            - input: The input field from the example
+            - combined_prompt: The instruction and input combined
+            - example: Full example dictionary with all fields
+        """
+        from jinja2 import Template as Jinja2Template, TemplateSyntaxError
+
+        instruction = example.get('instruction', '')
+        input_text = example.get('input', '')
+        combined_prompt = self._combine_instruction_and_input(instruction, input_text)
+
+        # Strategy 1: Use template configuration if available
+        if template.config.reasoning_placeholder_template:
+            try:
+                jinja_template = Jinja2Template(template.config.reasoning_placeholder_template)
+                return jinja_template.render(
+                    instruction=instruction,
+                    input=input_text,
+                    combined_prompt=combined_prompt,
+                    example=example
+                ).strip()
+            except (TemplateSyntaxError, Exception) as e:
+                logger.warning(f"Failed to render reasoning_placeholder_template: {e}. Using fallback.")
+
+        # Strategy 2: Extract from instruction (use first sentence/question)
+        if instruction:
+            # Try to get the first sentence
+            first_sentence = instruction.split('.')[0].strip()
+            if first_sentence and len(first_sentence) > 10:
+                # If it's a question, rephrase as statement
+                if first_sentence.endswith('?'):
+                    return f"Analyzing the question: {first_sentence}"
+                else:
+                    return f"Based on the instruction: {first_sentence}."
+
+        # Strategy 3: Detect domain and use appropriate reasoning
+        combined_lower = combined_prompt.lower()
+
+        # Technical/financial analysis
+        if any(term in combined_lower for term in ['indicator', 'analysis', 'signal', 'market', 'stock', 'trade', 'price']):
+            return "Based on the provided technical indicators and analysis."
+
+        # Mathematics
+        if any(term in combined_lower for term in ['calculate', 'solve', 'equation', 'proof', 'theorem', 'mathematics']):
+            return "Working through the mathematical problem step by step."
+
+        # Code/Programming
+        if any(term in combined_lower for term in ['code', 'function', 'program', 'implement', 'algorithm', 'debug']):
+            return "Analyzing the programming task and requirements."
+
+        # General Q&A
+        if any(term in combined_lower for term in ['question', 'answer', 'explain', 'what', 'why', 'how']):
+            return "Considering the question and available information."
+
+        # Strategy 4: Generic fallback
+        return "Based on the given information and requirements."
+
     def setup_model(self,
                    model_name: Optional[str] = None,
                    use_unsloth: bool = True) -> Tuple[Any, Any]:
@@ -541,9 +627,10 @@ class GRPOModelTrainer:
                         # treat it as the solution and generate minimal reasoning
                         if len(response_stripped.split()) <= 3 and len(response_stripped) < 50:
                             # Short response: likely a label/classification
-                            # Put it in the solution section, add placeholder reasoning
+                            # Put it in the solution section, add dynamic reasoning placeholder
                             # NOTE: No reasoning_start because prompt already has it
-                            response = (f"Based on the provided technical indicators and analysis.\n"
+                            reasoning_placeholder = self._generate_reasoning_placeholder(example, template)
+                            response = (f"{reasoning_placeholder}\n"
                                       f"{reasoning_end}\n"
                                       f"{solution_start}\n"
                                       f"{response_stripped}\n"

@@ -1,0 +1,113 @@
+# ============================================================================
+# LoRA Craft - Docker Compose Configuration
+#
+# This compose file sets up LoRA Craft with GPU support and persistent volumes.
+#
+# Prerequisites:
+#   - Docker 20.10+
+#   - Docker Compose 2.0+
+#   - NVIDIA Container Toolkit
+#   - NVIDIA GPU with CUDA 12.8+ support
+#
+# Usage:
+#   docker compose up -d              # Start in background
+#   docker compose logs -f            # View logs
+#   docker compose down               # Stop and remove containers
+#   docker compose down -v            # Stop and remove volumes (WARNING: deletes data)
+# ============================================================================
+
+services:
+  lora-craft:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    image: lora-craft:latest
+    container_name: lora-craft
+
+    # GPU Configuration
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all  # Use all available GPUs (or specify count: 1)
+              capabilities: [gpu]
+
+    # Port mapping
+    ports:
+      - "5000:5000"
+
+    # Environment variables (override with .env file)
+    environment:
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:-dev-secret-key-change-in-production}
+      - PORT=${PORT:-5000}
+      - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
+      - HF_HOME=/app/cache/huggingface
+      - TRANSFORMERS_CACHE=/app/cache/transformers
+      - HF_DATASETS_CACHE=/app/cache/datasets
+      - TORCH_HOME=/app/cache/torch
+      - PYTHONUNBUFFERED=1
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+    # Persistent volumes
+    volumes:
+      # Application data
+      - ./outputs:/app/outputs              # Trained model outputs
+      - ./exports:/app/exports              # Exported GGUF models
+      - ./configs:/app/configs              # Training configurations
+      - ./uploads:/app/uploads              # Uploaded datasets
+      - ./logs:/app/logs                    # Application logs
+
+      # Cache directories (speeds up subsequent runs)
+      - huggingface-cache:/app/cache/huggingface
+      - transformers-cache:/app/cache/transformers
+      - datasets-cache:/app/cache/datasets
+      - torch-cache:/app/cache/torch
+
+      # For development: mount source code (comment out for production)
+      # - ./core:/app/core
+      # - ./routes:/app/routes
+      # - ./services:/app/services
+      # - ./static:/app/static
+      # - ./templates:/app/templates
+
+    # Restart policy
+    restart: unless-stopped
+
+    # Resource limits (adjust based on your system)
+    mem_limit: 32g           # Maximum RAM (adjust for your system)
+    memswap_limit: 32g       # Disable swap
+    shm_size: 16g            # Shared memory for PyTorch multiprocessing
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/system/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Named volumes for caches
+volumes:
+  huggingface-cache:
+    driver: local
+  transformers-cache:
+    driver: local
+  datasets-cache:
+    driver: local
+  torch-cache:
+    driver: local
+
+# Network configuration
+networks:
+  default:
+    name: lora-craft-network
