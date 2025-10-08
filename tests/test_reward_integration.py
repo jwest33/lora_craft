@@ -37,7 +37,7 @@ def test_load_reward_config(session_id: str):
         print(f"❌ Session '{session_id}' not found")
         return False
 
-    print(f"✓ Session found: {session_info.display_name or session_id}")
+    print(f"Session found: {session_info.display_name or session_id}")
 
     # Load reward function
     reward_builder = load_reward_from_session(session_info)
@@ -46,7 +46,7 @@ def test_load_reward_config(session_id: str):
         print("❌ Could not load reward configuration from session")
         return False
 
-    print(f"✓ Loaded reward function with {len(reward_builder.rewards)} components")
+    print(f"Loaded reward function with {len(reward_builder.rewards)} components")
 
     # Get component details
     component_details = get_reward_component_details(session_info)
@@ -59,7 +59,7 @@ def test_load_reward_config(session_id: str):
             if comp['parameters']:
                 print(f"    Parameters: {comp['parameters']}")
 
-    print("\n✓ TEST 1 PASSED\n")
+    print("\nTEST 1 PASSED\n")
     return True
 
 
@@ -88,7 +88,7 @@ def test_single_test_with_reward(session_id: str):
         print(f"❌ Failed to load model: {error}")
         return False
 
-    print("✓ Model loaded successfully")
+    print("Model loaded successfully")
 
     # Test prompt (technical analysis example)
     test_prompt = """Based on the following technical indicators, provide your analysis and signal:
@@ -124,13 +124,13 @@ WEAK_BUY
         print(f"❌ Generation failed: {result.get('error')}")
         return False
 
-    print("✓ Generation successful")
+    print("Generation successful")
     print(f"\nResponse:\n{result['response'][:200]}...")
 
     # Check reward evaluation
     reward_eval = result.get('reward_evaluation')
     if reward_eval and reward_eval.get('success'):
-        print(f"\n✓ Reward Evaluation:")
+        print(f"\nReward Evaluation:")
         print(f"  Total Reward: {reward_eval['total_reward']:.3f}")
         print(f"  Components:")
         for comp_name, comp_score in reward_eval['components'].items():
@@ -138,7 +138,7 @@ WEAK_BUY
     else:
         print(f"❌ Reward evaluation failed: {reward_eval.get('error') if reward_eval else 'Not evaluated'}")
 
-    print("\n✓ TEST 2 PASSED\n")
+    print("\nTEST 2 PASSED\n")
     return True
 
 
@@ -176,7 +176,7 @@ def test_batch_test_with_rewards(session_id: str, test_file: str = None):
             writer.writeheader()
             writer.writerows(test_data)
 
-        print(f"✓ Created test dataset with {len(test_data)} samples")
+        print(f"Created test dataset with {len(test_data)} samples")
 
     # Load session
     registry = SessionRegistry()
@@ -194,7 +194,7 @@ def test_batch_test_with_rewards(session_id: str, test_file: str = None):
         print(f"❌ Failed to load model: {error}")
         return False
 
-    print("✓ Model loaded successfully")
+    print("Model loaded successfully")
 
     # Create batch test runner
     batch_runner = BatchTestRunner()
@@ -214,7 +214,7 @@ def test_batch_test_with_rewards(session_id: str, test_file: str = None):
         evaluate_rewards=True
     )
 
-    print(f"✓ Batch test started: {batch_id}")
+    print(f"Batch test started: {batch_id}")
 
     # Wait for completion
     import time
@@ -228,13 +228,13 @@ def test_batch_test_with_rewards(session_id: str, test_file: str = None):
     status = batch_runner.get_status(batch_id)
     results = batch_runner.get_results(batch_id)
 
-    print(f"\n✓ Batch test completed: {status['status']}")
+    print(f"\nBatch test completed: {status['status']}")
     print(f"  Successful: {status['successful']}/{status['total']}")
     print(f"  Failed: {status['failed']}")
     print(f"  Average time: {status['average_time']:.2f}s")
 
     if status.get('average_reward') is not None:
-        print(f"\n✓ Reward Statistics:")
+        print(f"\nReward Statistics:")
         print(f"  Average: {status['average_reward']:.3f}")
         print(f"  Min: {status['min_reward']:.3f}")
         print(f"  Max: {status['max_reward']:.3f}")
@@ -245,7 +245,7 @@ def test_batch_test_with_rewards(session_id: str, test_file: str = None):
     if results:
         print(f"\nResults saved to: {status['results_file']}")
 
-    print("\n✓ TEST 3 PASSED\n")
+    print("\nTEST 3 PASSED\n")
     return True
 
 
@@ -282,11 +282,11 @@ def main():
     print("=" * 80)
 
     for test_name, passed in results:
-        status = "✓ PASSED" if passed else "❌ FAILED"
+        status = "PASSED" if passed else "❌ FAILED"
         print(f"{status}: {test_name}")
 
     all_passed = all(passed for _, passed in results)
-    print(f"\nOverall: {'✓ ALL TESTS PASSED' if all_passed else '❌ SOME TESTS FAILED'}")
+    print(f"\nOverall: {'ALL TESTS PASSED' if all_passed else '❌ SOME TESTS FAILED'}")
     print("=" * 80 + "\n")
 
     return 0 if all_passed else 1

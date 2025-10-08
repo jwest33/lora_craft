@@ -970,7 +970,7 @@ class GRPOModelTrainer:
 
                 if is_valid:
                     results['passed'] += 1
-                    logger.info(f"✓ Sample {idx}: PASS")
+                    logger.info(f"Sample {idx}: PASS")
                     # Log first successful sample for comparison
                     if results['passed'] == 1:
                         logger.debug(f"Sample {idx} SUCCESS (first pass):")

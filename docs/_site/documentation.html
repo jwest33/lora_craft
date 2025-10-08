@@ -22,7 +22,7 @@
 {"@context":"https://schema.org","@type":"WebPage","description":"Craft your own LoRA adapters with LoRA Craft - A web-based interface for fine-tuning language models using GRPO","headline":"Documentation - LoRA Craft","url":"http://localhost:4000/documentation.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/assets/css/style.css?v=2e6e5b5b61282c5b3dab83ea6dfaca95f3af9b0b">
+    <link rel="stylesheet" href="/assets/css/style.css?v=645f0a8df1697b1551365c3e1ec069048e07fe9b">
     <link rel="icon" type="image/png" href="/lora_craft.png">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
@@ -118,7 +118,7 @@
     </ul>
   </li>
   <li><strong>RAM</strong>: Minimum 32GB system memory</li>
-  <li><strong>Storage</strong>: At least 20GB free disk space for models and datasets</li>
+  <li><strong>Storage</strong>: At least 64GB free disk space for models and datasets</li>
 </ul>
 
 <h3 id="software-requirements">Software Requirements</h3>
@@ -134,13 +134,197 @@
 
 <h2 id="installation">Installation</h2>
 
-<h3 id="step-1-clone-the-repository">Step 1: Clone the Repository</h3>
+<p>LoRA Craft supports two installation methods: <strong>Docker</strong> (recommended for most users) and <strong>Native</strong> (for development or advanced users).</p>
+
+<h3 id="docker-vs-native-installation">Docker vs Native Installation</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Feature</th>
+      <th>Docker</th>
+      <th>Native</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Setup Time</strong></td>
+      <td>5-10 minutes</td>
+      <td>15-30 minutes</td>
+    </tr>
+    <tr>
+      <td><strong>Dependency Management</strong></td>
+      <td>Automatic</td>
+      <td>Manual</td>
+    </tr>
+    <tr>
+      <td><strong>GPU Support</strong></td>
+      <td>Automatic detection</td>
+      <td>Requires CUDA setup</td>
+    </tr>
+    <tr>
+      <td><strong>Platform Support</strong></td>
+      <td>Windows (WSL2), Linux, macOS*</td>
+      <td>Linux, Windows*</td>
+    </tr>
+    <tr>
+      <td><strong>Updates</strong></td>
+      <td>Simple rebuild</td>
+      <td>Manual package updates</td>
+    </tr>
+    <tr>
+      <td><strong>Isolation</strong></td>
+      <td>Fully isolated</td>
+      <td>System-wide install</td>
+    </tr>
+    <tr>
+      <td><strong>Best For</strong></td>
+      <td>Production, Windows users</td>
+      <td>Development, debugging</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>*macOS Docker runs without GPU; Windows native requires WSL2 for GPU support.</p>
+
+<p><strong>See <a href="https://github.com/jwest33/lora_craft/blob/main/DOCKER-QUICKSTART.md">DOCKER-QUICKSTART.md</a> for platform-specific Docker setup guides.</strong></p>
+
+<hr />
+
+<h3 id="docker-installation-recommended">Docker Installation (Recommended)</h3>
+
+<p>Docker provides a pre-configured environment with all dependencies, CUDA runtime, and automatic GPU detection.</p>
+
+<h4 id="prerequisites-1">Prerequisites</h4>
+<ul>
+  <li>Docker 20.10+ and Docker Compose 2.0+</li>
+  <li>NVIDIA Driver 535+ on host</li>
+  <li><strong>Windows</strong>: Docker Desktop with WSL2</li>
+  <li><strong>Linux</strong>: NVIDIA Container Toolkit</li>
+  <li><strong>macOS</strong>: Docker Desktop (CPU-only, no GPU)</li>
+</ul>
+
+<h4 id="quick-setup">Quick Setup</h4>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Clone repository</span>
+git clone https://github.com/jwest33/lora_craft.git
+<span class="nb">cd </span>lora_craft
+
+<span class="c"># Optional: Configure environment</span>
+<span class="nb">cp</span> .env.example .env
+
+<span class="c"># Start application (builds on first run)</span>
+docker compose up <span class="nt">-d</span>
+
+<span class="c"># View logs</span>
+docker compose logs <span class="nt">-f</span>
+
+<span class="c"># Access at http://localhost:5000</span>
+</code></pre></div></div>
+
+<p><strong>First startup takes 5-10 minutes</strong> to download base image (~5GB) and install PyTorch.</p>
+
+<h4 id="whats-included">What’s Included</h4>
+<ul>
+  <li>NVIDIA CUDA 12.8 runtime with cuDNN</li>
+  <li>Python 3.11 with all dependencies</li>
+  <li>PyTorch 2.8.0 with CUDA support</li>
+  <li>nvidia-smi for GPU monitoring</li>
+  <li>Persistent volumes for data</li>
+  <li>Health checks and monitoring</li>
+</ul>
+
+<h4 id="docker-commands-reference">Docker Commands Reference</h4>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Check status</span>
+docker compose ps
+
+<span class="c"># Stop application</span>
+docker compose down
+
+<span class="c"># Restart</span>
+docker compose restart
+
+<span class="c"># View logs</span>
+docker compose logs <span class="nt">-f</span>
+
+<span class="c"># Check GPU</span>
+docker compose <span class="nb">exec </span>lora-craft nvidia-smi
+
+<span class="c"># Access shell</span>
+docker compose <span class="nb">exec </span>lora-craft bash
+
+<span class="c"># Update to latest</span>
+git pull <span class="o">&amp;&amp;</span> docker compose build <span class="o">&amp;&amp;</span> docker compose up <span class="nt">-d</span>
+
+<span class="c"># Clean rebuild</span>
+docker compose down
+docker compose build <span class="nt">--no-cache</span>
+docker compose up <span class="nt">-d</span>
+</code></pre></div></div>
+
+<h4 id="volume-management">Volume Management</h4>
+
+<p>Docker automatically mounts these directories:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Local</th>
+      <th>Container</th>
+      <th>Purpose</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">./outputs/</code></td>
+      <td><code class="language-plaintext highlighter-rouge">/app/outputs</code></td>
+      <td>Model checkpoints</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">./exports/</code></td>
+      <td><code class="language-plaintext highlighter-rouge">/app/exports</code></td>
+      <td>GGUF exports</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">./configs/</code></td>
+      <td><code class="language-plaintext highlighter-rouge">/app/configs</code></td>
+      <td>Configurations</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">./uploads/</code></td>
+      <td><code class="language-plaintext highlighter-rouge">/app/uploads</code></td>
+      <td>Dataset uploads</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">./logs/</code></td>
+      <td><code class="language-plaintext highlighter-rouge">/app/logs</code></td>
+      <td>Application logs</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Named volumes (in Docker):</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">huggingface-cache</code> - HuggingFace models</li>
+  <li><code class="language-plaintext highlighter-rouge">transformers-cache</code> - Transformers cache</li>
+  <li><code class="language-plaintext highlighter-rouge">datasets-cache</code> - HuggingFace datasets</li>
+  <li><code class="language-plaintext highlighter-rouge">torch-cache</code> - PyTorch cache</li>
+</ul>
+
+<p><strong>To backup:</strong> Copy local directories above. Named volumes persist across container restarts.</p>
+
+<hr />
+
+<h3 id="native-installation">Native Installation</h3>
+
+<h4 id="step-1-clone-the-repository">Step 1: Clone the Repository</h4>
 
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git clone https://github.com/jwest33/lora_craft.git
 <span class="nb">cd </span>lora_craft
 </code></pre></div></div>
 
-<h3 id="step-2-install-pytorch-with-cuda-support">Step 2: Install PyTorch with CUDA Support</h3>
+<h4 id="step-2-install-pytorch-with-cuda-support">Step 2: Install PyTorch with CUDA Support</h4>
 
 <p>Install PyTorch with CUDA 12.8 support:</p>
 
@@ -149,7 +333,7 @@
 
 <p>For other CUDA versions, visit <a href="https://pytorch.org/get-started/locally/">PyTorch’s installation page</a>.</p>
 
-<h3 id="step-3-install-dependencies">Step 3: Install Dependencies</h3>
+<h4 id="step-3-install-dependencies">Step 3: Install Dependencies</h4>
 
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pip <span class="nb">install</span> <span class="nt">-r</span> requirements.txt
 </code></pre></div></div>
@@ -162,14 +346,21 @@
   <li>Training utilities (accelerate, TRL, bitsandbytes)</li>
 </ul>
 
-<h3 id="step-4-verify-installation">Step 4: Verify Installation</h3>
+<h4 id="step-4-verify-installation">Step 4: Verify Installation</h4>
 
 <p>Check that your GPU is accessible:</p>
 
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">python</span> <span class="o">-</span><span class="n">c</span> <span class="s">"import torch; print(f'CUDA available: {torch.cuda.is_available()}')"</span>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>python <span class="nt">-c</span> <span class="s2">"import torch; print(f'CUDA available: {torch.cuda.is_available()}')"</span>
 </code></pre></div></div>
 
 <p>You should see <code class="language-plaintext highlighter-rouge">CUDA available: True</code>.</p>
+
+<h4 id="step-5-start-application">Step 5: Start Application</h4>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>python flask_app.py
+</code></pre></div></div>
+
+<p>Access the web interface at <code class="language-plaintext highlighter-rouge">http://localhost:5000</code>.</p>
 
 <hr />
 
@@ -750,6 +941,94 @@ Then, provide your solution between &lt;SOLUTION&gt;&lt;/SOLUTION&gt;
 <hr />
 
 <h2 id="troubleshooting">Troubleshooting</h2>
+
+<h3 id="docker-specific-issues">Docker-Specific Issues</h3>
+
+<h4 id="gpu-not-detected-in-container">GPU Not Detected in Container</h4>
+
+<p><strong>Symptom</strong>: Container logs show “CUDA Available: False” or “GPU Count: 0”</p>
+
+<p><strong>Solutions:</strong></p>
+
+<ol>
+  <li><strong>Verify GPU works with Docker</strong>:
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>docker run <span class="nt">--rm</span> <span class="nt">--gpus</span> all nvidia/cuda:12.8.0-base-ubuntu22.04 nvidia-smi
+</code></pre></div>    </div>
+    <p>If this fails, your Docker GPU setup needs configuration.</p>
+  </li>
+  <li><strong>Check docker-compose.yml</strong> has correct GPU configuration:
+```yaml
+runtime: nvidia
+environment:
+    <ul>
+      <li>NVIDIA_VISIBLE_DEVICES=all</li>
+      <li>NVIDIA_DRIVER_CAPABILITIES=compute,utility
+```</li>
+    </ul>
+  </li>
+  <li><strong>For Docker Desktop</strong> (Windows/macOS):
+    <ul>
+      <li>Restart Docker Desktop</li>
+      <li>Settings → Resources → WSL Integration (ensure enabled)</li>
+      <li>Verify NVIDIA driver installed on Windows host</li>
+    </ul>
+  </li>
+  <li><strong>For Linux</strong>:
+    <ul>
+      <li>Ensure NVIDIA Container Toolkit installed</li>
+      <li>Run: <code class="language-plaintext highlighter-rouge">sudo nvidia-ctk runtime configure --runtime=docker</code></li>
+      <li>Restart Docker: <code class="language-plaintext highlighter-rouge">sudo systemctl restart docker</code></li>
+    </ul>
+  </li>
+  <li><strong>Rebuild container</strong>:
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>docker compose down
+docker compose up <span class="nt">-d</span>
+</code></pre></div>    </div>
+  </li>
+</ol>
+
+<h4 id="container-wont-start---entrypoint-error">Container Won’t Start - Entrypoint Error</h4>
+
+<p><strong>Symptom</strong>: “exec /app/src/entrypoint.sh: no such file or directory”</p>
+
+<p><strong>Cause</strong>: Line ending issues when building on Windows</p>
+
+<p><strong>Solution</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Rebuild without cache</span>
+docker compose build <span class="nt">--no-cache</span>
+docker compose up <span class="nt">-d</span>
+</code></pre></div></div>
+
+<p>The Dockerfile automatically fixes line endings, so rebuilding should resolve this.</p>
+
+<h4 id="port-5000-already-in-use">Port 5000 Already in Use</h4>
+
+<p><strong>Symptom</strong>: “Error starting userland proxy: listen tcp4 0.0.0.0:5000: bind: address already in use”</p>
+
+<p><strong>Solutions</strong>:</p>
+
+<ol>
+  <li><strong>Change port in docker-compose.yml</strong>:
+```yaml
+ports:
+    <ul>
+      <li>“5001:5000”  # Use port 5001 on host
+```</li>
+    </ul>
+  </li>
+  <li><strong>Or set in .env file</strong>:
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">echo</span> <span class="s2">"PORT=5001"</span> <span class="o">&gt;&gt;</span> .env
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Or stop conflicting service</strong>:
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Find process using port 5000</span>
+<span class="c"># Linux:</span>
+<span class="nb">sudo </span>lsof <span class="nt">-i</span> :5000
+<span class="c"># Windows:</span>
+netstat <span class="nt">-ano</span> | findstr :5000
+</code></pre></div>    </div>
+  </li>
+</ol>
 
 <h3 id="gpu-memory-issues">GPU Memory Issues</h3>
 

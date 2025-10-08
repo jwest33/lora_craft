@@ -93,7 +93,6 @@ temp/
 Dockerfile*
 docker-compose*.yml
 .dockerignore
-entrypoint.sh
 
 # Environment files (use .env.example instead)
 .env

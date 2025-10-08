@@ -796,7 +796,7 @@ def run_training(session_id: str, config: Dict[str, Any],
                     q.put(('log', f"  Expected Solution Markers: {template_config_obj.solution_start_marker} ... {template_config_obj.solution_end_marker}"))
                     q.put(('log', f"  Has reasoning markers: {has_reasoning_markers}"))
                     q.put(('log', f"  Has solution markers: {has_solution_markers}"))
-                    q.put(('log', f"  Format Compliant: {'✓ YES' if format_ok else '✗ NO'}"))
+                    q.put(('log', f"  Format Compliant: {'YES' if format_ok else '✗ NO'}"))
 
                     if not format_ok:
                         q.put(('log', "  ⚠️  WARNING: Model may need more pre-training epochs!"))

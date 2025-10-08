@@ -7,7 +7,7 @@
 # Requirements:
 #   - NVIDIA GPU with CUDA 12.8+ support
 #   - NVIDIA Container Toolkit installed on host
-#   - 20GB+ disk space
+#   - 64GB+ disk space
 #   - 8GB+ GPU VRAM (16GB+ recommended)
 # ============================================================================
 
@@ -47,6 +47,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpng-dev \
     ca-certificates \
     sed \
+    nvidia-utils-580 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create symbolic link for python
@@ -88,13 +89,13 @@ WORKDIR /app/src
 COPY --from=builder /usr/local/lib/python3.11/dist-packages /usr/local/lib/python3.11/dist-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy and setup entrypoint script first (before COPY . .)
+# Copy application code first
+COPY . .
+
+# Copy and setup entrypoint script last (overwrites any version from COPY . .)
 # Convert CRLF to LF line endings to ensure compatibility on Linux
 COPY entrypoint.sh /app/src/entrypoint.sh
 RUN sed -i 's/\r$//' /app/src/entrypoint.sh && chmod +x /app/src/entrypoint.sh
-
-# Copy application code
-COPY . .
 
 # Create necessary directories with proper permissions
 RUN mkdir -p \

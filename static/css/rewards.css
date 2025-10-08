@@ -148,7 +148,7 @@
 /* Selected Indicator Badge */
 .preset-card.selected::after,
 .template-card.selected::after {
-    content: '✓ Selected';
+    content: 'Selected';
     position: absolute;
     top: 8px;
     right: 8px;

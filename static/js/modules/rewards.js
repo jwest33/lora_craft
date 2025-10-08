@@ -329,7 +329,7 @@ async function selectPresetByName(presetName, silent = false) {
 
     // Visual feedback (suppress for auto-restored selections)
     if (!silent) {
-        showNotification(`✓ Selected: ${preset.name}`, 'success');
+        showNotification(`Selected: ${preset.name}`, 'success');
     }
 
     // Animate the selection
@@ -674,7 +674,7 @@ function saveCustomizedPreset() {
     if (descElement) descElement.textContent = 'Custom configuration based on ' + originalPresetDetails.name;
 
     // Show success notification
-    showNotification('✓ Customized reward applied!', 'success');
+    showNotification('Customized reward applied!', 'success');
 
     // Clear original details
     originalPresetDetails = null;
@@ -1960,7 +1960,7 @@ async function testRewardWithModel() {
         document.getElementById('generated-actions').style.display = 'block';
         document.getElementById('edit-status').textContent = 'Original model output';
 
-        showNotification('✓ Model generated response and scored successfully', 'success');
+        showNotification('Model generated response and scored successfully', 'success');
 
         // Restore button
         generateBtn.disabled = false;
@@ -2074,7 +2074,7 @@ function restoreOriginalGenerated() {
     if (originalGeneratedText) {
         document.getElementById('test-generated').value = originalGeneratedText;
         onGeneratedTextEdit(); // Trigger score update
-        showNotification('✓ Restored original model output', 'info');
+        showNotification('Restored original model output', 'info');
     }
 }
 
@@ -2559,7 +2559,7 @@ function applyCustomReward() {
     if (descElement) descElement.textContent = `Custom reward with ${components.length} component(s)`;
 
     // Show success notification
-    showNotification('✓ Custom reward applied!', 'success');
+    showNotification('Custom reward applied!', 'success');
 
     // Close modal
     const modal = bootstrap.Modal.getInstance(document.getElementById('customRewardBuilderModal'));
@@ -2598,7 +2598,7 @@ async function saveCustomRewardAsPreset() {
         const result = await response.json();
 
         if (response.ok && result.success) {
-            showNotification(`✓ Custom preset "${name}" saved successfully!`, 'success');
+            showNotification(`Custom preset "${name}" saved successfully!`, 'success');
 
             // Close modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('customRewardBuilderModal'));
@@ -2631,7 +2631,7 @@ async function deleteCustomPreset(presetName) {
         const result = await response.json();
 
         if (response.ok && result.success) {
-            showNotification(`✓ Custom preset "${presetName}" deleted successfully!`, 'success');
+            showNotification(`Custom preset "${presetName}" deleted successfully!`, 'success');
 
             // Reload presets
             await initializeRewardSystem();
@@ -3051,7 +3051,7 @@ async function autoMapFields(presetName) {
 
         updateMappingPreview();
         validateCurrentMapping();
-        showNotification('✓ Fields auto-mapped successfully', 'success');
+        showNotification('Fields auto-mapped successfully', 'success');
 
     } catch (error) {
         console.error('Error auto-mapping fields:', error);
@@ -3087,7 +3087,7 @@ function confirmFieldMapping(presetName) {
     if (modal) modal.hide();
 
     // Show success message
-    showNotification(`✓ Field mapping confirmed for ${rewardPresets[presetName]?.name || presetName}`, 'success');
+    showNotification(`Field mapping confirmed for ${rewardPresets[presetName]?.name || presetName}`, 'success');
 
     // Update reward display to show mapping status
     updateRewardMappingStatus(presetName, mapping);

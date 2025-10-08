@@ -22,7 +22,7 @@
 {"@context":"https://schema.org","@type":"WebPage","description":"Craft your own LoRA adapters with LoRA Craft - A web-based interface for fine-tuning language models using GRPO","headline":"Quick Start - LoRA Craft","url":"http://localhost:4000/quickstart.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/assets/css/style.css?v=2e6e5b5b61282c5b3dab83ea6dfaca95f3af9b0b">
+    <link rel="stylesheet" href="/assets/css/style.css?v=645f0a8df1697b1551365c3e1ec069048e07fe9b">
     <link rel="icon" type="image/png" href="/lora_craft.png">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
@@ -91,19 +91,135 @@
 
 <h2 id="before-you-begin">Before You Begin</h2>
 
-<p>Ensure you have:</p>
+<h3 id="hardware-requirements">Hardware Requirements</h3>
 <ul>
-  <li>NVIDIA GPU with 8GB+ VRAM</li>
+  <li>NVIDIA GPU with 8GB+ VRAM (for GPU acceleration)</li>
   <li>32GB+ System RAM</li>
-  <li>Python 3.11 or higher</li>
-  <li>20GB+ free disk space</li>
+  <li>64GB+ free disk space</li>
+</ul>
+
+<h3 id="software-requirements">Software Requirements</h3>
+<ul>
+  <li><strong>Docker Installation</strong>: Docker Desktop (Windows/macOS) or Docker + NVIDIA Container Toolkit (Linux)</li>
+  <li><strong>Native Installation</strong>: Python 3.11+ and CUDA 12.8+</li>
 </ul>
 
 <p>Not sure if your system is ready? Check the <a href="documentation.html#prerequisites">Prerequisites</a>.</p>
 
 <hr />
 
-<h2 id="installation">Installation</h2>
+<h2 id="choose-your-installation-method">Choose Your Installation Method</h2>
+
+<div class="installation-choice">
+  <div class="choice-card">
+    <h3>Docker (Recommended)</h3>
+    <p><strong>Best for:</strong> Quick setup, Windows users, isolated environments</p>
+    <ul>
+      <li>Zero dependency management</li>
+      <li>Works on Windows (WSL2), Linux, macOS</li>
+      <li>Automatic GPU detection</li>
+      <li>5-minute setup</li>
+    </ul>
+    <a href="#docker-installation">Use Docker →</a>
+  </div>
+
+  <div class="choice-card">
+    <h3>Native Installation</h3>
+    <p><strong>Best for:</strong> Direct system access, development, maximum control</p>
+    <ul>
+      <li>Faster startup times</li>
+      <li>Full system integration</li>
+      <li>Easier debugging</li>
+      <li>No container overhead</li>
+    </ul>
+    <a href="#native-installation">Native Install →</a>
+  </div>
+</div>
+
+<hr />
+
+<h2 id="docker-installation">Docker Installation</h2>
+
+<h3 id="prerequisites">Prerequisites</h3>
+<ul>
+  <li>Docker 20.10+ and Docker Compose 2.0+</li>
+  <li>NVIDIA Driver 535+ installed on host</li>
+  <li>For Windows: WSL2 enabled with Docker Desktop</li>
+  <li>For Linux: NVIDIA Container Toolkit installed</li>
+</ul>
+
+<p><strong>Linux NVIDIA Container Toolkit Setup:</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Ubuntu/Debian</span>
+<span class="nv">distribution</span><span class="o">=</span><span class="si">$(</span><span class="nb">.</span> /etc/os-release<span class="p">;</span><span class="nb">echo</span> <span class="nv">$ID$VERSION_ID</span><span class="si">)</span>
+curl <span class="nt">-fsSL</span> https://nvidia.github.io/libnvidia-container/gpgkey | <span class="nb">sudo </span>gpg <span class="nt">--dearmor</span> <span class="nt">-o</span> /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl <span class="nt">-s</span> <span class="nt">-L</span> https://nvidia.github.io/libnvidia-container/<span class="nv">$distribution</span>/libnvidia-container.list | <span class="se">\</span>
+  <span class="nb">sed</span> <span class="s1">'s#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g'</span> | <span class="se">\</span>
+  <span class="nb">sudo tee</span> /etc/apt/sources.list.d/nvidia-container-toolkit.list
+<span class="nb">sudo </span>apt-get update <span class="o">&amp;&amp;</span> <span class="nb">sudo </span>apt-get <span class="nb">install</span> <span class="nt">-y</span> nvidia-container-toolkit
+<span class="nb">sudo </span>nvidia-ctk runtime configure <span class="nt">--runtime</span><span class="o">=</span>docker
+<span class="nb">sudo </span>systemctl restart docker
+</code></pre></div></div>
+
+<p><strong>Windows setup:</strong> Docker Desktop with WSL2 includes GPU support automatically—just install the NVIDIA driver on Windows.</p>
+
+<h3 id="installation-steps">Installation Steps</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># 1. Clone repository</span>
+git clone https://github.com/jwest33/lora_craft.git
+<span class="nb">cd </span>lora_craft
+
+<span class="c"># 2. Start application (builds image on first run)</span>
+docker compose up <span class="nt">-d</span>
+
+<span class="c"># 3. View logs to verify startup</span>
+docker compose logs <span class="nt">-f</span>
+
+<span class="c"># Wait for "Starting LoRA Craft Flask Application" message</span>
+<span class="c"># Press Ctrl+C to exit logs</span>
+</code></pre></div></div>
+
+<p><strong>First startup takes 5-15 minutes</strong> to download base image and install dependencies. Subsequent starts are much quicker.</p>
+
+<h3 id="verify-installation">Verify Installation</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Check container is running</span>
+docker compose ps
+
+<span class="c"># Verify GPU is detected</span>
+docker compose logs | <span class="nb">grep</span> <span class="s2">"CUDA Available"</span>
+<span class="c"># Should show: CUDA Available: True</span>
+
+<span class="c"># Open browser to http://localhost:5000</span>
+</code></pre></div></div>
+
+<h3 id="docker-management">Docker Management</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Stop application</span>
+docker compose down
+
+<span class="c"># Restart application</span>
+docker compose restart
+
+<span class="c"># View live logs</span>
+docker compose logs <span class="nt">-f</span>
+
+<span class="c"># Access container shell</span>
+docker compose <span class="nb">exec </span>lora-craft bash
+
+<span class="c"># Check GPU inside container</span>
+docker compose <span class="nb">exec </span>lora-craft nvidia-smi
+
+<span class="c"># Update to latest version</span>
+git pull
+docker compose build
+docker compose up <span class="nt">-d</span>
+</code></pre></div></div>
+
+<p><strong>Skip to</strong> <a href="#training-your-first-model">Training Your First Model</a></p>
+
+<hr />
+
+<h2 id="native-installation">Native Installation</h2>
 
 <h3 id="1-clone-the-repository">1. Clone the Repository</h3>
 
@@ -131,6 +247,10 @@
 <hr />
 
 <h2 id="starting-the-application">Starting the Application</h2>
+
+<p><strong>For Docker users:</strong> Your application is already running! Skip to <a href="#training-your-first-model">Training Your First Model</a>.</p>
+
+<p><strong>For native installation:</strong></p>
 
 <h3 id="1-launch-the-server">1. Launch the Server</h3>
 
@@ -314,6 +434,36 @@ Your fine-tuned model should show structured reasoning and correct answers more 
 
 <h2 id="common-first-time-issues">Common First-Time Issues</h2>
 
+<h3 id="docker-gpu-not-detected">Docker: GPU Not Detected</h3>
+
+<p><strong>Symptom:</strong> Container logs show “CUDA Available: False”</p>
+
+<p><strong>Solutions:</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># 1. Test GPU access works</span>
+docker run <span class="nt">--rm</span> <span class="nt">--gpus</span> all nvidia/cuda:12.8.0-base-ubuntu22.04 nvidia-smi
+
+<span class="c"># 2. If test fails on Linux, install/configure NVIDIA Container Toolkit</span>
+<span class="nb">sudo </span>nvidia-ctk runtime configure <span class="nt">--runtime</span><span class="o">=</span>docker
+<span class="nb">sudo </span>systemctl restart docker
+
+<span class="c"># 3. If test fails on Windows, restart Docker Desktop</span>
+<span class="c"># Docker Desktop → Restart</span>
+
+<span class="c"># 4. Rebuild and restart container</span>
+docker compose down
+docker compose up <span class="nt">-d</span>
+</code></pre></div></div>
+
+<h3 id="docker-container-wont-start">Docker: Container Won’t Start</h3>
+
+<p><strong>Symptom:</strong> “exec /app/src/entrypoint.sh: no such file or directory”</p>
+
+<p><strong>Solution:</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Rebuild image without cache</span>
+docker compose build <span class="nt">--no-cache</span>
+docker compose up <span class="nt">-d</span>
+</code></pre></div></div>
+
 <h3 id="training-is-too-slow">Training is too slow</h3>
 <ul>
   <li>Reduce samples per epoch to 200</li>
@@ -428,7 +578,7 @@ Load your HuggingFace format model in any Python application with the Transforme
   <li><strong>Discussions</strong>: <a href="https://github.com/jwest33/lora_craft/discussions">Ask questions and share tips</a></li>
 </ul>
 
-<p>Happy fine-tuning! 🎉</p>
+<p>Happy fine-tuning!</p>
 
 
         <footer class="site-footer">
