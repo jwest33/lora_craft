@@ -11,6 +11,7 @@ import os
 import warnings
 
 from constants import MODEL_SIZES
+from .device_manager import is_cuda_available as device_is_cuda_available
 
 try:
     # nvidia-ml-py package provides the pynvml module
@@ -289,12 +290,14 @@ class SystemConfig:
         # For Qwen3 models, use 16-bit LoRA (not 4-bit) for better performance
         use_mixed_precision = self.system_info.cuda_available and total_vram > 2000
         # Enable gradient checkpointing for memory efficiency ("unsloth" mode)
-        use_gradient_checkpointing = True  # Always use for GRPO
+        # Disable for CPU as it can cause compatibility issues
+        use_gradient_checkpointing = self.system_info.cuda_available  # Only use on GPU
         use_cpu_offload = total_vram < 4000 and available_ram > 16000
 
         # Check for flash attention support (requires Ampere or newer)
+        # Flash attention only works on GPU
         use_flash_attention = False
-        if self.gpu_info and self.gpu_info[0].cuda_capability:
+        if self.system_info.cuda_available and self.gpu_info and self.gpu_info[0].cuda_capability:
             major, minor = self.gpu_info[0].cuda_capability
             use_flash_attention = major >= 8  # Ampere and newer
 
@@ -387,7 +390,7 @@ class SystemConfig:
 
         # Check GPU
         if not self.system_info.cuda_available:
-            warnings.append("No CUDA-capable GPU detected. Training will be slow on CPU.")
+            warnings.append("No CUDA-capable GPU detected. Training will run on CPU (slower but functional).")
         elif self.gpu_info:
             vram_gb = self.gpu_info[0].memory_total / 1024
             if vram_gb < min_vram_gb:

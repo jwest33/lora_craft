@@ -1,5 +1,13 @@
 """Core modules for GRPO fine-tuning."""
 
+from .device_manager import (
+    detect_device,
+    get_device,
+    is_cuda_available,
+    use_unsloth,
+    get_device_info,
+    get_optimal_device_map
+)
 from .grpo_trainer import GRPOModelTrainer, GRPOTrainingConfig
 from .dataset_handler import DatasetHandler, DatasetConfig
 from .prompt_templates import PromptTemplate, TemplateConfig
@@ -16,6 +24,12 @@ from .session_registry import SessionRegistry, SessionInfo
 from .model_tester import ModelTester, TestConfig
 
 __all__ = [
+    'detect_device',
+    'get_device',
+    'is_cuda_available',
+    'use_unsloth',
+    'get_device_info',
+    'get_optimal_device_map',
     'GRPOModelTrainer',
     'GRPOTrainingConfig',
     'DatasetHandler',

@@ -55,19 +55,27 @@ LoRA Craft is a web-based application that enables fine-tuning of large language
 
 ### Hardware Requirements
 
-- **GPU**: NVIDIA GPU with CUDA support (minimum 8GB VRAM recommended)
+**GPU Mode (Recommended):**
+- **GPU**: NVIDIA GPU with CUDA support
   - 8GB VRAM: Small models (0.6B - 1.7B parameters)
   - 12GB VRAM: Medium models (3B - 4B parameters)
   - 16GB+ VRAM: Large models (7B - 8B parameters)
-- **RAM**: Minimum 32GB system memory
+- **RAM**: Minimum 16GB system memory (32GB+ recommended)
 - **Storage**: At least 64GB free disk space for models and datasets
+
+**CPU-Only Mode (Supported):**
+- **CPU**: Modern multi-core processor (4+ cores)
+- **RAM**: Minimum 16GB system memory (32GB+ strongly recommended)
+- **Storage**: At least 64GB free disk space
+- **Note**: Training will be 5-10x slower than GPU mode. Best for development, testing, or small-scale training.
 
 ### Software Requirements
 
 - **Operating System**: Windows, Linux, or macOS
-- **Python**: Version 3.11 or higher
-- **CUDA**: CUDA Toolkit 12.8 or compatible version
+- **Python**: Version 3.11 or higher (for native installation)
+- **CUDA**: CUDA Toolkit 12.8 or compatible version (GPU mode only)
 - **Git**: For cloning the repository
+- **Docker**: For Docker installation (optional but recommended)
 
 ---
 
@@ -80,7 +88,7 @@ LoRA Craft is a web-based application that enables fine-tuning of large language
 
 ### Docker Installation (Recommended)
 
-Docker provides the easiest and most reliable way to run LoRA Craft with all dependencies pre-configured. The Docker setup works on **Windows** (with WSL2), **Linux**, and **macOS** (CPU-only).
+Docker provides the easiest and most reliable way to run LoRA Craft with all dependencies pre-configured. The Docker setup works on **Windows** (with WSL2), **Linux**, and **macOS**.
 
 #### Why Use Docker?
 
@@ -89,12 +97,21 @@ Docker provides the easiest and most reliable way to run LoRA Craft with all dep
 - **Isolated installation** - Won't conflict with other Python projects
 - **Easy updates** - Pull latest image and restart
 - **Production-ready** - Includes health checks, logging, and volume management
+- **CPU/GPU flexibility** - Automatically detects and uses available hardware
 
 #### Prerequisites
+
+**Required (All Systems):**
 - **Docker 20.10+** and **Docker Compose 2.0+**
-- **NVIDIA GPU** with CUDA support (Linux/Windows only)
+
+**For GPU Mode (Optional):**
+- **NVIDIA GPU** with CUDA support
 - **NVIDIA Driver 535+** installed on host
 - **NVIDIA Container Toolkit** - See [DOCKER-QUICKSTART.md](DOCKER-QUICKSTART.md) for installation
+
+**For CPU-Only Mode:**
+- No additional setup needed - Docker is sufficient
+- Recommended: 16GB+ RAM (32GB+ preferred)
 
 #### Quick Start
 
@@ -123,11 +140,12 @@ docker compose logs -f
 
 The LoRA Craft Docker image provides:
 
-- ✅ **NVIDIA CUDA 12.8** runtime with cuDNN 9.7
+- ✅ **NVIDIA CUDA 12.8** runtime with cuDNN 9.7 (works on both GPU and CPU)
 - ✅ **Python 3.11** with all dependencies pre-installed
 - ✅ **PyTorch 2.8.0** with CUDA 12.8 support
-- ✅ **nvidia-smi** utility for GPU monitoring
-- ✅ **Automatic GPU detection** on startup
+- ✅ **nvidia-smi** utility for GPU monitoring (when GPU available)
+- ✅ **Automatic GPU/CPU detection** on startup
+- ✅ **Graceful CPU fallback** when GPU not available
 - ✅ **Persistent volumes** for models, datasets, configs, and outputs
 - ✅ **Health checks** to monitor application status
 - ✅ **Optimized training libraries** (Unsloth, Transformers, PEFT, TRL)
@@ -206,10 +224,23 @@ docker compose down -v
 
 **macOS**:
 - GPU acceleration not available (no NVIDIA GPU support)
-- Can run in CPU-only mode (very slow for training)
-- Consider using cloud GPU instance instead
+- ✅ **CPU-only mode now supported** - works for development and testing
+- Training will be 5-10x slower than GPU mode
+- Recommended for small models (Qwen3-0.6B, Qwen3-1.7B)
+- For production training, consider using cloud GPU instance
 
-For **detailed Docker setup, troubleshooting, and platform-specific instructions**, see **[DOCKER-QUICKSTART.md](DOCKER-QUICKSTART.md)**.
+**CPU Mode Detection:**
+
+The application automatically detects available hardware on startup:
+- **With GPU**: Uses CUDA acceleration and Unsloth optimizations
+- **Without GPU**: Falls back to CPU mode with standard PyTorch
+
+Check logs after startup to see which mode is active:
+```bash
+docker compose logs lora-craft | grep -i "gpu\|cuda\|cpu mode"
+```
+
+For **detailed Docker setup, CPU mode configuration, troubleshooting, and platform-specific instructions**, see **[DOCKER-QUICKSTART.md](DOCKER-QUICKSTART.md)**.
 
 ---
 
@@ -224,37 +255,62 @@ git clone https://github.com/jwest33/lora_craft.git
 cd lora_craft
 ```
 
-#### Step 2: Install PyTorch with CUDA Support
+#### Step 2: Install PyTorch
 
-Install PyTorch with CUDA 12.8 support:
-
+**For GPU (CUDA 12.8):**
 ```bash
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 ```
 
-For other CUDA versions, visit [PyTorch's installation page](https://pytorch.org/get-started/locally/).
+**For CPU-only:**
+```bash
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+```
+
+For other CUDA versions or more options, visit [PyTorch's installation page](https://pytorch.org/get-started/locally/).
 
 #### Step 3: Install Dependencies
 
+**For GPU mode:**
 ```bash
 pip install -r requirements.txt
 ```
 
+**For CPU-only mode:**
+```bash
+# Install PyTorch CPU first (if not done in Step 2)
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+# Comment out GPU-specific packages in requirements.txt:
+# - unsloth, unsloth_zoo
+# - bitsandbytes
+# - xformers
+# - triton-windows (Windows only)
+# Then install:
+pip install -r requirements.txt
+```
+
 This will install all required packages including:
-- Unsloth (optimized training framework)
+- Unsloth (optimized training framework, GPU-only)
 - Transformers and PEFT (model handling)
 - Flask and SocketIO (web interface)
 - Training utilities (accelerate, TRL, bitsandbytes)
 
 ### Step 4: Verify Installation
 
-Check that your GPU is accessible:
+Check that PyTorch is working:
 
+**GPU Mode:**
 ```python
 python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
 ```
-
 You should see `CUDA available: True`.
+
+**CPU Mode:**
+```python
+python -c "import torch; print(f'PyTorch version: {torch.__version__}')"
+```
+You should see the PyTorch version printed.
 
 ---
 
@@ -738,11 +794,26 @@ Then, provide your solution between <SOLUTION></SOLUTION>
 
 ## Troubleshooting
 
+### CPU vs GPU Mode
+
+**Note**: LoRA Craft automatically detects and uses available hardware. If you see "CPU Mode" in the logs but have an NVIDIA GPU, see the GPU troubleshooting section below.
+
+**Expected CPU Mode Indicators:**
+- Log message: `⚠ No GPU detected - running in CPU mode`
+- Log message: `⚠ Unsloth optimizations: DISABLED (requires CUDA)`
+- System status shows: "CPU Mode (No GPU Detected)"
+
+**This is normal if:**
+- You don't have an NVIDIA GPU
+- Running on macOS
+- Intentionally using CPU mode for testing
+- NVIDIA Container Toolkit not installed (Docker)
+
 ### Docker-Specific Issues
 
-#### GPU Not Detected in Container
+#### GPU Not Detected in Container (But You Have a GPU)
 
-**Symptom**: Container logs show "CUDA Available: False" or "GPU Count: 0"
+**Symptom**: Container logs show "CPU Mode" or "CUDA Available: False" even though you have an NVIDIA GPU
 
 **Solutions:**
 

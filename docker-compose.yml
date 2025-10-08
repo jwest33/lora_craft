@@ -25,8 +25,14 @@ services:
     image: lora-craft:latest
     container_name: lora-craft
 
-    # GPU Configuration (using runtime for Docker Desktop compatibility)
-    runtime: nvidia
+    # GPU Configuration (Docker Desktop compatible)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
     # Port mapping
     ports:

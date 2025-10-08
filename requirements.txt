@@ -3,13 +3,26 @@
 # ============================================================================
 # These packages are essential for LoRA training with GRPO/GSPO
 
-# PyTorch ecosystem - CUDA-specific builds
-# Install instructions: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+# ============================================================================
+# PyTorch Installation Instructions:
+# ============================================================================
+# FOR GPU (CUDA 12.8):
+#   pip install torch==2.8.0+cu128 torchvision==0.23.0 --index-url https://download.pytorch.org/whl/cu128
+#   pip install triton-windows==3.4.0.post20  (Windows only)
+#
+# FOR CPU-ONLY:
+#   pip install torch==2.8.0 torchvision==0.23.0 --index-url https://download.pytorch.org/whl/cpu
+# ============================================================================
+# Note: Requirements below assume GPU installation. For CPU-only, install
+# PyTorch separately using CPU index URL above, then install requirements.txt
 torch==2.8.0+cu128
 torchvision==0.23.0
 triton-windows==3.4.0.post20
 
-# Unsloth optimization (2x faster training, 50% less memory)
+# ============================================================================
+# Unsloth optimization (OPTIONAL - GPU-only, provides 2x faster training)
+# ============================================================================
+# Unsloth requires CUDA. For CPU-only systems, comment out or skip these:
 unsloth==2025.9.7
 unsloth_zoo==2025.9.9
 
@@ -19,7 +32,8 @@ transformers==4.55.4
 peft==0.17.0
 trl==0.21.0
 
-# Quantization and optimization
+# Quantization and optimization (GPU-only, optional for CPU)
+# Note: bitsandbytes and xformers require CUDA. Skip for CPU-only installations.
 bitsandbytes==0.47.0
 # xformers: Local build detected. For portable install use: xformers>=0.0.33
 xformers>=0.0.33
@@ -87,9 +101,9 @@ yarl==1.20.1
 # ============================================================================
 
 # System monitoring
-gpustat==1.1.1
+gpustat==1.1.1  # Optional - GPU monitoring only
 psutil==7.1.0
-nvidia-ml-py==13.580.82
+nvidia-ml-py==13.580.82  # Optional - NVIDIA GPU monitoring only
 py-cpuinfo==9.0.0
 
 # Terminal utilities (Windows-specific)
