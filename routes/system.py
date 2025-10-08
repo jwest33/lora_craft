@@ -12,6 +12,7 @@ from flask import Blueprint, jsonify
 import torch
 import psutil
 
+from core import is_cuda_available, get_device_info
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -64,17 +65,21 @@ def get_system_info():
 def get_system_status():
     """Get real-time system status including GPU, VRAM, and RAM information."""
     try:
+        # Get device info from device manager
+        device_info = get_device_info()
+
         status = {
             'gpu': 'Unknown',
             'vram': 'N/A',
             'ram': 'N/A',
             'cpu': 'N/A',
             'vram_percent': 0,
-            'ram_percent': 0
+            'ram_percent': 0,
+            'mode': device_info.get('mode', 'Unknown')  # 'GPU' or 'CPU'
         }
 
         # Get GPU info if available
-        if torch.cuda.is_available():
+        if is_cuda_available():
             status['gpu'] = torch.cuda.get_device_name(0)
 
             # Try to get actual VRAM usage from GPU hardware using pynvml
@@ -106,7 +111,8 @@ def get_system_status():
                 status['vram'] = f"{reserved:.1f}GB / {total:.1f}GB"
                 status['vram_percent'] = (reserved / total * 100) if total > 0 else 0
         else:
-            status['gpu'] = 'CPU Only'
+            status['gpu'] = 'CPU Mode (No GPU Detected)'
+            status['vram'] = 'N/A (CPU Mode)'
 
         # Get RAM info
         ram = psutil.virtual_memory()

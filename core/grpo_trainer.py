@@ -1,5 +1,4 @@
 """GRPO (Group Relative Policy Optimization) trainer module."""
-from unsloth import FastModel
 import os
 import torch
 import gc
@@ -15,6 +14,29 @@ import numpy as np
 from tqdm import tqdm
 import logging
 from torch.utils.data import DataLoader
+
+# Import device manager and logger utilities first
+from .device_manager import get_device, is_cuda_available, use_unsloth, get_optimal_device_map
+from utils.logging_config import get_logger
+
+# Initialize logger first before using it
+logger = get_logger(__name__)
+
+# Conditional Unsloth import - MUST import before trl, transformers, peft for optimizations
+UNSLOTH_AVAILABLE = False
+FastModel = None
+if use_unsloth():
+    try:
+        from unsloth import FastModel
+        UNSLOTH_AVAILABLE = True
+        logger.info("[OK] Unsloth optimizations enabled")
+    except ImportError as e:
+        logger.warning(f"[WARN] Unsloth not available despite CUDA: {e}")
+        logger.warning("[WARN] Falling back to standard HuggingFace model loading")
+else:
+    logger.info("[INFO] Running in CPU mode - Unsloth optimizations disabled")
+
+# Import ML libraries AFTER unsloth to ensure optimizations are applied
 from trl import GRPOConfig as TRLGRPOConfig, GRPOTrainer
 
 from transformers import (
@@ -35,15 +57,12 @@ from datasets import Dataset
 from accelerate import Accelerator
 import safetensors.torch
 
+# Import remaining core modules
 from .dataset_handler import DatasetHandler, DatasetConfig
 from .prompt_templates import PromptTemplate
 from .custom_rewards import CustomRewardBuilder
 from .system_config import SystemConfig, TrainingConfig
 from .model_exporter import ModelExporter
-from utils.logging_config import get_logger
-
-
-logger = get_logger(__name__)
 
 
 class CallbackLogHandler(logging.Handler):
@@ -355,12 +374,12 @@ class GRPOModelTrainer:
 
     def setup_model(self,
                    model_name: Optional[str] = None,
-                   use_unsloth: bool = True) -> Tuple[Any, Any]:
+                   use_unsloth_arg: bool = True) -> Tuple[Any, Any]:
         """Setup model and tokenizer.
 
         Args:
             model_name: Model name (overrides config)
-            use_unsloth: Whether to use Unsloth for loading
+            use_unsloth_arg: Whether to use Unsloth for loading (if available)
 
         Returns:
             Tuple of (model, tokenizer)
@@ -368,7 +387,10 @@ class GRPOModelTrainer:
         model_name = model_name or self.config.model_name
         logger.info(f"Loading model: {model_name}")
 
-        if use_unsloth:
+        # Check if Unsloth is available and requested
+        should_use_unsloth = UNSLOTH_AVAILABLE and use_unsloth_arg
+
+        if should_use_unsloth:
             try:
                 # Load with Unsloth
                 # Determine dtype for model loading
@@ -408,30 +430,55 @@ class GRPOModelTrainer:
                     random_state=self.config.seed,
                 )
 
-                logger.info("Model loaded with Unsloth")
+                logger.info("Model loaded with Unsloth optimizations")
 
-            except ImportError:
-                logger.warning("Unsloth not available, falling back to standard loading")
-                use_unsloth = False
+            except Exception as e:
+                logger.warning(f"Unsloth loading failed: {e}, falling back to standard loading")
+                should_use_unsloth = False
 
-        if not use_unsloth:
+        if not should_use_unsloth:
             # Standard loading with transformers
-            compute_dtype = getattr(torch, self.config.bnb_4bit_compute_dtype)
+            logger.info("Loading model with standard HuggingFace transformers")
 
-            bnb_config = BitsAndBytesConfig(
-                load_in_4bit=self.config.use_4bit,
-                load_in_8bit=self.config.use_8bit,
-                bnb_4bit_compute_dtype=compute_dtype,
-                bnb_4bit_quant_type=self.config.bnb_4bit_quant_type,
-                bnb_4bit_use_double_quant=self.config.use_nested_quant,
-            )
+            # Quantization not supported on CPU
+            use_quantization = (self.config.use_4bit or self.config.use_8bit) and is_cuda_available()
+
+            if use_quantization:
+                compute_dtype = getattr(torch, self.config.bnb_4bit_compute_dtype)
+                bnb_config = BitsAndBytesConfig(
+                    load_in_4bit=self.config.use_4bit,
+                    load_in_8bit=self.config.use_8bit,
+                    bnb_4bit_compute_dtype=compute_dtype,
+                    bnb_4bit_quant_type=self.config.bnb_4bit_quant_type,
+                    bnb_4bit_use_double_quant=self.config.use_nested_quant,
+                )
+            else:
+                bnb_config = None
+                if not is_cuda_available():
+                    logger.info("Running on CPU - quantization disabled")
+
+            # Get optimal device map
+            device_map = get_optimal_device_map(model_name)
+
+            # Determine dtype for CPU mode
+            if not is_cuda_available():
+                # Use float32 for CPU for better compatibility
+                torch_dtype = torch.float32
+            elif self.config.fp16:
+                torch_dtype = torch.float16
+            elif self.config.bf16:
+                torch_dtype = torch.bfloat16
+            else:
+                torch_dtype = "auto"
 
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name,
-                quantization_config=bnb_config if self.config.use_4bit or self.config.use_8bit else None,
-                device_map="auto",
+                quantization_config=bnb_config,
+                device_map=device_map,
+                torch_dtype=torch_dtype,
                 trust_remote_code=True,
                 cache_dir=self.config.cache_dir,
+                low_cpu_mem_usage=True,
             )
 
             self.tokenizer = AutoTokenizer.from_pretrained(
@@ -446,11 +493,18 @@ class GRPOModelTrainer:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
                 self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
 
-            # Prepare model for training
-            self.model = prepare_model_for_kbit_training(self.model)
+            # Prepare model for training (only if using quantization)
+            if use_quantization:
+                self.model = prepare_model_for_kbit_training(self.model)
+            else:
+                # Enable gradient checkpointing for CPU mode if configured
+                if self.config.gradient_checkpointing and hasattr(self.model, 'enable_input_require_grads'):
+                    self.model.enable_input_require_grads()
 
             # Setup LoRA
             self.setup_lora()
+
+            logger.info(f"Model loaded successfully on {get_device()}")
 
         return self.model, self.tokenizer
 
@@ -1595,11 +1649,12 @@ class GRPOModelTrainer:
                 self.model.clear_cache()
 
             # Ensure model is on the correct device
+            device = get_device()
+            self.model = self.model.to(device)
             if torch_module.cuda.is_available():
-                self.model = self.model.cuda()
                 torch_module.cuda.empty_cache()
 
-            logger.info("Reset model state for GRPO training")
+            logger.info(f"Reset model state for GRPO training on {device}")
         except Exception as e:
             logger.warning(f"Could not fully reset model state: {e}")
 

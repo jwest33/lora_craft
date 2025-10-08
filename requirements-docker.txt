@@ -5,7 +5,8 @@
 # Main differences from requirements.txt:
 #   - Uses triton (Linux) instead of triton-windows
 #   - Removes ansicon (Windows-specific terminal utility)
-#   - PyTorch installed separately in Dockerfile for CUDA 12.8 compatibility
+#   - PyTorch installed separately in Dockerfile for CPU/GPU compatibility
+#   - Unsloth is optional (GPU-only optimization)
 # ============================================================================
 
 # ============================================================================
@@ -14,13 +15,18 @@
 # These packages are essential for LoRA training with GRPO/GSPO
 
 # NOTE: PyTorch is installed separately in Dockerfile
-# torch==2.8.0  (installed with CUDA 12.8 from PyTorch index)
-# torchvision==0.23.0  (installed with CUDA 12.8 from PyTorch index)
+# FOR GPU: torch==2.8.0+cu128 (installed with CUDA 12.8 from PyTorch index)
+# FOR CPU: torch==2.8.0 (installed from PyTorch CPU index)
+# torchvision==0.23.0  (installed with matching PyTorch build)
 
-# Triton for Linux (not triton-windows)
+# Triton for Linux (GPU-only, optional)
+# Note: Only needed for GPU builds. Will be skipped for CPU-only Docker images.
 triton>=3.0.0
 
-# Unsloth optimization (2x faster training, 50% less memory)
+# ============================================================================
+# Unsloth optimization (OPTIONAL - GPU-only, provides 2x faster training)
+# ============================================================================
+# Unsloth requires CUDA. For CPU-only Docker images, skip these packages.
 unsloth==2025.9.7
 unsloth_zoo==2025.9.9
 
@@ -30,9 +36,10 @@ transformers==4.55.4
 peft==0.17.0
 trl==0.21.0
 
-# Quantization and optimization
+# Quantization and optimization (GPU-only, optional for CPU)
+# Note: bitsandbytes and xformers require CUDA. Skip for CPU-only Docker images.
 bitsandbytes==0.47.0
-xformers>=0.0.27  # Use latest available stable version compatible with PyTorch 2.8.0
+# xformers: Built from source in Dockerfile for RTX 50X (Blackwell) support
 
 # Efficient attention and optimization
 cut-cross-entropy==25.1.1
@@ -97,9 +104,9 @@ yarl==1.20.1
 # ============================================================================
 
 # System monitoring
-gpustat==1.1.1
+gpustat==1.1.1  # Optional - GPU monitoring only
 psutil==7.1.0
-nvidia-ml-py==13.580.82
+nvidia-ml-py==13.580.82  # Optional - NVIDIA GPU monitoring only
 py-cpuinfo==9.0.0
 
 # Terminal utilities (Linux-compatible, removed ansicon)

@@ -1,19 +1,29 @@
 # ============================================================================
 # LoRA Craft - Multi-Stage Dockerfile
 #
-# This Dockerfile creates an optimized container for running LoRA Craft,
+# This Dockerfile creates a container for running LoRA Craft,
 # a web-based GRPO fine-tuning interface for language models.
 #
+# Supports both GPU and CPU modes:
+#   GPU MODE (default):
+#     - Requires NVIDIA GPU with CUDA 12.8+ support
+#     - Requires NVIDIA Container Toolkit installed on host
+#     - Run with: docker run --gpus all ...
+#   CPU MODE:
+#     - No GPU required
+#     - Run with: docker run ... (no --gpus flag needed)
+#     - Training will be slower but functional
+#
 # Requirements:
-#   - NVIDIA GPU with CUDA 12.8+ support
-#   - NVIDIA Container Toolkit installed on host
 #   - 64GB+ disk space
-#   - 8GB+ GPU VRAM (16GB+ recommended)
+#   - GPU: 8GB+ VRAM (16GB+ recommended)
+#   - CPU: 16GB+ RAM (32GB+ recommended)
 # ============================================================================
 
 # ============================================================================
-# Stage 1: Base Image with CUDA 12.8 Runtime
+# Stage 1: Base Image with CUDA 12.8 Runtime (GPU) or Ubuntu (CPU-capable)
 # ============================================================================
+# Note: This image includes CUDA support but will work on CPU-only systems
 FROM nvidia/cuda:12.8.0-cudnn-runtime-ubuntu22.04 AS base
 
 # Set environment variables
@@ -69,12 +79,21 @@ WORKDIR /build
 COPY requirements-docker.txt .
 
 # Install PyTorch with CUDA 12.8 support first (large dependency)
+# Note: This will work on both GPU and CPU systems. PyTorch detects available hardware at runtime.
 RUN pip install --no-cache-dir \
     torch==2.8.0 \
     torchvision==0.23.0 \
     --index-url https://download.pytorch.org/whl/cu128
 
+# Build xformers from source for RTX 50X (Blackwell) GPU support
+# This provides compatibility with PyTorch 2.8.0 and latest GPU architectures
+# Note: ninja is already installed in base image
+RUN pip install --no-cache-dir -v --no-build-isolation \
+    git+https://github.com/facebookresearch/xformers.git@main
+
 # Install remaining dependencies
+# Note: Some packages (unsloth, bitsandbytes, triton) are GPU-only but won't prevent CPU operation
+# The application will detect GPU availability and disable these features automatically
 RUN pip install --no-cache-dir -r requirements-docker.txt
 
 # ============================================================================

@@ -4,12 +4,22 @@ Fast track to running LoRA Craft with Docker.
 
 ## Prerequisites
 
-1. **NVIDIA GPU** with CUDA support
-2. **NVIDIA Driver** 535+ installed
-3. **Docker** 20.10+ and **Docker Compose** 2.0+ installed
-4. **NVIDIA Container Toolkit** installed
+### Required (All Modes)
+- **Docker** 20.10+ and **Docker Compose** 2.0+ installed
 
-## One-Time Setup
+### For GPU Mode (Optional, but Recommended)
+- **NVIDIA GPU** with CUDA support
+- **NVIDIA Driver** 535+ installed
+- **NVIDIA Container Toolkit** installed
+
+### For CPU-Only Mode
+- No GPU required - Docker is sufficient
+- **Note:** Training will be 5-10x slower on CPU
+- Recommended: 16GB+ RAM (32GB+ preferred)
+
+## One-Time Setup (GPU Mode Only)
+
+**Skip this section if you're running in CPU-only mode.** The NVIDIA Container Toolkit is only needed for GPU acceleration.
 
 ### Linux (Ubuntu/Debian)
 
@@ -77,11 +87,17 @@ docker run --rm --gpus all nvidia/cuda:12.8.0-base-ubuntu22.04 nvidia-smi
 
 ### macOS
 
-**GPU acceleration is not supported on macOS** due to lack of NVIDIA GPU support. You can run LoRA Craft in CPU-only mode, but training will be significantly slower and memory-limited.
+**GPU acceleration is not supported on macOS** due to lack of NVIDIA GPU support.
 
-For macOS users, we recommend:
-- Using a cloud GPU instance (AWS, GCP, RunPod, etc.)
+However, **LoRA Craft now supports CPU-only mode** and will run on macOS:
+- Training will be 5-10x slower than GPU mode
+- Recommended for development, testing, or small-scale training
+- Use smaller models (e.g., Qwen3-0.6B) and reduce batch sizes
+
+**For production training on macOS**, we recommend:
+- Using a cloud GPU instance (AWS, GCP, RunPod, vast.ai, etc.)
 - Remote development to a Linux machine with GPU
+- Docker Desktop with macOS native installation (no GPU setup needed for CPU mode)
 
 ## Launch LoRA Craft
 
@@ -94,14 +110,40 @@ cd lora_craft
 cp .env.example .env
 # Edit .env if needed
 
-# Start application
+# Start application (GPU mode - default)
 docker compose up -d
+
+# OR: Start in CPU-only mode (omit --gpus flag in docker-compose.yml)
+# Edit docker-compose.yml and comment out the 'runtime: nvidia' line
+# Then run: docker compose up -d
 
 # View logs
 docker compose logs -f
 ```
 
 **Access:** http://localhost:5000
+
+### How to Check Which Mode You're Running
+
+Once started, check the logs to see if GPU was detected:
+
+```bash
+docker compose logs lora-craft | grep -i "gpu\|cuda\|cpu mode"
+```
+
+**GPU Mode Output:**
+```
+✓ GPU detected: NVIDIA GeForce RTX 4090
+✓ CUDA available: 12.8
+✓ Unsloth optimizations: ENABLED
+```
+
+**CPU Mode Output:**
+```
+⚠ No GPU detected - running in CPU mode
+⚠ Unsloth optimizations: DISABLED (requires CUDA)
+⚠ Training will be slower on CPU
+```
 
 ## Common Commands
 
@@ -135,9 +177,9 @@ docker compose up -d
 
 ## Troubleshooting
 
-### GPU Not Detected
+### GPU Not Detected (But You Have a GPU)
 
-**Symptoms**: Container logs show "CUDA Available: False" or "GPU Count: 0"
+**Symptoms**: Container logs show "CPU Mode" or "CUDA Available: False" even though you have an NVIDIA GPU
 
 **Linux Solutions:**
 ```bash
@@ -225,6 +267,49 @@ docker compose build --no-cache
 docker compose up -d
 ```
 
+### Running in CPU Mode (Intentionally)
+
+**To force CPU-only mode** (useful for testing or when GPU not needed):
+
+1. Edit `docker-compose.yml` and comment out the GPU runtime:
+   ```yaml
+   # runtime: nvidia  # Comment this out for CPU mode
+   ```
+
+2. Restart the container:
+   ```bash
+   docker compose down
+   docker compose up -d
+   ```
+
+3. Verify CPU mode in logs:
+   ```bash
+   docker compose logs lora-craft | grep "CPU mode"
+   ```
+
+### Out of Memory on CPU
+
+**Symptoms**: Container crashes with "Killed" or OOM errors in CPU mode
+
+**Solutions:**
+
+1. **Use smaller models**:
+   - Try Qwen3-0.6B instead of larger models
+   - Reduce max_sequence_length to 512 or 256
+
+2. **Reduce batch size**:
+   - Set batch_size to 1
+   - Reduce gradient_accumulation_steps
+
+3. **Increase Docker memory limit** (Docker Desktop):
+   - Docker Desktop → Settings → Resources
+   - Increase Memory limit to 16GB+ (32GB recommended)
+
+4. **Close other applications** to free system RAM
+
+5. **Use smaller datasets**:
+   - Limit dataset to < 1000 samples for testing
+
 ## Data Locations
 
 All data is stored in the project directory:
@@ -239,27 +324,48 @@ All data is stored in the project directory:
 
 ## Resource Requirements
 
-### Minimum
+### GPU Mode (Recommended)
+
+**Minimum:**
 - 8GB VRAM GPU
 - 16GB RAM
 - 50GB disk space
 
-### Recommended
+**Recommended:**
 - 16GB+ VRAM GPU
 - 32GB RAM
 - 100GB disk space
+
+### CPU-Only Mode
+
+**Minimum:**
+- 16GB RAM
+- 50GB disk space
+- Modern multi-core CPU (4+ cores)
+
+**Recommended:**
+- 32GB+ RAM
+- 100GB disk space
+- 8+ core CPU (Ryzen 7/9, Intel i7/i9, or equivalent)
+
+**Note:** CPU mode is 5-10x slower than GPU. Best for:
+- Development and testing
+- Small models (Qwen3-0.6B, Qwen3-1.7B)
+- Limited datasets (< 1000 samples)
+- Systems without NVIDIA GPU
 
 ## What's Included in the Docker Image
 
 The LoRA Craft Docker image provides a complete, pre-configured environment:
 
-- **NVIDIA CUDA 12.8** runtime with cuDNN
+- **NVIDIA CUDA 12.8** runtime with cuDNN (works on both GPU and CPU systems)
 - **Python 3.11** with all dependencies pre-installed
-- **nvidia-smi** utility for GPU monitoring
-- **Automatic GPU detection** on container startup
+- **nvidia-smi** utility for GPU monitoring (when GPU available)
+- **Automatic GPU/CPU detection** on container startup
 - **Persistent volumes** for models, datasets, and outputs
 - **Health checks** to monitor application status
 - **Optimized dependencies** (PyTorch 2.8.0 with CUDA support)
+- **Graceful CPU fallback** when GPU not available
 
 **Image size**: ~15GB (includes PyTorch, Transformers, and training libraries)
 
