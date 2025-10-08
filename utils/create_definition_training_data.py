@@ -74,8 +74,8 @@ def create_definition_qa_samples(definitions_path='data/metric_definitions.jsonl
         for sample in qa_samples:
             f.write(json.dumps(sample, ensure_ascii=False) + '\n')
 
-    print(f"✓ Created {len(qa_samples)} Q&A samples from {len(definitions)} metrics")
-    print(f"✓ Saved to: {output_path}")
+    print(f"Created {len(qa_samples)} Q&A samples from {len(definitions)} metrics")
+    print(f"Saved to: {output_path}")
     print(f"\nTo use in training:")
     print("1. Load this file in addition to your main dataset")
     print("2. Mix ~10-20% definition samples with 80-90% task samples")
@@ -123,7 +123,7 @@ def merge_with_training_data(task_data_path, definition_data_path, output_path,
         for sample in merged:
             f.write(json.dumps(sample, ensure_ascii=False) + '\n')
 
-    print(f"\n✓ Merged dataset created: {output_path}")
+    print(f"\nMerged dataset created: {output_path}")
     print(f"  Task samples: {total_task} ({(1-definition_ratio)*100:.0f}%)")
     print(f"  Definition samples: {target_definitions} ({definition_ratio*100:.0f}%)")
     print(f"  Total: {len(merged)} samples")

@@ -79,8 +79,8 @@ def create_condensed_reference(definitions_path='data/metric_definitions.jsonl',
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(reference_text)
 
-    print(f"✓ Created condensed metric reference: {output_path}")
-    print(f"✓ Included {len(priority_defs)} priority metrics\n")
+    print(f"Created condensed metric reference: {output_path}")
+    print(f"Included {len(priority_defs)} priority metrics\n")
     print("=" * 60)
     print("PREVIEW:")
     print("=" * 60)

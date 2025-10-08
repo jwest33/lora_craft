@@ -1,0 +1,119 @@
+# ============================================================================
+# Docker Ignore File for LoRA Craft
+#
+# Excludes unnecessary files from Docker build context to:
+# - Reduce build context size
+# - Speed up builds
+# - Prevent sensitive data leakage
+# - Avoid caching conflicts
+# ============================================================================
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Training outputs (will be mounted as volumes)
+outputs/
+exports/
+checkpoints/
+
+# Dataset cache (will be mounted as volume)
+cache/
+datasets_cache/
+
+# Logs (will be mounted as volume)
+logs/
+*.log
+
+# Uploaded files (will be mounted as volume)
+uploads/
+
+# Saved configurations (will be mounted as volume)
+configs/
+
+# Compiled Unsloth cache
+unsloth_compiled_cache/
+unsloth_compiled_cache_backup_*/
+
+# Git directory
+.git/
+.gitignore
+.gitattributes
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation (except what we need)
+docs/example_*.png
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# llama.cpp (will be cloned fresh in container)
+tools/llama.cpp/
+llama.cpp/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# OS-specific
+Thumbs.db
+desktop.ini
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Docker files (don't need these in the image)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Environment files (use .env.example instead)
+.env
+.env.local
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Data files that should persist in volumes
+output/
+*.safetensors
+*.bin
+*.gguf
+*.pt
+*.pth
+
+# Node modules (if any)
+node_modules/
+
+# README and docs we don't need in container
+README.md
+LICENSE
+CONTRIBUTING.md

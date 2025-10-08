@@ -41,6 +41,12 @@ LoRA Craft is a web-based application for fine-tuning large language models usin
   </div>
 
   <div class="benefit-card">
+    <div class="benefit-icon">⬢</div>
+    <h3>Docker Ready</h3>
+    <p>Start in minutes with Docker—no manual dependency setup required. Works on Windows (WSL2), Linux, and macOS with automatic GPU detection.</p>
+  </div>
+
+  <div class="benefit-card">
     <div class="benefit-icon">▸</div>
     <h3>Efficient Fine-Tuning</h3>
     <p>Uses LoRA adapters to train on consumer GPUs (4-8GB VRAM). Fine-tune 7B models on your desktop with GRPO reinforcement learning.</p>
@@ -159,7 +165,7 @@ This approach enables models to learn complex behaviors and improve beyond the q
 
 <div class="final-cta">
   <h3>Start fine-tuning your first model in minutes</h3>
-  <p>Follow our quick start guide for a step-by-step walkthrough from installation to your first trained model.</p>
+  <p>Choose Docker for the easiest setup with zero configuration, or install natively for maximum control. Both methods support full GPU acceleration.</p>
   <a href="quickstart.html" class="btn-primary">Quick Start Guide</a>
   <a href="documentation.html" class="btn-secondary">Full Documentation</a>
 </div>

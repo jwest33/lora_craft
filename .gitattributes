@@ -1,0 +1,40 @@
+# ============================================================================
+# Git Attributes for LoRA Craft
+#
+# Ensures consistent line endings across platforms
+# ============================================================================
+
+# Auto-detect text files and normalize to LF
+* text=auto
+
+# Force LF line endings for shell scripts (critical for Docker)
+*.sh text eol=lf
+
+# Force LF for Python files
+*.py text eol=lf
+
+# Force LF for configuration files
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+*.ini text eol=lf
+*.cfg text eol=lf
+
+# Force LF for web files
+*.html text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+*.md text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.safetensors binary
+*.bin binary
+*.gguf binary
+*.pt binary
+*.pth binary

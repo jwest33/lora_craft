@@ -151,3 +151,40 @@ def get_active_sessions():
     except Exception as e:
         logger.error(f"Error getting active sessions: {e}")
         return jsonify({'sessions': []})
+
+
+@system_bp.route('/system/health', methods=['GET'])
+def health_check():
+    """
+    Health check endpoint for Docker and monitoring systems.
+
+    Returns:
+        JSON with status 'healthy' if system is operational
+    """
+    try:
+        # Check basic system availability
+        gpu_available = torch.cuda.is_available()
+
+        # Basic health metrics
+        health = {
+            'status': 'healthy',
+            'gpu_available': gpu_available,
+            'gpu_count': torch.cuda.device_count() if gpu_available else 0,
+            'python_version': sys.version.split()[0],
+            'torch_version': torch.__version__
+        }
+
+        # Optional: Check RAM availability
+        ram = psutil.virtual_memory()
+        health['ram_available_gb'] = round(ram.available / 1024**3, 2)
+        health['ram_percent_used'] = ram.percent
+
+        # Return 200 OK with health status
+        return jsonify(health), 200
+
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return jsonify({
+            'status': 'unhealthy',
+            'error': str(e)
+        }), 503  # Service Unavailable

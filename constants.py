@@ -203,3 +203,77 @@ DEFAULT_REWARD_CONFIG = {
     'type': 'preset',
     'preset_name': 'math',
 }
+
+# Model Configuration
+# Comprehensive model definitions with metadata
+MODEL_DEFINITIONS = {
+    'qwen': [
+        {
+            'id': 'unsloth/Qwen3-0.6B',
+            'name': 'Qwen3 0.6B',
+            'size': '600M',
+            'vram': '~1.2GB',
+            'category': 'qwen'
+        },
+        {
+            'id': 'unsloth/Qwen3-1.7B',
+            'name': 'Qwen3 1.7B',
+            'size': '1.7B',
+            'vram': '~3.4GB',
+            'category': 'qwen'
+        },
+        {
+            'id': 'unsloth/Qwen3-4B',
+            'name': 'Qwen3 4B',
+            'size': '4B',
+            'vram': '~8GB',
+            'category': 'qwen'
+        },
+        {
+            'id': 'unsloth/Qwen3-8B',
+            'name': 'Qwen3 8B',
+            'size': '8B',
+            'vram': '~16GB',
+            'category': 'qwen'
+        }
+    ],
+    'llama': [
+        {
+            'id': 'unsloth/Llama-3.2-1B-Instruct',
+            'name': 'LLaMA 3.2 1B',
+            'size': '1B',
+            'vram': '~2GB',
+            'category': 'llama'
+        },
+        {
+            'id': 'unsloth/Llama-3.2-3B-Instruct',
+            'name': 'LLaMA 3.2 3B',
+            'size': '3B',
+            'vram': '~6GB',
+            'category': 'llama'
+        }
+    ],
+    'phi': [
+        {
+            'id': 'unsloth/phi-4-reasoning',
+            'name': 'Phi-4 Reasoning',
+            'size': '15B',
+            'vram': '~30GB',
+            'category': 'phi'
+        }
+    ]
+}
+
+# Model size estimates (in MB) - used for memory planning and optimization
+MODEL_SIZES = {
+    "unsloth/phi-4-reasoning": 30720,
+    "unsloth/Qwen3-0.6B": 1229,
+    "unsloth/Qwen3-1.7B": 3482,
+    "unsloth/Qwen3-4B": 8192,
+    "unsloth/Qwen3-8B": 16384,
+    "unsloth/Llama-3.2-1B-Instruct": 2048,
+    "unsloth/Llama-3.2-3B-Instruct": 6144,
+    "unsloth/mistral-7b-instruct-v0.3-bnb-4bit": 4096,
+    "unsloth/gemma-3-1b-it-unsloth-bnb-4bit": 1024,
+    "unsloth/gemma-3-4b-it-unsloth-bnb-4bit": 4096
+}

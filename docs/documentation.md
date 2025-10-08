@@ -30,7 +30,7 @@ Complete technical guide for installing, configuring, and using LoRA Craft.
   - 12GB VRAM: Medium models (3B - 4B parameters)
   - 16GB+ VRAM: Large models (7B - 8B parameters)
 - **RAM**: Minimum 32GB system memory
-- **Storage**: At least 20GB free disk space for models and datasets
+- **Storage**: At least 64GB free disk space for models and datasets
 
 ### Software Requirements
 
@@ -43,14 +43,128 @@ Complete technical guide for installing, configuring, and using LoRA Craft.
 
 ## Installation
 
-### Step 1: Clone the Repository
+LoRA Craft supports two installation methods: **Docker** (recommended for most users) and **Native** (for development or advanced users).
+
+### Docker vs Native Installation
+
+| Feature | Docker | Native |
+|---------|--------|--------|
+| **Setup Time** | 5-10 minutes | 15-30 minutes |
+| **Dependency Management** | Automatic | Manual |
+| **GPU Support** | Automatic detection | Requires CUDA setup |
+| **Platform Support** | Windows (WSL2), Linux, macOS* | Linux, Windows* |
+| **Updates** | Simple rebuild | Manual package updates |
+| **Isolation** | Fully isolated | System-wide install |
+| **Best For** | Production, Windows users | Development, debugging |
+
+*macOS Docker runs without GPU; Windows native requires WSL2 for GPU support.
+
+**See [DOCKER-QUICKSTART.md](https://github.com/jwest33/lora_craft/blob/main/DOCKER-QUICKSTART.md) for platform-specific Docker setup guides.**
+
+---
+
+### Docker Installation (Recommended)
+
+Docker provides a pre-configured environment with all dependencies, CUDA runtime, and automatic GPU detection.
+
+#### Prerequisites
+- Docker 20.10+ and Docker Compose 2.0+
+- NVIDIA Driver 535+ on host
+- **Windows**: Docker Desktop with WSL2
+- **Linux**: NVIDIA Container Toolkit
+- **macOS**: Docker Desktop (CPU-only, no GPU)
+
+#### Quick Setup
+
+```bash
+# Clone repository
+git clone https://github.com/jwest33/lora_craft.git
+cd lora_craft
+
+# Optional: Configure environment
+cp .env.example .env
+
+# Start application (builds on first run)
+docker compose up -d
+
+# View logs
+docker compose logs -f
+
+# Access at http://localhost:5000
+```
+
+**First startup takes 5-10 minutes** to download base image (~5GB) and install PyTorch.
+
+#### What's Included
+- NVIDIA CUDA 12.8 runtime with cuDNN
+- Python 3.11 with all dependencies
+- PyTorch 2.8.0 with CUDA support
+- nvidia-smi for GPU monitoring
+- Persistent volumes for data
+- Health checks and monitoring
+
+#### Docker Commands Reference
+
+```bash
+# Check status
+docker compose ps
+
+# Stop application
+docker compose down
+
+# Restart
+docker compose restart
+
+# View logs
+docker compose logs -f
+
+# Check GPU
+docker compose exec lora-craft nvidia-smi
+
+# Access shell
+docker compose exec lora-craft bash
+
+# Update to latest
+git pull && docker compose build && docker compose up -d
+
+# Clean rebuild
+docker compose down
+docker compose build --no-cache
+docker compose up -d
+```
+
+#### Volume Management
+
+Docker automatically mounts these directories:
+
+| Local | Container | Purpose |
+|-------|-----------|---------|
+| `./outputs/` | `/app/outputs` | Model checkpoints |
+| `./exports/` | `/app/exports` | GGUF exports |
+| `./configs/` | `/app/configs` | Configurations |
+| `./uploads/` | `/app/uploads` | Dataset uploads |
+| `./logs/` | `/app/logs` | Application logs |
+
+Named volumes (in Docker):
+- `huggingface-cache` - HuggingFace models
+- `transformers-cache` - Transformers cache
+- `datasets-cache` - HuggingFace datasets
+- `torch-cache` - PyTorch cache
+
+**To backup:** Copy local directories above. Named volumes persist across container restarts.
+
+---
+
+### Native Installation
+
+#### Step 1: Clone the Repository
 
 ```bash
 git clone https://github.com/jwest33/lora_craft.git
 cd lora_craft
 ```
 
-### Step 2: Install PyTorch with CUDA Support
+#### Step 2: Install PyTorch with CUDA Support
 
 Install PyTorch with CUDA 12.8 support:
 
@@ -60,7 +174,7 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 
 For other CUDA versions, visit [PyTorch's installation page](https://pytorch.org/get-started/locally/).
 
-### Step 3: Install Dependencies
+#### Step 3: Install Dependencies
 
 ```bash
 pip install -r requirements.txt
@@ -72,15 +186,23 @@ This will install all required packages including:
 - Flask and SocketIO (web interface)
 - Training utilities (accelerate, TRL, bitsandbytes)
 
-### Step 4: Verify Installation
+#### Step 4: Verify Installation
 
 Check that your GPU is accessible:
 
-```python
+```bash
 python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
 ```
 
 You should see `CUDA available: True`.
+
+#### Step 5: Start Application
+
+```bash
+python flask_app.py
+```
+
+Access the web interface at `http://localhost:5000`.
 
 ---
 
@@ -532,6 +654,85 @@ Then, provide your solution between <SOLUTION></SOLUTION>
 ---
 
 ## Troubleshooting
+
+### Docker-Specific Issues
+
+#### GPU Not Detected in Container
+
+**Symptom**: Container logs show "CUDA Available: False" or "GPU Count: 0"
+
+**Solutions:**
+
+1. **Verify GPU works with Docker**:
+   ```bash
+   docker run --rm --gpus all nvidia/cuda:12.8.0-base-ubuntu22.04 nvidia-smi
+   ```
+   If this fails, your Docker GPU setup needs configuration.
+
+2. **Check docker-compose.yml** has correct GPU configuration:
+   ```yaml
+   runtime: nvidia
+   environment:
+     - NVIDIA_VISIBLE_DEVICES=all
+     - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+   ```
+
+3. **For Docker Desktop** (Windows/macOS):
+   - Restart Docker Desktop
+   - Settings → Resources → WSL Integration (ensure enabled)
+   - Verify NVIDIA driver installed on Windows host
+
+4. **For Linux**:
+   - Ensure NVIDIA Container Toolkit installed
+   - Run: `sudo nvidia-ctk runtime configure --runtime=docker`
+   - Restart Docker: `sudo systemctl restart docker`
+
+5. **Rebuild container**:
+   ```bash
+   docker compose down
+   docker compose up -d
+   ```
+
+#### Container Won't Start - Entrypoint Error
+
+**Symptom**: "exec /app/src/entrypoint.sh: no such file or directory"
+
+**Cause**: Line ending issues when building on Windows
+
+**Solution**:
+```bash
+# Rebuild without cache
+docker compose build --no-cache
+docker compose up -d
+```
+
+The Dockerfile automatically fixes line endings, so rebuilding should resolve this.
+
+#### Port 5000 Already in Use
+
+**Symptom**: "Error starting userland proxy: listen tcp4 0.0.0.0:5000: bind: address already in use"
+
+**Solutions**:
+
+1. **Change port in docker-compose.yml**:
+   ```yaml
+   ports:
+     - "5001:5000"  # Use port 5001 on host
+   ```
+
+2. **Or set in .env file**:
+   ```bash
+   echo "PORT=5001" >> .env
+   ```
+
+3. **Or stop conflicting service**:
+   ```bash
+   # Find process using port 5000
+   # Linux:
+   sudo lsof -i :5000
+   # Windows:
+   netstat -ano | findstr :5000
+   ```
 
 ### GPU Memory Issues
 

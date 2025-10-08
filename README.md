@@ -11,6 +11,8 @@
 1. [Overview](#overview)
 2. [Prerequisites](#prerequisites)
 3. [Installation](#installation)
+   - [Docker Installation (Recommended)](#docker-installation-recommended)
+   - [Native Installation](#native-installation)
 4. [Quick Start](#quick-start)
 5. [User Guide](#user-guide)
    - [Step 1: Model Selection](#step-1-model-selection)
@@ -57,8 +59,8 @@ LoRA Craft is a web-based application that enables fine-tuning of large language
   - 8GB VRAM: Small models (0.6B - 1.7B parameters)
   - 12GB VRAM: Medium models (3B - 4B parameters)
   - 16GB+ VRAM: Large models (7B - 8B parameters)
-- **RAM**: Minimum 16GB system memory
-- **Storage**: At least 20GB free disk space for models and datasets
+- **RAM**: Minimum 32GB system memory
+- **Storage**: At least 64GB free disk space for models and datasets
 
 ### Software Requirements
 
@@ -71,14 +73,158 @@ LoRA Craft is a web-based application that enables fine-tuning of large language
 
 ## Installation
 
-### Step 1: Clone the Repository
+**Choose your installation method:**
+
+- **[Docker Installation](#docker-installation-recommended)** (Recommended) - Easiest setup, works on any system
+- **[Native Installation](#native-installation)** - Direct installation on your system
+
+### Docker Installation (Recommended)
+
+Docker provides the easiest and most reliable way to run LoRA Craft with all dependencies pre-configured. The Docker setup works on **Windows** (with WSL2), **Linux**, and **macOS** (CPU-only).
+
+#### Why Use Docker?
+
+- **Zero dependency management** - No need to install Python, CUDA, or PyTorch manually
+- **Consistent environment** - Works the same on any system
+- **Isolated installation** - Won't conflict with other Python projects
+- **Easy updates** - Pull latest image and restart
+- **Production-ready** - Includes health checks, logging, and volume management
+
+#### Prerequisites
+- **Docker 20.10+** and **Docker Compose 2.0+**
+- **NVIDIA GPU** with CUDA support (Linux/Windows only)
+- **NVIDIA Driver 535+** installed on host
+- **NVIDIA Container Toolkit** - See [DOCKER-QUICKSTART.md](DOCKER-QUICKSTART.md) for installation
+
+#### Quick Start
 
 ```bash
-git clone https://github.com/yourusername/lora_craft.git
+# Clone the repository
+git clone https://github.com/jwest33/lora_craft.git
+cd lora_craft
+
+# Optional: Configure environment
+cp .env.example .env
+# Edit .env to customize PORT, FLASK_SECRET_KEY, etc.
+
+# Start the application (builds image on first run)
+docker compose up -d
+
+# View logs to verify startup
+docker compose logs -f
+
+# Access the web interface
+# Open browser to http://localhost:5000
+```
+
+**First startup takes 5-10 minutes** to download the base image and install dependencies. Subsequent starts are nearly instant.
+
+#### What's Included
+
+The LoRA Craft Docker image provides:
+
+- ✅ **NVIDIA CUDA 12.8** runtime with cuDNN 9.7
+- ✅ **Python 3.11** with all dependencies pre-installed
+- ✅ **PyTorch 2.8.0** with CUDA 12.8 support
+- ✅ **nvidia-smi** utility for GPU monitoring
+- ✅ **Automatic GPU detection** on startup
+- ✅ **Persistent volumes** for models, datasets, configs, and outputs
+- ✅ **Health checks** to monitor application status
+- ✅ **Optimized training libraries** (Unsloth, Transformers, PEFT, TRL)
+
+**Image size**: ~15GB (includes all ML libraries)
+
+#### Volume Management
+
+Docker automatically creates persistent volumes for your data:
+
+| Host Directory | Container Path | Purpose |
+|---------------|----------------|---------|
+| `./outputs/` | `/app/outputs` | Trained model checkpoints |
+| `./exports/` | `/app/exports` | Exported GGUF models |
+| `./configs/` | `/app/configs` | Saved training configurations |
+| `./uploads/` | `/app/uploads` | Uploaded dataset files |
+| `./logs/` | `/app/logs` | Application logs |
+
+**Named volumes** (stored in Docker):
+- `huggingface-cache` - Downloaded models from HuggingFace
+- `transformers-cache` - Transformers model cache
+- `datasets-cache` - HuggingFace datasets cache
+- `torch-cache` - PyTorch cache
+
+**Backup your data**: Simply copy the host directories listed above.
+
+#### Common Docker Commands
+
+```bash
+# Start application
+docker compose up -d
+
+# Stop application (preserves data)
+docker compose down
+
+# View live logs
+docker compose logs -f
+
+# Restart after changes
+docker compose restart
+
+# Check container status
+docker compose ps
+
+# Execute commands in container
+docker compose exec lora-craft bash
+
+# Check GPU inside container
+docker compose exec lora-craft nvidia-smi
+
+# Rebuild image (after Dockerfile changes)
+docker compose build --no-cache
+docker compose up -d
+
+# Update to latest version
+git pull
+docker compose build
+docker compose up -d
+
+# Remove everything including volumes (WARNING: deletes all data)
+docker compose down -v
+```
+
+#### Platform-Specific Notes
+
+**Windows (Docker Desktop with WSL2)**:
+- GPU support requires WSL2 backend (enabled by default)
+- No need to install CUDA Toolkit on Windows host
+- NVIDIA Driver must be installed on Windows (not in WSL2)
+- Docker Desktop automatically includes NVIDIA Container Toolkit
+
+**Linux**:
+- Requires NVIDIA Container Toolkit installation
+- See [DOCKER-QUICKSTART.md](DOCKER-QUICKSTART.md) for setup instructions
+- Use `sudo` for Docker commands or add user to docker group
+
+**macOS**:
+- GPU acceleration not available (no NVIDIA GPU support)
+- Can run in CPU-only mode (very slow for training)
+- Consider using cloud GPU instance instead
+
+For **detailed Docker setup, troubleshooting, and platform-specific instructions**, see **[DOCKER-QUICKSTART.md](DOCKER-QUICKSTART.md)**.
+
+---
+
+### Native Installation
+
+For users who prefer to install directly on their system.
+
+#### Step 1: Clone the Repository
+
+```bash
+git clone https://github.com/jwest33/lora_craft.git
 cd lora_craft
 ```
 
-### Step 2: Install PyTorch with CUDA Support
+#### Step 2: Install PyTorch with CUDA Support
 
 Install PyTorch with CUDA 12.8 support:
 
@@ -88,7 +234,7 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 
 For other CUDA versions, visit [PyTorch's installation page](https://pytorch.org/get-started/locally/).
 
-### Step 3: Install Dependencies
+#### Step 3: Install Dependencies
 
 ```bash
 pip install -r requirements.txt
@@ -592,6 +738,53 @@ Then, provide your solution between <SOLUTION></SOLUTION>
 
 ## Troubleshooting
 
+### Docker-Specific Issues
+
+#### GPU Not Detected in Container
+
+**Symptom**: Container logs show "CUDA Available: False" or "GPU Count: 0"
+
+**Solutions:**
+
+1. **Verify GPU works with Docker**:
+   ```bash
+   docker run --rm --gpus all nvidia/cuda:12.8.0-base-ubuntu22.04 nvidia-smi
+   ```
+   If this fails, your Docker GPU setup needs configuration.
+
+2. **Check docker-compose.yml** has correct GPU configuration:
+   ```yaml
+   runtime: nvidia
+   environment:
+     - NVIDIA_VISIBLE_DEVICES=all
+     - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+   ```
+
+3. **For Docker Desktop** (Windows/macOS):
+   - Restart Docker Desktop
+   - Settings → Resources → WSL Integration (ensure enabled)
+   - Verify NVIDIA driver installed on Windows host
+
+4. **For Linux**:
+   - Ensure NVIDIA Container Toolkit installed
+   - Run: `sudo nvidia-ctk runtime configure --runtime=docker`
+   - Restart Docker: `sudo systemctl restart docker`
+
+#### Container Won't Start - Entrypoint Error
+
+**Symptom**: "exec /app/src/entrypoint.sh: no such file or directory"
+
+**Cause**: Line ending issues when building on Windows
+
+**Solution**:
+```bash
+# Rebuild without cache
+docker compose build --no-cache
+docker compose up -d
+```
+
+The Dockerfile automatically fixes line endings, so rebuilding should resolve this.
+
 ### GPU Memory Issues
 
 **Problem**: "CUDA out of memory" error during training
@@ -997,8 +1190,8 @@ lora_craft/
 - [LM Studio](https://lmstudio.ai/)
 
 **Community & Support**
-- [GitHub Issues](https://github.com/yourusername/lora_craft/issues)
-- [Discussions](https://github.com/yourusername/lora_craft/discussions)
+- [GitHub Issues](https://github.com/jwest33/lora_craft/issues)
+- [Discussions](https://github.com/jwest33/lora_craft/discussions)
 
 ---
 

@@ -7,20 +7,135 @@ title: Quick Start - LoRA Craft
 
 Get from zero to your first fine-tuned model in minutes.
 
-
 ## Before You Begin
 
-Ensure you have:
-- NVIDIA GPU with 8GB+ VRAM
+### Hardware Requirements
+- NVIDIA GPU with 8GB+ VRAM (for GPU acceleration)
 - 32GB+ System RAM
-- Python 3.11 or higher
-- 20GB+ free disk space
+- 64GB+ free disk space
+
+### Software Requirements
+- **Docker Installation**: Docker Desktop (Windows/macOS) or Docker + NVIDIA Container Toolkit (Linux)
+- **Native Installation**: Python 3.11+ and CUDA 12.8+
 
 Not sure if your system is ready? Check the [Prerequisites](documentation.html#prerequisites).
 
 ---
 
-## Installation
+## Choose Your Installation Method
+
+<div class="installation-choice">
+  <div class="choice-card">
+    <h3>Docker (Recommended)</h3>
+    <p><strong>Best for:</strong> Quick setup, Windows users, isolated environments</p>
+    <ul>
+      <li>Zero dependency management</li>
+      <li>Works on Windows (WSL2), Linux, macOS</li>
+      <li>Automatic GPU detection</li>
+      <li>5-minute setup</li>
+    </ul>
+    <a href="#docker-installation">Use Docker →</a>
+  </div>
+
+  <div class="choice-card">
+    <h3>Native Installation</h3>
+    <p><strong>Best for:</strong> Direct system access, development, maximum control</p>
+    <ul>
+      <li>Faster startup times</li>
+      <li>Full system integration</li>
+      <li>Easier debugging</li>
+      <li>No container overhead</li>
+    </ul>
+    <a href="#native-installation">Native Install →</a>
+  </div>
+</div>
+
+---
+
+## Docker Installation
+
+### Prerequisites
+- Docker 20.10+ and Docker Compose 2.0+
+- NVIDIA Driver 535+ installed on host
+- For Windows: WSL2 enabled with Docker Desktop
+- For Linux: NVIDIA Container Toolkit installed
+
+**Linux NVIDIA Container Toolkit Setup:**
+```bash
+# Ubuntu/Debian
+distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | \
+  sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+  sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+```
+
+**Windows setup:** Docker Desktop with WSL2 includes GPU support automatically—just install the NVIDIA driver on Windows.
+
+### Installation Steps
+
+```bash
+# 1. Clone repository
+git clone https://github.com/jwest33/lora_craft.git
+cd lora_craft
+
+# 2. Start application (builds image on first run)
+docker compose up -d
+
+# 3. View logs to verify startup
+docker compose logs -f
+
+# Wait for "Starting LoRA Craft Flask Application" message
+# Press Ctrl+C to exit logs
+```
+
+**First startup takes 5-15 minutes** to download base image and install dependencies. Subsequent starts are much quicker.
+
+### Verify Installation
+
+```bash
+# Check container is running
+docker compose ps
+
+# Verify GPU is detected
+docker compose logs | grep "CUDA Available"
+# Should show: CUDA Available: True
+
+# Open browser to http://localhost:5000
+```
+
+### Docker Management
+
+```bash
+# Stop application
+docker compose down
+
+# Restart application
+docker compose restart
+
+# View live logs
+docker compose logs -f
+
+# Access container shell
+docker compose exec lora-craft bash
+
+# Check GPU inside container
+docker compose exec lora-craft nvidia-smi
+
+# Update to latest version
+git pull
+docker compose build
+docker compose up -d
+```
+
+**Skip to** [Training Your First Model](#training-your-first-model)
+
+---
+
+## Native Installation
 
 ### 1. Clone the Repository
 
@@ -52,6 +167,10 @@ You should see `CUDA available: True`.
 ---
 
 ## Starting the Application
+
+**For Docker users:** Your application is already running! Skip to [Training Your First Model](#training-your-first-model).
+
+**For native installation:**
 
 ### 1. Launch the Server
 
@@ -201,6 +320,38 @@ Your fine-tuned model should show structured reasoning and correct answers more 
 
 ## Common First-Time Issues
 
+### Docker: GPU Not Detected
+
+**Symptom:** Container logs show "CUDA Available: False"
+
+**Solutions:**
+```bash
+# 1. Test GPU access works
+docker run --rm --gpus all nvidia/cuda:12.8.0-base-ubuntu22.04 nvidia-smi
+
+# 2. If test fails on Linux, install/configure NVIDIA Container Toolkit
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+
+# 3. If test fails on Windows, restart Docker Desktop
+# Docker Desktop → Restart
+
+# 4. Rebuild and restart container
+docker compose down
+docker compose up -d
+```
+
+### Docker: Container Won't Start
+
+**Symptom:** "exec /app/src/entrypoint.sh: no such file or directory"
+
+**Solution:**
+```bash
+# Rebuild image without cache
+docker compose build --no-cache
+docker compose up -d
+```
+
 ### Training is too slow
 - Reduce samples per epoch to 200
 - Check GPU is being used (metrics should show GPU memory usage)
@@ -299,4 +450,4 @@ Load your HuggingFace format model in any Python application with the Transforme
 - **GitHub Issues**: [Report bugs or request features](https://github.com/jwest33/lora_craft/issues)
 - **Discussions**: [Ask questions and share tips](https://github.com/jwest33/lora_craft/discussions)
 
-Happy fine-tuning! 🎉
+Happy fine-tuning!

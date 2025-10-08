@@ -6,3 +6,9 @@ source "https://rubygems.org"
 
 gem "jekyll", "~> 3.10"
 gem "github-pages", "~> 232"
+
+# Windows directory monitoring for faster auto-regeneration
+gem 'wdm', '>= 0.1.0' if Gem.win_platform?
+
+# Faraday retry middleware
+gem 'faraday-retry'
