@@ -3,11 +3,11 @@
 # IMPORTANT: GitHub Pages does not support custom headers files.
 # This file is for DOCUMENTATION ONLY and will not be used by GitHub Pages.
 #
-# To apply these headers to your Cloudflare-proxied domain (loracraft.org),
+# To apply these headers to your Cloudflare-proxied domain,
 # configure them in the Cloudflare Dashboard:
 #
 # 1. Log into Cloudflare Dashboard
-# 2. Select your domain: loracraft.org
+# 2. Select your domain
 # 3. Go to: Rules > Transform Rules > Modify Response Header
 # 4. Create a new rule with the headers below
 #
@@ -15,12 +15,13 @@
 # See: https://developers.cloudflare.com/rules/transform/response-header-modification/
 
 # ============================================================================
-# Recommended Cloudflare Security Headers Configuration
+# Cloudflare Security Headers Configuration
 # ============================================================================
 
 /*
   # Content Security Policy (CSP)
   # Restricts resource loading to trusted sources
+  # Note: Uses local fonts (no external font CDNs needed)
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;
 
   # Strict Transport Security (HSTS)
@@ -51,36 +52,12 @@
 # Cloudflare Dashboard Configuration Steps
 # ============================================================================
 #
-# Option 1: Using Transform Rules (Recommended)
+# Using Transform Rules
 # ----------------------------------------------
 # 1. Dashboard > Rules > Transform Rules > Modify Response Header
 # 2. Create Rule: "Security Headers"
 # 3. Match: All incoming requests (or specific paths)
 # 4. Then: Set static headers (add each header above)
-#
-# Option 2: Using Cloudflare Workers
-# -----------------------------------
-# Create a Worker with the following code:
-#
-# addEventListener('fetch', event => {
-#   event.respondWith(handleRequest(event.request))
-# })
-#
-# async function handleRequest(request) {
-#   const response = await fetch(request)
-#   const newResponse = new Response(response.body, response)
-#
-#   // Add security headers
-#   newResponse.headers.set('Content-Security-Policy', "default-src 'self'; ...")
-#   newResponse.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload')
-#   newResponse.headers.set('X-Frame-Options', 'SAMEORIGIN')
-#   newResponse.headers.set('X-Content-Type-Options', 'nosniff')
-#   newResponse.headers.set('X-XSS-Protection', '1; mode=block')
-#   newResponse.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
-#   newResponse.headers.set('Permissions-Policy', 'geolocation=(), ...')
-#
-#   return newResponse
-# }
 #
 # ============================================================================
 # Additional Security Recommendations

@@ -10,7 +10,7 @@ title: LoRA Craft - LLM Fine-Tuning
   </div>
 
   <p class="hero-description">
-    Transform pre-trained language models into specialized assistants with a web-based interface.
+    Fine-tune large language models into specialized assistants with a web-based interface.
     No ML expertise required—just choose your model, dataset, and reward function.
   </p>
 

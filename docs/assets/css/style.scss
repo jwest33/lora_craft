@@ -8,9 +8,18 @@
 /* Matches the application's professional design */
 /* ============================================================================ */
 
-/* Modern Font Stack */
+/* Local Font - Coda */
+@font-face {
+  font-family: 'Coda';
+  src: url('/fonts/Coda-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Modern Font Stack with Coda */
 * {
-  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  font-family: 'Coda', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
 }
 
 /* Color Variables - Synthwave Dark Theme */
@@ -110,18 +119,18 @@ body {
 /* Main Content Area */
 .main-content {
   max-width: 80rem;
-  padding: 2rem 3rem 3rem;
+  padding: 1.5rem 2.5rem 2rem;
   margin: 0 auto;
-  font-size: 1.05rem;
-  line-height: 1.7;
+  font-size: 0.95rem;
+  line-height: 1.6;
   background: var(--bg-card);
   box-shadow:
     0 10px 30px -5px rgba(0, 0, 0, 0.6),
     0 0 60px -15px rgba(168, 85, 247, 0.2),
     0 0 100px -20px rgba(6, 182, 212, 0.1);
   border-radius: 16px;
-  margin-top: 2rem;
-  margin-bottom: 2rem;
+  margin-top: 1.25rem;
+  margin-bottom: 1.25rem;
   border: 1px solid transparent;
   background-clip: padding-box;
   position: relative;
@@ -221,20 +230,26 @@ body {
 .main-content h5,
 .main-content h6 {
   font-weight: 700;
-  margin-top: 2.5rem;
-  margin-bottom: 1rem;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
   color: var(--text-primary);
   line-height: 1.3;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9);
 }
 
+.main-content h2 {
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+}
+
 .main-content h1 {
-  font-size: 2.5rem;
-  color: var(--primary);
+  font-size: 1.9rem;
+  color: rgb(255, 255, 255);
   border-bottom: none;
-  padding-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
   margin-top: 0;
   position: relative;
+  text-align: center;
 }
 
 .main-content h1::after {
@@ -255,25 +270,12 @@ body {
 }
 
 .main-content h2 {
-  font-size: 2rem;
-  color: var(--primary);
+  font-size: 1.3rem;
+  color: var(--accent);
   border-bottom: none;
-  padding-bottom: 0.5rem;
+  padding-bottom: 1.75rem;
   position: relative;
-  padding-left: 1rem;
-}
-
-.main-content h2::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 4px;
-  height: 70%;
-  background: linear-gradient(180deg, var(--primary), var(--accent));
-  border-radius: 2px;
-  box-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
+  text-align: center;
 }
 
 .main-content h2::after {
@@ -294,18 +296,17 @@ body {
 }
 
 .main-content h3 {
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   color: var(--primary-light);
-  padding-left: 0.75rem;
-  border-left: 3px solid var(--accent);
+  padding-left: 0.65rem;
 }
 
 .main-content h4 {
-  font-size: 1.25rem;
+  font-size: 1.05rem;
   color: var(--accent);
   font-weight: 600;
   position: relative;
-  padding-left: 1.25rem;
+  padding-left: 1.1rem;
 }
 
 .main-content h4::before {
@@ -335,12 +336,12 @@ body {
 .main-content img {
   max-width: 100%;
   height: auto;
-  border-radius: 16px;
+  border-radius: 12px;
   box-shadow:
-    0 8px 24px rgba(0, 0, 0, 0.4),
+    0 6px 18px rgba(0, 0, 0, 0.4),
     0 0 0 1px rgba(168, 85, 247, 0.2),
-    0 0 40px rgba(168, 85, 247, 0.1);
-  margin: 2rem 0;
+    0 0 30px rgba(168, 85, 247, 0.1);
+  margin: 1.25rem 0;
   display: block;
   border: 2px solid transparent;
   background: linear-gradient(var(--bg-card), var(--bg-card)) padding-box,
@@ -385,16 +386,16 @@ div[align="center"] img {
 .main-content pre {
   background-color: #0f172a !important;
   border-radius: 8px;
-  padding: 1rem;
+  padding: 0.85rem;
   overflow: hidden;
   box-shadow: var(--shadow-md);
   border: 1px solid var(--border-color);
-  margin: 1.25rem 0;
+  margin: 1rem 0;
 }
 
 .main-content pre code {
   font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: #e2e8f0 !important;
   background: #0f172a !important;
   padding: 0;
@@ -414,6 +415,10 @@ div[align="center"] img {
 
 .main-content .highlight pre {
   background-color: #0f172a !important;
+}
+
+.highlight .se {
+    color: rgb(253, 78, 230);
 }
 
 /* Syntax Highlighting - Synthwave Dark Theme */
@@ -525,10 +530,10 @@ div[align="center"] img {
 /* Inline code */
 .main-content code {
   font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
-  font-size: 0.9em;
+  font-size: 0.87em;
   background-color: var(--bg-primary);
   color: var(--primary-light);
-  padding: 0.2rem 0.5rem;
+  padding: 0.15rem 0.4rem;
   border-radius: 4px;
   border: 1px solid var(--border-color);
 }
@@ -543,9 +548,9 @@ div[align="center"] img {
 .main-content ul,
 .main-content ol {
   margin-left: 0;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
   max-width: 75ch;
-  padding-left: 3rem;
+  padding-left: 2.5rem;
 }
 
 .main-content ul {
@@ -554,9 +559,9 @@ div[align="center"] img {
 
 .main-content ul > li {
   position: relative;
-  padding-left: 1.75rem;
-  margin-bottom: 0.75rem;
-  line-height: 1.8;
+  padding-left: 1.5rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.6;
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9);
 }
 
@@ -573,9 +578,9 @@ div[align="center"] img {
 }
 
 .main-content ol > li {
-  margin-bottom: 0.75rem;
-  line-height: 1.8;
-  padding-left: 0.5rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.6;
+  padding-left: 0.4rem;
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9);
 }
 
@@ -601,8 +606,8 @@ div[align="center"] img {
 .main-content blockquote {
   border-left: 4px solid transparent;
   border-image: linear-gradient(180deg, var(--primary), var(--accent)) 1;
-  padding: 1.25rem 1.5rem;
-  margin: 2rem 0;
+  padding: 0.9rem 1.2rem;
+  margin: 1.25rem 0;
   background: linear-gradient(135deg, rgba(168, 85, 247, 0.05), rgba(6, 182, 212, 0.05));
   border-radius: 8px;
   color: var(--text-secondary);
@@ -668,7 +673,7 @@ div[align="center"] img {
 .main-content hr {
   border: none;
   height: 2px;
-  margin: 3rem 0;
+  margin: 2rem 0;
   background: linear-gradient(90deg,
     transparent,
     rgba(168, 85, 247, 0.4) 20%,
@@ -697,8 +702,8 @@ div[align="center"] img {
 
 /* Section dividers */
 .main-content > hr {
-  height: 3px;
-  margin: 3.5rem 0;
+  height: 2px;
+  margin: 2.25rem 0;
   background: linear-gradient(90deg,
     transparent,
     var(--primary) 25%,
@@ -722,11 +727,26 @@ div[align="center"] img {
 
 /* Paragraphs */
 .main-content p {
-  margin-bottom: 1.25rem;
-  line-height: 1.8;
+  margin-bottom: 0.9rem;
+  line-height: 1.6;
   max-width: 75ch;
-  padding-left: 1.5rem;
+  padding-left: 1.2rem;
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+/* Center page descriptions that follow h1 or h2 headers */
+.main-content h1 + p,
+.main-content h2 + p {
+  text-align: center;
+  padding-left: 0;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Hide separator bars that come after centered descriptions */
+.main-content h1 + p + hr,
+.main-content h2 + p + hr {
+  display: none;
 }
 
 /* Strong text */
@@ -742,44 +762,33 @@ div[align="center"] img {
   color: var(--accent);
 }
 
-/* Special highlight sections */
-.main-content h3 + ul,
-.main-content h3 + p + ul {
-  background: linear-gradient(135deg, rgba(168, 85, 247, 0.03), rgba(6, 182, 212, 0.03));
-  padding: 1.5rem 2rem;
-  border-radius: 12px;
-  border: 1px solid rgba(168, 85, 247, 0.1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  max-width: none;
-}
-
 /* Responsive Design */
 @media screen and (max-width: 64em) {
   .main-content {
-    padding: 2rem 1.5rem;
-    font-size: 1rem;
+    padding: 1.5rem 1.25rem;
+    font-size: 0.93rem;
     margin-top: 1rem;
     margin-bottom: 1rem;
   }
 
   .project-name {
-    font-size: 2.25rem;
+    font-size: 1.8rem;
   }
 
   .project-tagline {
-    font-size: 1.1rem;
+    font-size: 0.95rem;
   }
 
   .main-content h1 {
-    font-size: 2rem;
+    font-size: 1.9rem;
   }
 
   .main-content h2 {
-    font-size: 1.75rem;
+    font-size: 1.4rem;
   }
 
   .main-content h3 {
-    font-size: 1.35rem;
+    font-size: 1.15rem;
   }
 
 }
@@ -808,42 +817,44 @@ div[align="center"] img {
 
 @media screen and (max-width: 42em) {
   .main-content {
-    padding: 1.5rem 1rem;
-    font-size: 0.95rem;
+    padding: 1.25rem 0.9rem;
+    font-size: 0.9rem;
     border-radius: 0;
   }
 
   .main-content p {
     max-width: 100%;
+    padding-left: 0.8rem;
   }
 
   .main-content ul,
   .main-content ol {
     max-width: 100%;
+    padding-left: 2rem;
   }
 
   .project-name {
-    font-size: 1.75rem;
-  }
-
-  .project-tagline {
-    font-size: 1rem;
-  }
-
-  .main-content h1 {
-    font-size: 1.75rem;
-  }
-
-  .main-content h2 {
     font-size: 1.5rem;
   }
 
+  .project-tagline {
+    font-size: 0.9rem;
+  }
+
+  .main-content h1 {
+    font-size: 1.6rem;
+  }
+
+  .main-content h2 {
+    font-size: 1.3rem;
+  }
+
   .main-content h3 {
-    font-size: 1.25rem;
+    font-size: 1.1rem;
   }
 
   .page-header {
-    padding: 2rem 1rem;
+    padding: 1.5rem 0.9rem;
   }
 }
 
@@ -905,7 +916,7 @@ div[align="center"] img {
 /* Sidebar Header - Fixed at top */
 .sidebar-header {
   flex-shrink: 0;
-  padding: 1.5rem 1.5rem;
+  padding: 1rem 1.5rem;
   background: var(--gradient-primary);
   color: white;
   text-align: center;
@@ -927,16 +938,13 @@ div[align="center"] img {
 .sidebar-title {
   font-size: 1.5rem;
   font-weight: 700;
-  margin: 0 0 0.25rem 0;
+  margin: 0;
   color: white;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .sidebar-tagline {
-  font-size: 0.85rem;
-  margin: 0;
-  color: rgba(255, 255, 255, 0.9);
-  font-weight: 400;
+  display: none;
 }
 
 /* Sidebar Navigation - Scrollable */
@@ -997,7 +1005,7 @@ div[align="center"] img {
 .toc-h2 > .toc-link {
   font-weight: 600;
   font-size: 0.9rem;
-  color: var(--primary-light);
+  color: var(--accent);
   padding-top: 0.6rem;
   padding-bottom: 0.6rem;
 }
@@ -1007,7 +1015,7 @@ div[align="center"] img {
   padding-left: 2.25rem;
   padding-top: 0.4rem;
   padding-bottom: 0.4rem;
-  color: var(--accent);
+  color: rgb(255, 255, 255);
 }
 
 .toc-link:hover {
@@ -1145,8 +1153,6 @@ button:focus {
 /* Hero Section */
 .hero-section {
   text-align: center;
-  padding: 2rem 0 4rem;
-  margin-bottom: 2rem;
   overflow: visible;
 }
 
