@@ -124,30 +124,32 @@
                 // Escape for HTML attributes using double encoding for onclick strings
                 const escapedPath = dataset.path.replace(/'/g, "\\'").replace(/"/g, '&quot;');
                 const escapedName = dataset.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                const escapedConfig = dataset.dataset_config ? dataset.dataset_config.replace(/'/g, "\\'").replace(/"/g, '&quot;') : '';
 
                 return `
-                    <div class="dataset-item ${dataset.category}" data-dataset-path="${dataset.path}" data-dataset-name="${CoreModule.escapeHtml(dataset.name)}">
-                        <div class="dataset-card">
+                    <div class="dataset-item ${dataset.category}" data-dataset-path="${dataset.path}" data-dataset-name="${CoreModule.escapeHtml(dataset.name)}" data-dataset-config="${escapedConfig}">
+                        <div class="dataset-card" data-path="${escapedPath}" data-name="${escapedName}" data-config="${escapedConfig}">
                             <div class="dataset-header">
                                 <div class="dataset-icon-title">
                                     <span class="dataset-category-icon">${this.getCategoryIcon(dataset.category)}</span>
                                     <h6 class="dataset-name">${CoreModule.escapeHtml(dataset.name)}</h6>
                                 </div>
-                                ${dataset.is_cached ? '<span class="badge bg-success"><i class="fas fa-check"></i> Cached</span>' : '<span class="badge bg-secondary"><i class="fas fa-download"></i> Download</span>'}
+                                ${dataset.is_cached ? '<span class="badge bg-success"><i class="fas fa-check"></i> Cached</span>' : ''}
                             </div>
                             <div class="dataset-meta">
                                 <span class="badge bg-info">${dataset.category}</span>
                                 <span class="text-muted small">${dataset.size}</span>
                             </div>
                             <div class="dataset-actions mt-2">
-                                <button class="btn btn-sm btn-primary flex-grow-1 dataset-select-btn" data-path="${escapedPath}" data-name="${escapedName}">
-                                    <i class="fas fa-mouse-pointer"></i> Select
-                                </button>
                                 ${dataset.is_cached ? `
-                                    <button class="btn btn-sm btn-outline-secondary dataset-preview-btn" data-path="${escapedPath}" data-name="${escapedName}">
+                                    <button class="btn btn-sm btn-outline-secondary dataset-preview-btn" data-path="${escapedPath}" data-name="${escapedName}" data-config="${escapedConfig}">
                                         <i class="fas fa-eye"></i> Preview
                                     </button>
-                                ` : ''}
+                                ` : `
+                                    <button class="btn btn-sm btn-success dataset-download-btn" data-path="${escapedPath}" data-name="${escapedName}" data-config="${escapedConfig}">
+                                        <i class="fas fa-download"></i> Download
+                                    </button>
+                                `}
                             </div>
                         </div>
                     </div>
@@ -160,13 +162,16 @@
 
         // Attach event listeners to dataset card buttons
         attachDatasetCardListeners() {
-            // Select buttons
-            document.querySelectorAll('.dataset-select-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
+            // Card click handlers for selection
+            document.querySelectorAll('.dataset-card').forEach(card => {
+                card.addEventListener('click', (e) => {
                     const path = e.currentTarget.dataset.path;
                     const name = e.currentTarget.dataset.name;
-                    this.selectDataset(path, name);
+                    const config = e.currentTarget.dataset.config || null;
+                    this.selectDataset(path, name, config);
                 });
+                // Add pointer cursor to indicate clickability
+                card.style.cursor = 'pointer';
             });
 
             // Preview buttons
@@ -175,20 +180,82 @@
                     e.stopPropagation();
                     const path = e.currentTarget.dataset.path;
                     const name = e.currentTarget.dataset.name;
-                    this.previewPublicDataset(path, name);
+                    const config = e.currentTarget.dataset.config || null;
+                    this.previewPublicDataset(path, name, config);
+                });
+            });
+
+            // Download buttons
+            document.querySelectorAll('.dataset-download-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const path = e.currentTarget.dataset.path;
+                    const name = e.currentTarget.dataset.name;
+                    const config = e.currentTarget.dataset.config || null;
+                    this.downloadPublicDataset(path, name, config);
                 });
             });
         },
 
         // Select a dataset from the catalog
-        selectDataset(datasetPath, datasetName) {
-            console.log('Dataset selected:', datasetPath);
+        selectDataset(datasetPath, datasetName, datasetConfig = null) {
+            console.log('Dataset selected:', datasetPath, 'config:', datasetConfig);
 
             // Update UI to show selection (HTML inputs are source of truth, no AppState persistence)
             const datasetPathInput = document.getElementById('dataset-path');
             if (datasetPathInput) {
                 datasetPathInput.value = datasetPath;
             }
+
+            // Fetch dataset info to get columns and field mappings
+            const requestBody = { path: datasetPath };
+            if (datasetConfig) {
+                requestBody.dataset_config = datasetConfig;
+            }
+
+            fetch('/api/dataset_info', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('[Dataset] Fetched dataset info:', data);
+
+                // Make columns available globally for reward system
+                if (data.columns && data.columns.length > 0) {
+                    window.currentDatasetColumns = data.columns;
+                    console.log('[Dataset] Set currentDatasetColumns:', window.currentDatasetColumns);
+                }
+
+                // Update hidden field mappings if suggested or predefined mappings exist
+                const instructionFieldInput = document.getElementById('instruction-field');
+                const responseFieldInput = document.getElementById('response-field');
+
+                if (data.predefined_mapping) {
+                    // Use predefined mapping from POPULAR_DATASETS
+                    if (instructionFieldInput && data.predefined_mapping.instruction) {
+                        instructionFieldInput.value = data.predefined_mapping.instruction;
+                    }
+                    if (responseFieldInput && data.predefined_mapping.response) {
+                        responseFieldInput.value = data.predefined_mapping.response;
+                    }
+                    console.log('[Dataset] Applied predefined field mapping:', data.predefined_mapping);
+                } else if (data.suggested_mappings) {
+                    // Use suggested mapping from field detection
+                    if (instructionFieldInput && data.suggested_mappings.instruction) {
+                        instructionFieldInput.value = data.suggested_mappings.instruction;
+                    }
+                    if (responseFieldInput && data.suggested_mappings.response) {
+                        responseFieldInput.value = data.suggested_mappings.response;
+                    }
+                    console.log('[Dataset] Applied suggested field mapping:', data.suggested_mappings);
+                }
+            })
+            .catch(error => {
+                console.warn('[Dataset] Could not fetch dataset info:', error);
+                // Continue without field mappings - they'll use defaults
+            });
 
             // Update configuration summary
             if (typeof window.updateConfigSummary === 'function') {
@@ -921,19 +988,28 @@
         },
 
         // Preview a public dataset from catalog
-        previewPublicDataset(datasetPath, datasetName) {
-            console.log('Previewing dataset:', datasetPath);
+        previewPublicDataset(datasetPath, datasetName, datasetConfig = null) {
+            console.log('Previewing dataset:', datasetPath, 'config:', datasetConfig);
 
             // Store the current preview context for "Use This Dataset" button
             this.currentPreviewDataset = {
                 path: datasetPath,
-                name: datasetName
+                name: datasetName,
+                config: datasetConfig
             };
+
+            const requestBody = {
+                path: datasetPath,
+                samples: 5
+            };
+            if (datasetConfig) {
+                requestBody.dataset_config = datasetConfig;
+            }
 
             fetch('/api/preview_dataset', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ path: datasetPath, samples: 5 })
+                body: JSON.stringify(requestBody)
             })
             .then(response => response.json())
             .then(data => {
@@ -946,6 +1022,41 @@
             .catch(error => {
                 console.error('Failed to preview dataset:', error);
                 CoreModule.showAlert(`Failed to preview ${datasetName}: ${error.message}`, 'danger');
+            });
+        },
+
+        // Download a public dataset from catalog
+        downloadPublicDataset(datasetPath, datasetName, datasetConfig = null) {
+            console.log('Downloading dataset:', datasetPath, 'config:', datasetConfig);
+
+            // Show loading alert
+            CoreModule.showAlert(`Downloading ${datasetName}...`, 'info');
+
+            const requestBody = {
+                dataset_name: datasetPath
+            };
+            if (datasetConfig) {
+                requestBody.dataset_config = datasetConfig;
+            }
+
+            fetch('/api/datasets/download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    CoreModule.showAlert(`${datasetName} downloaded successfully!`, 'success');
+                    // Refresh the dataset grid to update cached status
+                    this.loadPopularDatasets();
+                } else {
+                    throw new Error(data.error || 'Download failed');
+                }
+            })
+            .catch(error => {
+                console.error('Failed to download dataset:', error);
+                CoreModule.showAlert(`Failed to download ${datasetName}: ${error.message}`, 'danger');
             });
         },
 
@@ -1360,10 +1471,11 @@ ${solutionStart}4${solutionEnd}`;
                 return;
             }
 
-            // Select the dataset using the stored preview context
+            // Select the dataset using the stored preview context including config
             this.selectDataset(
                 this.currentPreviewDataset.path,
-                this.currentPreviewDataset.name
+                this.currentPreviewDataset.name,
+                this.currentPreviewDataset.config
             );
 
             // Close the modal

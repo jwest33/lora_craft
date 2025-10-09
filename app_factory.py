@@ -155,17 +155,27 @@ def create_app(config=None):
             datasets_with_status = []
 
             for dataset_path, info in POPULAR_DATASETS.items():
-                is_cached = handler.is_cached(dataset_path)
-                cache_info = handler.get_cache_info(dataset_path) if is_cached else None
+                # Extract dataset_config if it exists (for multi-config datasets like GSM8K)
+                dataset_config = info.get('dataset_config')
 
-                datasets_with_status.append({
+                # Check cache status with config to differentiate between different configs
+                is_cached = handler.is_cached(dataset_path, dataset_config)
+                cache_info = handler.get_cache_info(dataset_path, dataset_config) if is_cached else None
+
+                dataset_entry = {
                     'path': dataset_path,
                     'name': info['name'],
                     'size': info['size'],
                     'category': info['category'],
                     'is_cached': is_cached,
                     'cache_info': cache_info.to_dict() if cache_info else None
-                })
+                }
+
+                # Include dataset_config if present (for multi-config datasets like GSM8K)
+                if dataset_config:
+                    dataset_entry['dataset_config'] = dataset_config
+
+                datasets_with_status.append(dataset_entry)
 
             from flask import jsonify
             return jsonify({'datasets': datasets_with_status})
@@ -281,6 +291,7 @@ def create_app(config=None):
         try:
             data = flask_request.json
             dataset_name = data.get('path') or data.get('dataset_name')
+            dataset_config = data.get('dataset_config')  # Extract dataset_config if provided
 
             if not dataset_name:
                 return jsonify({'error': 'Dataset path required'}), 400
@@ -289,6 +300,7 @@ def create_app(config=None):
             # which provides similar functionality
             result = legacy_dataset_service.detect_fields(
                 dataset_name=dataset_name,
+                dataset_config=dataset_config,  # Pass dataset_config to service
                 is_local='uploads' in dataset_name or dataset_name.endswith(('.json', '.jsonl', '.csv', '.parquet'))
             )
 
@@ -304,6 +316,7 @@ def create_app(config=None):
         try:
             data = flask_request.json
             dataset_name = data.get('path') or data.get('dataset_name')
+            dataset_config = data.get('dataset_config')  # Extract dataset_config if provided
             num_samples = data.get('samples', 5)
 
             if not dataset_name:
@@ -312,6 +325,7 @@ def create_app(config=None):
             # Call the datasets blueprint's sample function
             result = legacy_dataset_service.sample_dataset(
                 dataset_name=dataset_name,
+                dataset_config=dataset_config,
                 sample_size=num_samples
             )
 

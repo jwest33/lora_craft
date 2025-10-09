@@ -78,7 +78,7 @@ class DatasetService:
 
     def download_dataset(self, dataset_name: str, dataset_config: Optional[str],
                         force_download: bool, custom_field_mapping: Optional[Dict],
-                        progress_callback: Optional[Callable] = None) -> Tuple[Any, Dict]:
+                        progress_callback: Optional[Callable] = None) -> Tuple[bool, str, Dict]:
         """
         Download a dataset with optional progress tracking.
 
@@ -90,7 +90,7 @@ class DatasetService:
             progress_callback: Optional callback for progress updates
 
         Returns:
-            Tuple of (dataset, cache_info)
+            Tuple of (success, message, info_dict)
 
         Raises:
             ValueError: If dataset name is invalid
@@ -133,7 +133,16 @@ class DatasetService:
         # Get cache info
         cache_info = handler.get_cache_info(dataset_name)
 
-        return dataset, cache_info
+        # Build info dictionary
+        info_dict = {
+            'dataset_name': dataset_name,
+            'samples': len(dataset) if dataset else 0,
+            'cache_info': cache_info.to_dict() if cache_info else None,
+            'instruction_field': instruction_field,
+            'response_field': response_field
+        }
+
+        return True, 'Dataset downloaded successfully', info_dict
 
     def download_dataset_background(self, dataset_name: str, dataset_config: Optional[str],
                                    force_download: bool, custom_field_mapping: Optional[Dict],
@@ -154,16 +163,12 @@ class DatasetService:
 
         def download_task():
             try:
-                dataset, cache_info = self.download_dataset(
+                success, message, info_dict = self.download_dataset(
                     dataset_name, dataset_config, force_download,
                     custom_field_mapping, progress_callback
                 )
 
-                emit_callback(session_id, 'dataset_complete', {
-                    'dataset_name': dataset_name,
-                    'samples': len(dataset) if dataset else 0,
-                    'cache_info': cache_info.to_dict() if cache_info else None
-                })
+                emit_callback(session_id, 'dataset_complete', info_dict)
             except Exception as e:
                 logger.error(f"Dataset download failed: {e}")
                 emit_callback(session_id, 'dataset_error', {'error': str(e)})
@@ -201,6 +206,14 @@ class DatasetService:
         instruction_field = field_mapping.get('instruction', 'instruction')
         response_field = field_mapping.get('response', 'response')
 
+        # Check if dataset is already cached
+        temp_handler = DatasetHandler()
+        is_cached = temp_handler.is_cached(dataset_name, dataset_config)
+
+        # Use streaming mode for uncached datasets (much faster for previews)
+        # Cached datasets use normal mode since they're already fast
+        use_streaming = not is_cached
+
         # Create config for sampling
         config = DatasetConfig(
             source_type='huggingface',
@@ -209,7 +222,8 @@ class DatasetService:
             subset=dataset_config,
             instruction_field=instruction_field,
             response_field=response_field,
-            max_samples=sample_size,
+            sample_size=sample_size,  # Set sample_size for streaming mode
+            streaming=use_streaming,  # Enable streaming for uncached datasets
             use_cache=True
         )
 
@@ -217,10 +231,18 @@ class DatasetService:
         handler = DatasetHandler(config)
         dataset = handler.load()
 
-        # Extract samples
+        # Extract samples (handle both streaming and regular datasets)
         samples = []
-        for i in range(min(sample_size, len(dataset))):
-            samples.append(dataset[i])
+        if use_streaming:
+            # Streaming dataset - iterate to get samples
+            for i, sample in enumerate(dataset):
+                if i >= sample_size:
+                    break
+                samples.append(sample)
+        else:
+            # Regular dataset - direct indexing
+            for i in range(min(sample_size, len(dataset))):
+                samples.append(dataset[i])
 
         return {
             'samples': samples,
@@ -515,7 +537,7 @@ class DatasetService:
             logger.error(f"Failed to list uploaded datasets: {e}")
             raise
 
-    def delete_uploaded_dataset(self, filename: str) -> bool:
+    def delete_uploaded_dataset(self, filename: str) -> Tuple[bool, str]:
         """
         Delete an uploaded dataset file.
 
@@ -523,7 +545,7 @@ class DatasetService:
             filename: Name of the file to delete
 
         Returns:
-            True if deleted successfully, False if not found
+            Tuple of (success, message)
 
         Raises:
             ValueError: If trying to access file outside upload directory
@@ -536,18 +558,18 @@ class DatasetService:
                 raise ValueError('Invalid file path')
 
             if not file_path.exists():
-                return False
+                return False, f"Dataset file '{filename}' not found"
 
             file_path.unlink()
             logger.info(f"Deleted uploaded dataset: {filename}")
-            return True
+            return True, f"Dataset '{filename}' deleted successfully"
 
         except Exception as e:
             logger.error(f"Failed to delete uploaded dataset {filename}: {e}")
             raise
 
     @staticmethod
-    def allowed_file(filename: str, allowed_extensions: set) -> bool:
+    def validate_file_extension(filename: str, allowed_extensions: set) -> bool:
         """
         Check if a file extension is allowed.
 
@@ -559,6 +581,22 @@ class DatasetService:
             True if file extension is allowed
         """
         return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_extensions
+
+    @staticmethod
+    def allowed_file(filename: str, allowed_extensions: set) -> bool:
+        """
+        Deprecated: Use validate_file_extension() instead.
+
+        Check if a file extension is allowed.
+
+        Args:
+            filename: Name of the file
+            allowed_extensions: Set of allowed extensions
+
+        Returns:
+            True if file extension is allowed
+        """
+        return DatasetService.validate_file_extension(filename, allowed_extensions)
 
     def get_upload_info(self, file_path: str) -> Dict[str, Any]:
         """

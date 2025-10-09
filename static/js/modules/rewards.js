@@ -29,12 +29,28 @@ function viewRewardDetails() {
         return;
     }
 
-    // Get the selected item from the cached data
-    const items = selectedRewardType === 'preset' ? rewardPresets : rewardTemplates;
-    const selected = Object.values(items).find(item => item.name === selectedRewardName);
+    // For custom rewards, show a different modal or message
+    if (selectedRewardType === 'custom' || selectedRewardName.includes('Custom')) {
+        // Custom rewards don't have preset details, show component info instead
+        if (window.selectedRewardConfig && window.selectedRewardConfig.components) {
+            // Could create a custom modal here, but for now just show notification
+            showNotification('Custom reward details are shown in the component display below', 'info');
+        } else {
+            showNotification('No details available for custom reward', 'warning');
+        }
+        return;
+    }
 
-    if (selected) {
-        showRewardDetailsModal(selected);
+    // Find the preset key
+    const presetKey = Object.keys(rewardPresets).find(key =>
+        rewardPresets[key].name === selectedRewardName
+    );
+
+    if (presetKey) {
+        // Call the same function as "Components" button
+        showPresetDetails(presetKey);
+    } else {
+        showNotification('Could not find reward details', 'warning');
     }
 }
 
@@ -684,8 +700,21 @@ function saveCustomizedPreset() {
 }
 
 function displayCustomComponents(components) {
-    const componentsList = document.getElementById('components-list');
-    if (!componentsList) return;
+    // Find or create component display area (similar to displayPresetComponents)
+    let componentDisplay = document.getElementById('preset-component-display');
+    if (!componentDisplay) {
+        // Create display area if it doesn't exist
+        const selectedRewardDisplay = document.getElementById('selected-reward-display');
+        if (!selectedRewardDisplay) {
+            console.error('selected-reward-display element not found');
+            return;
+        }
+
+        componentDisplay = document.createElement('div');
+        componentDisplay.id = 'preset-component-display';
+        componentDisplay.className = 'mt-3';
+        selectedRewardDisplay.appendChild(componentDisplay);
+    }
 
     const totalWeight = components.reduce((sum, c) => sum + c.weight, 0);
     const weightPercentages = components.map(c => ({
@@ -753,29 +782,36 @@ function displayCustomComponents(components) {
         `;
     }).join('');
 
-    componentsList.innerHTML = componentsHtml;
-
-    // Update header
-    const cardHeader = componentsList.closest('.card').querySelector('.card-header');
-    const isValid = Math.abs(totalWeight - 1.0) < 0.001;
-    const weightStatus = isValid
-        ? '<span class="badge bg-success"><i class="fas fa-check"></i> Weight Valid (1.0)</span>'
-        : `<span class="badge bg-warning text-dark"><i class="fas fa-exclamation-triangle"></i> Total: ${totalWeight.toFixed(3)}</span>`;
-
     // Create details object for re-editing
     const details = {
         name: 'Custom Reward',
         components: components
     };
 
-    cardHeader.innerHTML = `
-        <div class="d-flex justify-content-between align-items-center">
-            <span><i class="fas fa-puzzle-piece"></i> Custom Reward Components</span>
-            <div>
-                ${weightStatus}
-                <button class="btn btn-sm btn-light ms-2" onclick='makePresetEditable(${JSON.stringify(details).replace(/'/g, "&#39;")})'>
-                    <i class="fas fa-edit"></i> Customize
-                </button>
+    // Check if weights are valid
+    const isValid = Math.abs(totalWeight - 1.0) < 0.001;
+    const weightStatus = isValid
+        ? '<span class="badge bg-success"><i class="fas fa-check"></i> Weight Valid (1.0)</span>'
+        : `<span class="badge bg-warning text-dark"><i class="fas fa-exclamation-triangle"></i> Total: ${totalWeight.toFixed(3)}</span>`;
+
+    // Create the full card structure with header and body
+    componentDisplay.innerHTML = `
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-puzzle-piece"></i> Custom Reward Components</span>
+                    <div>
+                        ${weightStatus}
+                        <button class="btn btn-sm btn-light ms-2" onclick='makePresetEditable(${JSON.stringify(details).replace(/'/g, "&#39;")})'>
+                            <i class="fas fa-edit"></i> Customize
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="components-list" id="components-list">
+                    ${componentsHtml}
+                </div>
             </div>
         </div>
     `;
@@ -3149,12 +3185,20 @@ function showFieldMappingForCurrentReward() {
         return;
     }
 
+    // Check if this is a custom reward
+    if (selectedRewardType === 'custom' || selectedRewardName.includes('Custom')) {
+        showNotification('Field mapping is only available for preset rewards. Custom rewards use the general dataset field mappings.', 'info');
+        return;
+    }
+
     const presetName = Object.keys(rewardPresets).find(key =>
         rewardPresets[key].name === selectedRewardName
     );
 
     if (presetName) {
         showFieldMappingModal(presetName, window.currentDatasetColumns);
+    } else {
+        showNotification('Could not find reward preset for field mapping', 'warning');
     }
 }
 

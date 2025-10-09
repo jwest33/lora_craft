@@ -1173,6 +1173,7 @@ body {
     display: flex;
     gap: 0.5rem;
     margin-top: 0.75rem;
+    justify-content: center;
 }
 
 .dataset-catalog-card {
@@ -2696,6 +2697,25 @@ body {
     background: var(--bg-secondary) !important;
     color: var(--text-primary) !important;
     border-color: var(--primary) !important;
+}
+
+/* Dark mode for chat template type selector */
+[data-theme="dark"] #chat-template-type {
+    background-color: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] #chat-template-type:focus {
+    background-color: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--primary) !important;
+}
+
+[data-theme="dark"] #chat-template-type:disabled {
+    background-color: var(--bg-tertiary) !important;
+    color: var(--text-muted) !important;
+    opacity: 0.6;
 }
 
 /* Ensure all labels in step 6 are visible */
