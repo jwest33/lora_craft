@@ -34,10 +34,10 @@
 
             if (exists) {
                 successCount++;
-                results.push(`✅ ${moduleName} - Loaded successfully`);
+                results.push(`+ ${moduleName} - Loaded successfully`);
             } else {
                 failureCount++;
-                results.push(`❌ ${moduleName} - NOT FOUND`);
+                results.push(`X ${moduleName} - NOT FOUND`);
             }
         });
 
@@ -47,13 +47,13 @@
 
         console.log('\n--- Summary ---');
         console.log(`Total Modules: ${expectedModules.length}`);
-        console.log(`✅ Loaded: ${successCount}`);
-        console.log(`❌ Missing: ${failureCount}`);
+        console.log(`+ Loaded: ${successCount}`);
+        console.log(`X Missing: ${failureCount}`);
 
         if (failureCount === 0) {
             console.log('\n🎉 All modules loaded successfully!');
         } else {
-            console.error('\n⚠️ Some modules failed to load. Check console for errors.');
+            console.error('\nx Some modules failed to load. Check console for errors.');
         }
 
         // Test key functions
@@ -70,12 +70,12 @@
         functionTests.forEach(test => {
             try {
                 if (window[test.module] && typeof window[test.module][test.func] === 'function') {
-                    console.log(`✅ ${test.desc} - Function exists`);
+                    console.log(`+ ${test.desc} - Function exists`);
                 } else {
-                    console.log(`❌ ${test.desc} - Function not found`);
+                    console.log(`X ${test.desc} - Function not found`);
                 }
             } catch (error) {
-                console.log(`❌ ${test.desc} - Error: ${error.message}`);
+                console.log(`X ${test.desc} - Error: ${error.message}`);
             }
         });
 
@@ -98,9 +98,9 @@
 
         globalFunctions.forEach(funcName => {
             if (typeof window[funcName] === 'function') {
-                console.log(`✅ ${funcName}() - Available`);
+                console.log(`+ ${funcName}() - Available`);
             } else {
-                console.log(`❌ ${funcName}() - Not found`);
+                console.log(`X ${funcName}() - Not found`);
             }
         });
 

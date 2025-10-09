@@ -133,16 +133,16 @@ docker compose logs lora-craft | grep -i "gpu\|cuda\|cpu mode"
 
 **GPU Mode Output:**
 ```
-✓ GPU detected: NVIDIA GeForce RTX 4090
-✓ CUDA available: 12.8
-✓ Unsloth optimizations: ENABLED
++ GPU detected: NVIDIA GeForce RTX 4090
++ CUDA available: 12.8
++ Unsloth optimizations: ENABLED
 ```
 
 **CPU Mode Output:**
 ```
-⚠ No GPU detected - running in CPU mode
-⚠ Unsloth optimizations: DISABLED (requires CUDA)
-⚠ Training will be slower on CPU
+x No GPU detected - running in CPU mode
+x Unsloth optimizations: DISABLED (requires CUDA)
+x Training will be slower on CPU
 ```
 
 ## Common Commands
@@ -358,16 +358,17 @@ All data is stored in the project directory:
 
 The LoRA Craft Docker image provides a complete, pre-configured environment:
 
-- **NVIDIA CUDA 12.8** runtime with cuDNN (works on both GPU and CPU systems)
+- **NVIDIA CUDA 12.8** runtime with cuDNN 9.7 (works on both GPU and CPU)
 - **Python 3.11** with all dependencies pre-installed
+- **PyTorch 2.8.0** with CUDA 12.8 support
 - **nvidia-smi** utility for GPU monitoring (when GPU available)
-- **Automatic GPU/CPU detection** on container startup
-- **Persistent volumes** for models, datasets, and outputs
+- **Automatic GPU/CPU detection** on startup
+- **CPU fallback** when GPU not available
+- **Persistent volumes** for models, datasets, configs, and outputs
 - **Health checks** to monitor application status
-- **Optimized dependencies** (PyTorch 2.8.0 with CUDA support)
-- **Graceful CPU fallback** when GPU not available
+- **Optimized training libraries** (Unsloth, Transformers, PEFT, TRL)
 
-**Image size**: ~15GB (includes PyTorch, Transformers, and training libraries)
+**Image size**: ~20GB (includes PyTorch, Transformers, and training libraries)
 
 ## GPU Configuration Notes
 

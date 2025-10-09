@@ -37,17 +37,27 @@ def list_popular_datasets():
 
         datasets_with_status = []
         for dataset_path, info in POPULAR_DATASETS.items():
-            is_cached = handler.is_cached(dataset_path)
-            cache_info = handler.get_cache_info(dataset_path) if is_cached else None
+            # Extract dataset_config if it exists (for multi-config datasets like GSM8K)
+            dataset_config = info.get('dataset_config')
 
-            datasets_with_status.append({
+            # Check cache status with config to differentiate between different configs
+            is_cached = handler.is_cached(dataset_path, dataset_config)
+            cache_info = handler.get_cache_info(dataset_path, dataset_config) if is_cached else None
+
+            dataset_entry = {
                 'path': dataset_path,
                 'name': info['name'],
                 'size': info['size'],
                 'category': info['category'],
                 'is_cached': is_cached,
                 'cache_info': cache_info.to_dict() if cache_info else None
-            })
+            }
+
+            # Include dataset_config in response if present
+            if dataset_config:
+                dataset_entry['dataset_config'] = dataset_config
+
+            datasets_with_status.append(dataset_entry)
 
         return jsonify({
             'datasets': datasets_with_status
@@ -64,6 +74,9 @@ def get_dataset_status(dataset_name):
     try:
         from core import DatasetConfig
 
+        # Get optional dataset_config from query params
+        dataset_config = request.args.get('dataset_config')
+
         # Replace forward slash with safe separator
         safe_name = dataset_name.replace('/', '__')
 
@@ -71,15 +84,17 @@ def get_dataset_status(dataset_name):
         config = DatasetConfig(
             source_type='huggingface',
             source_path=dataset_name.replace('__', '/'),
+            dataset_config=dataset_config,
             use_cache=True
         )
 
         handler = DatasetHandler(config)
-        is_cached = handler.is_cached(dataset_name.replace('__', '/'))
+        normalized_name = dataset_name.replace('__', '/')
+        is_cached = handler.is_cached(normalized_name, dataset_config)
 
         cache_info = None
         if is_cached:
-            cache_info = handler.get_cache_info(dataset_name.replace('__', '/'))
+            cache_info = handler.get_cache_info(normalized_name, dataset_config)
 
         return jsonify({
             'dataset': dataset_name,

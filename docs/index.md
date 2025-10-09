@@ -136,7 +136,7 @@ LoRA Craft is a web-based application for fine-tuning large language models usin
 ## What You Can Do
 
 - **Fine-tune for specific tasks**: Math reasoning, code generation, question answering, instruction-following
-- **Use curated datasets**: Alpaca, GSM8K, OpenMath, Code Alpaca, SQuAD, and 15+ more
+- **Use curated datasets**: 7 pre-configured datasets including Alpaca, GSM8K, OpenMath, Code Alpaca, Dolly 15k, Orca Math, and SQuAD
 - **Upload custom data**: Train on your own JSON, JSONL, CSV, or Parquet datasets
 - **Monitor in real-time**: Track loss, rewards, KL divergence, and other metrics through WebSocket-based updates
 - **Test and compare models**: Interactive evaluation interface with side-by-side comparisons and batch testing

@@ -372,6 +372,20 @@
                     filter_by_length: document.getElementById('pre-training-filter-length')?.checked ?? false,
                     validate_format: document.getElementById('validate-format')?.checked ?? true
                 },
+                // Fine-tuning internals (advanced)
+                fine_tuning_internals: {
+                    dataset_processing_batch_size: parseInt(document.getElementById('dataset-processing-batch-size')?.value) || 1000,
+                    short_response_max_words: parseInt(document.getElementById('short-response-max-words')?.value) || 3,
+                    short_response_max_chars: parseInt(document.getElementById('short-response-max-chars')?.value) || 50,
+                    reward_sample_interval: parseInt(document.getElementById('reward-sample-interval')?.value) || 10,
+                    reward_samples_per_batch: parseInt(document.getElementById('reward-samples-per-batch')?.value) || 2,
+                    log_preview_chars: parseInt(document.getElementById('log-preview-chars')?.value) || 300,
+                    prompt_length_percentile: parseFloat(document.getElementById('prompt-length-percentile')?.value) || 0.9,
+                    prompt_length_buffer: parseInt(document.getElementById('prompt-length-buffer')?.value) || 10,
+                    min_completion_length: parseInt(document.getElementById('min-completion-length')?.value) || 256,
+                    fallback_completion_length: parseInt(document.getElementById('fallback-completion-length')?.value) || 512,
+                    min_loss_threshold: parseFloat(document.getElementById('min-loss-threshold')?.value) || 0.01
+                },
                 // Get reward config from the actual reward system (rewards.js)
                 reward: (typeof gatherRewardConfig === 'function')
                     ? gatherRewardConfig()
@@ -655,6 +669,30 @@
                         validateFormat.checked = config.pre_training.validate_format;
                     }
                 }
+            }
+
+            // Apply fine-tuning internals configuration
+            if (config.fine_tuning_internals) {
+                const fineTuningFields = {
+                    'dataset-processing-batch-size': 'dataset_processing_batch_size',
+                    'short-response-max-words': 'short_response_max_words',
+                    'short-response-max-chars': 'short_response_max_chars',
+                    'reward-sample-interval': 'reward_sample_interval',
+                    'reward-samples-per-batch': 'reward_samples_per_batch',
+                    'log-preview-chars': 'log_preview_chars',
+                    'prompt-length-percentile': 'prompt_length_percentile',
+                    'prompt-length-buffer': 'prompt_length_buffer',
+                    'min-completion-length': 'min_completion_length',
+                    'fallback-completion-length': 'fallback_completion_length',
+                    'min-loss-threshold': 'min_loss_threshold'
+                };
+
+                Object.entries(fineTuningFields).forEach(([elementId, configKey]) => {
+                    if (config.fine_tuning_internals[configKey] !== undefined) {
+                        const element = document.getElementById(elementId);
+                        if (element) element.value = config.fine_tuning_internals[configKey];
+                    }
+                });
             }
 
             // Apply reward configuration
@@ -1514,6 +1552,19 @@
                     if (document.getElementById('pre-training-samples')) document.getElementById('pre-training-samples').value = '500';
                     if (document.getElementById('pre-training-filter-length')) document.getElementById('pre-training-filter-length').checked = false;
                     if (document.getElementById('validate-format')) document.getElementById('validate-format').checked = true;
+
+                    // Reset fine-tuning internals (advanced)
+                    if (document.getElementById('dataset-processing-batch-size')) document.getElementById('dataset-processing-batch-size').value = '1000';
+                    if (document.getElementById('short-response-max-words')) document.getElementById('short-response-max-words').value = '3';
+                    if (document.getElementById('short-response-max-chars')) document.getElementById('short-response-max-chars').value = '50';
+                    if (document.getElementById('reward-sample-interval')) document.getElementById('reward-sample-interval').value = '10';
+                    if (document.getElementById('reward-samples-per-batch')) document.getElementById('reward-samples-per-batch').value = '2';
+                    if (document.getElementById('log-preview-chars')) document.getElementById('log-preview-chars').value = '300';
+                    if (document.getElementById('prompt-length-percentile')) document.getElementById('prompt-length-percentile').value = '0.9';
+                    if (document.getElementById('prompt-length-buffer')) document.getElementById('prompt-length-buffer').value = '10';
+                    if (document.getElementById('min-completion-length')) document.getElementById('min-completion-length').value = '256';
+                    if (document.getElementById('fallback-completion-length')) document.getElementById('fallback-completion-length').value = '512';
+                    if (document.getElementById('min-loss-threshold')) document.getElementById('min-loss-threshold').value = '0.01';
 
                     // Reset optimizations
                     if (document.getElementById('use-flash-attention')) document.getElementById('use-flash-attention').checked = false;

@@ -174,6 +174,27 @@ class GRPOTrainingConfig:
     epsilon: float = 3e-4
     epsilon_high: float = 4e-4
 
+    # Advanced training options
+    # Dataset processing
+    dataset_processing_batch_size: int = 1000
+    # Response detection
+    short_response_max_words: int = 3
+    short_response_max_chars: int = 50
+    min_reasoning_placeholder_length: int = 10
+    # Logging and sampling
+    reward_sample_interval: int = 10  # Log every Nth batch
+    reward_samples_per_batch: int = 2  # Samples to log per selected batch
+    log_preview_chars_short: int = 200
+    log_preview_chars_long: int = 300
+    log_sample_max_chars: int = 1000
+    # Prompt/completion length management
+    prompt_length_percentile: float = 0.9
+    prompt_length_buffer: int = 10
+    min_completion_length: int = 256
+    fallback_completion_length: int = 512
+    # Training thresholds
+    min_loss_threshold_warning: float = 0.01
+
     # Paths
     output_dir: str = "./outputs"
     cache_dir: str = "./cache"
@@ -343,7 +364,7 @@ class GRPOModelTrainer:
         if instruction:
             # Try to get the first sentence
             first_sentence = instruction.split('.')[0].strip()
-            if first_sentence and len(first_sentence) > 10:
+            if first_sentence and len(first_sentence) > self.config.min_reasoning_placeholder_length:
                 # If it's a question, rephrase as statement
                 if first_sentence.endswith('?'):
                     return f"Analyzing the question: {first_sentence}"
@@ -581,7 +602,7 @@ class GRPOModelTrainer:
             dataset_with_lengths = pre_train_dataset.map(
                 get_length,
                 batched=True,
-                batch_size=1000,
+                batch_size=self.config.dataset_processing_batch_size,
                 load_from_cache_file=False,  # Don't cache intermediate results
                 desc="Computing sequence lengths"
             )
@@ -679,7 +700,7 @@ class GRPOModelTrainer:
 
                         # If response looks like a single-word/short label (e.g., "STRONG_BUY")
                         # treat it as the solution and generate minimal reasoning
-                        if len(response_stripped.split()) <= 3 and len(response_stripped) < 50:
+                        if len(response_stripped.split()) <= self.config.short_response_max_words and len(response_stripped) < self.config.short_response_max_chars:
                             # Short response: likely a label/classification
                             # Put it in the solution section, add dynamic reasoning placeholder
                             # NOTE: No reasoning_start because prompt already has it
@@ -1172,9 +1193,9 @@ class GRPOModelTrainer:
         logger.info(f"Final success rate: {success_rate*100:.1f}%")
 
         if success_rate >= self.config.pre_training_min_success_rate:
-            logger.info("✅ SUCCESS: Model has learned the format!")
+            logger.info("+ SUCCESS: Model has learned the format!")
         else:
-            logger.warning(f"⚠️  WARNING: Success rate {success_rate*100:.1f}% below target {self.config.pre_training_min_success_rate*100:.0f}%")
+            logger.warning(f"x  WARNING: Success rate {success_rate*100:.1f}% below target {self.config.pre_training_min_success_rate*100:.0f}%")
             logger.warning("   Consider:")
             logger.warning("   - Increasing pre_training_epochs")
             logger.warning("   - Increasing pre_training_max_additional_epochs")
@@ -1284,8 +1305,8 @@ class GRPOModelTrainer:
             """Wrapper to adapt our reward function to TRL's format."""
             scores = []
 
-            # Sample every 10th batch (adjustable)
-            should_sample = (sample_counter['count'] % 10 == 0)
+            # Sample every Nth batch (configurable)
+            should_sample = (sample_counter['count'] % self.config.reward_sample_interval == 0)
             logger.debug(f"Reward wrapper called: batch_count={sample_counter['count']}, should_sample={should_sample}, num_prompts={len(prompts)}")
             sample_counter['count'] += 1
 
@@ -1313,8 +1334,8 @@ class GRPOModelTrainer:
                 # Use the total reward directly
                 scores.append(reward)
 
-                # Sample first 2 examples from sampled batches
-                if should_sample and idx < 2 and self.metrics_callback:
+                # Sample first N examples from sampled batches
+                if should_sample and idx < self.config.reward_samples_per_batch and self.metrics_callback:
                     # Try to get current step from trainer state if available
                     # Otherwise use batch count as approximate step (incremented before this check)
                     current_step = sample_counter['count']
@@ -1508,25 +1529,25 @@ class GRPOModelTrainer:
             tokens = self.tokenizer.encode(prompt_text, add_special_tokens=True)
             prompt_lengths.append(len(tokens))
 
-        # Calculate 90th percentile to avoid truncating most prompts
+        # Calculate percentile to avoid truncating most prompts
         # while filtering out extreme outliers (like official notebook does)
         import numpy as np
-        percentile_90 = int(np.quantile(prompt_lengths, 0.9))
-        max_prompt_length = percentile_90 + 10  # Add small buffer
+        percentile_value = int(np.quantile(prompt_lengths, self.config.prompt_length_percentile))
+        max_prompt_length = percentile_value + self.config.prompt_length_buffer  # Add buffer
 
         # Ensure we don't exceed total sequence length
         max_completion_length = self.config.max_sequence_length - max_prompt_length
-        if max_completion_length < 256:
+        if max_completion_length < self.config.min_completion_length:
             # If completion space is too small, reduce prompt length
             logger.warning(f"Completion length would be too small ({max_completion_length}), adjusting...")
-            max_prompt_length = self.config.max_sequence_length - 512
-            max_completion_length = 512
+            max_prompt_length = self.config.max_sequence_length - self.config.fallback_completion_length
+            max_completion_length = self.config.fallback_completion_length
 
         logger.info(f"Prompt length statistics:")
         logger.info(f"  Min: {min(prompt_lengths)} tokens")
         logger.info(f"  Mean: {int(np.mean(prompt_lengths))} tokens")
         logger.info(f"  Median: {int(np.median(prompt_lengths))} tokens")
-        logger.info(f"  90th percentile: {percentile_90} tokens")
+        logger.info(f"  {int(self.config.prompt_length_percentile*100)}th percentile: {percentile_value} tokens")
         logger.info(f"  Max: {max(prompt_lengths)} tokens")
         logger.info(f"  Configured max_prompt_length: {max_prompt_length} tokens")
         logger.info(f"  Configured max_completion_length: {max_completion_length} tokens")
@@ -1876,7 +1897,7 @@ class GRPOModelTrainer:
                         logger.warning(f"No metrics callback registered - metrics not sent for step {current_step}")
 
                     # Log to console with actual values - use higher precision for small values
-                    if abs(actual_loss) < 0.01:
+                    if abs(actual_loss) < parent.config.min_loss_threshold_warning:
                         loss_str = f"{actual_loss:.6f}"
                     else:
                         loss_str = f"{actual_loss:.4f}"

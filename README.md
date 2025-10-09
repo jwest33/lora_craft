@@ -1,7 +1,15 @@
 <div align="center">
   <img src="static/images/lora_craft.png" alt="LoRA Craft" width="200"/>
   <h1>LoRA Craft</h1>
-  <p>Craft your own LoRA adapters with LoRA Craft - A web-based interface for fine-tuning language models using GRPO (Group Relative Policy Optimization)</p>
+  <p>Craft your own LoRA adapters with LoRA Craft - A web-based interface for fine-tuning pre-trained language models using GRPO (Group Relative Policy Optimization)</p>
+
+  <p>
+    <a href="https://loracraft.org"><img src="https://img.shields.io/badge/Website-loracraft.org-blue?style=for-the-badge&logo=internet-explorer" alt="Website"></a>
+    &nbsp;&nbsp;
+    <a href="https://github.com/jwest33/lora_craft"><img src="https://img.shields.io/badge/GitHub-lora__craft-181717?style=for-the-badge&logo=github" alt="GitHub"></a>
+    &nbsp;&nbsp;
+    <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License"></a>
+  </p>
 </div>
 
 ---
@@ -140,17 +148,17 @@ docker compose logs -f
 
 The LoRA Craft Docker image provides:
 
-- ✅ **NVIDIA CUDA 12.8** runtime with cuDNN 9.7 (works on both GPU and CPU)
-- ✅ **Python 3.11** with all dependencies pre-installed
-- ✅ **PyTorch 2.8.0** with CUDA 12.8 support
-- ✅ **nvidia-smi** utility for GPU monitoring (when GPU available)
-- ✅ **Automatic GPU/CPU detection** on startup
-- ✅ **Graceful CPU fallback** when GPU not available
-- ✅ **Persistent volumes** for models, datasets, configs, and outputs
-- ✅ **Health checks** to monitor application status
-- ✅ **Optimized training libraries** (Unsloth, Transformers, PEFT, TRL)
+- **NVIDIA CUDA 12.8** runtime with cuDNN 9.7 (works on both GPU and CPU)
+- **Python 3.11** with all dependencies pre-installed
+- **PyTorch 2.8.0** with CUDA 12.8 support
+- **nvidia-smi** utility for GPU monitoring (when GPU available)
+- **Automatic GPU/CPU detection** on startup
+- **CPU fallback** when GPU not available
+- **Persistent volumes** for models, datasets, configs, and outputs
+- **Health checks** to monitor application status
+- **Optimized training libraries** (Unsloth, Transformers, PEFT, TRL)
 
-**Image size**: ~15GB (includes all ML libraries)
+**Image size**: ~20GB (includes all ML libraries)
 
 #### Volume Management
 
@@ -224,7 +232,7 @@ docker compose down -v
 
 **macOS**:
 - GPU acceleration not available (no NVIDIA GPU support)
-- ✅ **CPU-only mode now supported** - works for development and testing
+- **CPU-only mode** - works for development and testing
 - Training will be 5-10x slower than GPU mode
 - Recommended for small models (Qwen3-0.6B, Qwen3-1.7B)
 - For production training, consider using cloud GPU instance
@@ -534,7 +542,7 @@ Reward functions evaluate model outputs and guide training. Choose functions tha
 
 ![Reward Function Mapping](docs/example_reward_function_mapping.png)
 
-1. **Select Algorithm Type**: GRPO (standard), GSPO (sequence-level), or OR-GRPO (robust variant)
+1. **Select Algorithm Type**: GRPO (standard) or GSPO (sequence-level)
 
 2. **Choose Reward Source**:
    - **Quick Start**: Auto-configured based on dataset
@@ -708,7 +716,6 @@ GRPO is a reinforcement learning algorithm for training language models. Unlike 
 **GRPO vs Other Algorithms:**
 - **GRPO**: Token-level importance weighting (standard)
 - **GSPO**: Sequence-level optimization (simpler, less granular)
-- **OR-GRPO**: Outlier-robust variant (handles noisy rewards better)
 
 ### What are LoRA Adapters?
 
@@ -799,8 +806,8 @@ Then, provide your solution between <SOLUTION></SOLUTION>
 **Note**: LoRA Craft automatically detects and uses available hardware. If you see "CPU Mode" in the logs but have an NVIDIA GPU, see the GPU troubleshooting section below.
 
 **Expected CPU Mode Indicators:**
-- Log message: `⚠ No GPU detected - running in CPU mode`
-- Log message: `⚠ Unsloth optimizations: DISABLED (requires CUDA)`
+- Log message: `x No GPU detected - running in CPU mode`
+- Log message: `x Unsloth optimizations: DISABLED (requires CUDA)`
 - System status shows: "CPU Mode (No GPU Detected)"
 
 **This is normal if:**
@@ -1169,30 +1176,6 @@ instruction,response
 - Standard Apache Parquet files with `instruction` and `response` columns
 - Supports nested structures and efficient compression
 
-### Directory Structure
-
-```
-lora_craft/
-├── cache/              # Cached datasets from HuggingFace
-├── configs/            # Saved training configurations
-├── core/               # Core training logic
-├── docs/               # Documentation and example images
-├── exports/            # Exported models (GGUF, etc.)
-├── logs/               # Application and training logs
-├── outputs/            # Training outputs (model checkpoints)
-├── routes/             # Flask API routes
-├── services/           # Business logic services
-├── static/             # Static web assets (CSS, JS, images)
-├── templates/          # HTML templates
-├── uploads/            # Uploaded dataset files
-├── utils/              # Utility functions
-├── websockets/         # WebSocket handlers
-├── flask_app.py        # Application entry point
-├── app_factory.py      # Flask application factory
-├── constants.py        # Application constants
-└── requirements.txt    # Python dependencies
-```
-
 ---
 
 ## Appendix
@@ -1264,8 +1247,11 @@ lora_craft/
 - [GitHub Issues](https://github.com/jwest33/lora_craft/issues)
 - [Discussions](https://github.com/jwest33/lora_craft/discussions)
 
----
-
-**License**: MIT
 
 **Acknowledgments**: Built with Unsloth, HuggingFace Transformers, and Flask.
+
+---
+
+Created and maintained by **jwest33** ([loracraft.org](https://loracraft.org))  
+Licensed under the [MIT License](./LICENSE).  
+If you reuse or distribute this project, please retain attribution. Thank you, and happy crafting!

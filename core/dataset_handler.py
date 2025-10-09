@@ -165,19 +165,49 @@ class DatasetHandler:
         except Exception as e:
             logger.error(f"Failed to save cache info: {e}")
 
-    def _get_cache_key(self, dataset_name: str) -> str:
-        """Generate cache key for dataset."""
-        return hashlib.md5(dataset_name.encode()).hexdigest()
+    def _get_cache_key(self, dataset_name: str, dataset_config: Optional[str] = None) -> str:
+        """Generate cache key for dataset.
 
-    def is_cached(self, dataset_name: str) -> bool:
-        """Check if dataset is cached."""
-        cache_key = self._get_cache_key(dataset_name)
+        Args:
+            dataset_name: Name of the dataset
+            dataset_config: Optional config/subset name for multi-config datasets
+
+        Returns:
+            MD5 hash of dataset name (and config if provided)
+        """
+        # Include config in cache key to differentiate between different configs
+        # e.g., 'openai/gsm8k' with config 'main' vs config 'socratic'
+        if dataset_config:
+            cache_string = f"{dataset_name}::{dataset_config}"
+        else:
+            cache_string = dataset_name
+        return hashlib.md5(cache_string.encode()).hexdigest()
+
+    def is_cached(self, dataset_name: str, dataset_config: Optional[str] = None) -> bool:
+        """Check if dataset is cached.
+
+        Args:
+            dataset_name: Name of the dataset
+            dataset_config: Optional config/subset name for multi-config datasets
+
+        Returns:
+            True if dataset is cached, False otherwise
+        """
+        cache_key = self._get_cache_key(dataset_name, dataset_config)
         cache_path = self._cache_dir / f"{cache_key}.pkl"
         return cache_path.exists() and cache_key in self.cache_info
 
-    def get_cache_info(self, dataset_name: str) -> Optional[CacheInfo]:
-        """Get cache information for dataset."""
-        cache_key = self._get_cache_key(dataset_name)
+    def get_cache_info(self, dataset_name: str, dataset_config: Optional[str] = None) -> Optional[CacheInfo]:
+        """Get cache information for dataset.
+
+        Args:
+            dataset_name: Name of the dataset
+            dataset_config: Optional config/subset name for multi-config datasets
+
+        Returns:
+            CacheInfo object if dataset is cached, None otherwise
+        """
+        cache_key = self._get_cache_key(dataset_name, dataset_config)
         return self.cache_info.get(cache_key)
 
     def clear_cache(self, dataset_name: Optional[str] = None):
@@ -243,8 +273,8 @@ class DatasetHandler:
         else:
             raise ValueError(f"Unknown source type: {self.config.source_type}")
 
-        # Apply preprocessing
-        if self.dataset:
+        # Apply preprocessing (skip for streaming mode - used for previews only)
+        if self.dataset and not self.config.streaming:
             if self.progress_callback:
                 self.progress_callback({
                     'message': 'Preprocessing dataset...',
@@ -267,6 +297,8 @@ class DatasetHandler:
                     'status': 'completed',
                     'timestamp': time.time()
                 })
+        elif self.config.streaming:
+            logger.info("Skipped preprocessing for streaming mode (preview only)")
 
         return self.dataset
 
@@ -278,11 +310,11 @@ class DatasetHandler:
             if not valid:
                 raise ValueError(msg)
 
-            cache_key = self._get_cache_key(self.config.source_path)
+            cache_key = self._get_cache_key(self.config.source_path, self.config.subset)
             cache_path = self._cache_dir / f"{cache_key}.pkl"
 
             # Check cache unless force download
-            if self.config.use_cache and not self.config.force_download and self.is_cached(self.config.source_path):
+            if self.config.use_cache and not self.config.force_download and self.is_cached(self.config.source_path, self.config.subset):
                 self._report_progress(f"Loading {self.config.source_path} from cache...", 0.1, "cache_loading")
 
                 try:

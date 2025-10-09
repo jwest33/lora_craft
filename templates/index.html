@@ -966,45 +966,6 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                 </div>
                             </div>
 
-                            <!-- Custom Reward Builder Modal -->
-                            <div class="modal fade" id="customRewardBuilderModal" tabindex="-1" aria-hidden="true">
-                                <div class="modal-dialog modal-xl">
-                                    <div class="modal-content">
-                                        <div class="modal-header">
-                                            <h5 class="modal-title">
-                                                <i class="fas fa-tools"></i> Custom Reward Builder
-                                            </h5>
-                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                        </div>
-                                        <div class="modal-body">
-                                            <div class="alert alert-info">
-                                                <i class="fas fa-info-circle"></i> Build a custom reward by combining components. Each component evaluates a different aspect of the generated output.
-                                            </div>
-
-                                            <!-- Component List -->
-                                            <div id="custom-reward-components" class="mb-3">
-                                                <!-- Components will be added dynamically -->
-                                            </div>
-
-                                            <!-- Add Component Button -->
-                                            <button class="btn btn-primary" onclick="addCustomComponent()">
-                                                <i class="fas fa-plus"></i> Add Component
-                                            </button>
-                                        </div>
-                                        <div class="modal-footer">
-                                            <div class="me-auto">
-                                                <span id="custom-weight-total" class="badge bg-secondary"></span>
-                                            </div>
-                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                            <button type="button" class="btn btn-primary" onclick="applyCustomReward()">Apply Custom Reward</button>
-                                            <button type="button" class="btn btn-success" onclick="saveCustomRewardAsPreset()">
-                                                <i class="fas fa-save"></i> Save as Preset
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
                             <!-- Basic Settings -->
                             <div class="config-section">
                                 <h5 class="section-title">
@@ -1355,6 +1316,154 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
                                                 <label class="form-check-label" for="use-nested-quant">
                                                     Nested Quantization <small class="text-muted">(Double quantization)</small>
                                                 </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Fine-Tuning Internals (Collapsible) -->
+                            <div class="config-section mt-4 collapsible collapsed">
+                                <h5 class="section-title" onclick="toggleSection('fine-tuning-internals')">
+                                    <i class="fas fa-microscope"></i> Pre-fine-Tuning Settings
+                                    <i class="fas fa-chevron-down float-end"></i>
+                                </h5>
+                                <div id="fine-tuning-internals" class="section-content" style="display: none;">
+                                    <div class="alert alert-info">
+                                        <i class="fas fa-info-circle"></i> Internal parameters for fine-tuning behavior. Default values work well for most use cases.
+                                    </div>
+
+                                    <!-- Dataset Processing -->
+                                    <h6 class="mt-3"><i class="fas fa-database"></i> Dataset Processing</h6>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label class="form-label">Processing Batch Size
+                                                    <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip"
+                                                       title="Batch size for dataset length computation and tokenization"></i>
+                                                </label>
+                                                <input type="number" class="form-control" id="dataset-processing-batch-size"
+                                                       value="1000" min="100" max="5000" step="100">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Response Detection -->
+                                    <h6 class="mt-3"><i class="fas fa-text-height"></i> Response Format Detection</h6>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label class="form-label">Short Response Max Words
+                                                    <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip"
+                                                       title="Max words to consider a response 'short' (for placeholder reasoning)"></i>
+                                                </label>
+                                                <input type="number" class="form-control" id="short-response-max-words"
+                                                       value="3" min="1" max="10">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label class="form-label">Short Response Max Chars
+                                                    <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip"
+                                                       title="Max characters to consider a response 'short'"></i>
+                                                </label>
+                                                <input type="number" class="form-control" id="short-response-max-chars"
+                                                       value="50" min="10" max="200" step="10">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Logging & Sampling -->
+                                    <h6 class="mt-3"><i class="fas fa-clipboard-list"></i> Logging & Sampling</h6>
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <div class="form-group">
+                                                <label class="form-label">Reward Sample Interval
+                                                    <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip"
+                                                       title="Log reward samples every N batches (10 = every 10th batch)"></i>
+                                                </label>
+                                                <input type="number" class="form-control" id="reward-sample-interval"
+                                                       value="10" min="1" max="100">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-group">
+                                                <label class="form-label">Samples Per Batch
+                                                    <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip"
+                                                       title="Number of examples to log from each sampled batch"></i>
+                                                </label>
+                                                <input type="number" class="form-control" id="reward-samples-per-batch"
+                                                       value="2" min="1" max="10">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-group">
+                                                <label class="form-label">Log Preview Length
+                                                    <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip"
+                                                       title="Characters to show in log previews"></i>
+                                                </label>
+                                                <input type="number" class="form-control" id="log-preview-chars"
+                                                       value="300" min="50" max="1000" step="50">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Prompt/Completion Management -->
+                                    <h6 class="mt-3"><i class="fas fa-ruler-combined"></i> Prompt/Completion Length</h6>
+                                    <div class="row">
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="form-label">Length Percentile
+                                                    <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip"
+                                                       title="Percentile for dynamic prompt length calculation (0.9 = 90th percentile)"></i>
+                                                </label>
+                                                <input type="number" class="form-control" id="prompt-length-percentile"
+                                                       value="0.9" min="0.5" max="0.99" step="0.05">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="form-label">Length Buffer
+                                                    <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip"
+                                                       title="Token buffer added to calculated prompt length"></i>
+                                                </label>
+                                                <input type="number" class="form-control" id="prompt-length-buffer"
+                                                       value="10" min="0" max="100" step="5">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="form-label">Min Completion Length
+                                                    <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip"
+                                                       title="Minimum tokens reserved for completion"></i>
+                                                </label>
+                                                <input type="number" class="form-control" id="min-completion-length"
+                                                       value="256" min="128" max="1024" step="64">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label class="form-label">Fallback Completion
+                                                    <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip"
+                                                       title="Fallback completion length if calculated value too small"></i>
+                                                </label>
+                                                <input type="number" class="form-control" id="fallback-completion-length"
+                                                       value="512" min="256" max="2048" step="128">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Training Thresholds -->
+                                    <h6 class="mt-3"><i class="fas fa-exclamation-triangle"></i> Training Alerts</h6>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label class="form-label">Min Loss Warning Threshold
+                                                    <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip"
+                                                       title="Show warning if loss drops below this value (potential training issue)"></i>
+                                                </label>
+                                                <input type="number" class="form-control" id="min-loss-threshold"
+                                                       value="0.01" min="0.001" max="0.1" step="0.001">
                                             </div>
                                         </div>
                                     </div>
@@ -2669,6 +2778,45 @@ Then, provide your solution between <SOLUTION></SOLUTION></textarea>
     <!-- End of main-wrapper -->
 
     <!-- Modals -->
+    <!-- Custom Reward Builder Modal -->
+    <div class="modal fade" id="customRewardBuilderModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-tools"></i> Custom Reward Builder
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> Build a custom reward by combining components. Each component evaluates a different aspect of the generated output.
+                    </div>
+
+                    <!-- Component List -->
+                    <div id="custom-reward-components" class="mb-3">
+                        <!-- Components will be added dynamically -->
+                    </div>
+
+                    <!-- Add Component Button -->
+                    <button class="btn btn-primary" onclick="addCustomComponent()">
+                        <i class="fas fa-plus"></i> Add Component
+                    </button>
+                </div>
+                <div class="modal-footer">
+                    <div class="me-auto">
+                        <span id="custom-weight-total" class="badge bg-secondary"></span>
+                    </div>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="applyCustomReward()">Apply Custom Reward</button>
+                    <button type="button" class="btn btn-success" onclick="saveCustomRewardAsPreset()">
+                        <i class="fas fa-save"></i> Save as Preset
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- System Info Modal -->
     <div class="modal fade" id="systemInfoModal" tabindex="-1">
         <div class="modal-dialog modal-lg">

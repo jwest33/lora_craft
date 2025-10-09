@@ -1173,6 +1173,7 @@ body {
     display: flex;
     gap: 0.5rem;
     margin-top: 0.75rem;
+    justify-content: center;
 }
 
 .dataset-catalog-card {
@@ -1895,6 +1896,11 @@ body {
 
 [data-theme="dark"] .modal-header .btn-close {
     filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+[data-theme="dark"] .modal-body {
+    background-color: var(--bg-card);
+    color: var(--text-primary);
 }
 
 /* Specific modal customizations */
@@ -2696,6 +2702,25 @@ body {
     background: var(--bg-secondary) !important;
     color: var(--text-primary) !important;
     border-color: var(--primary) !important;
+}
+
+/* Dark mode for chat template type selector */
+[data-theme="dark"] #chat-template-type {
+    background-color: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] #chat-template-type:focus {
+    background-color: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--primary) !important;
+}
+
+[data-theme="dark"] #chat-template-type:disabled {
+    background-color: var(--bg-tertiary) !important;
+    color: var(--text-muted) !important;
+    opacity: 0.6;
 }
 
 /* Ensure all labels in step 6 are visible */
@@ -4682,6 +4707,18 @@ body {
 }
 
 /* Dark theme overrides for custom builder */
+[data-theme="dark"] .custom-component {
+    --bs-card-bg: var(--bg-card);
+    background-color: var(--bg-card);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .custom-component .card-body {
+    background-color: var(--bg-card);
+    color: var(--text-primary);
+}
+
 [data-theme="dark"] .custom-component .card-header {
     background-color: var(--bg-tertiary);
     color: var(--text-primary);

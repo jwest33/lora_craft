@@ -2332,14 +2332,14 @@ if __name__ == "__main__":
         actual = signal_reward.compute(instruction, generated, reference)
         is_correct = abs(actual - expected) < 0.01
 
-        status = "✅ PASS" if is_correct else "❌ FAIL"
+        status = "+ PASS" if is_correct else "X FAIL"
         passed += 1 if is_correct else 0
         failed += 0 if is_correct else 1
 
         print(f"{status} | {description}")
         print(f"     Expected: {expected:.2f}, Actual: {actual:.2f}")
         if not is_correct:
-            print(f"     ⚠️  MISMATCH!")
+            print(f"     x  MISMATCH!")
         print()
 
     print("=" * 80)

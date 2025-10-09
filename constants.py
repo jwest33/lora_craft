@@ -52,6 +52,7 @@ POPULAR_DATASETS = {
         'estimated_mb': 12,
         'sample_count': 8500,
         'category': 'math',
+        'dataset_config': 'main',  # Required: GSM8K has 'main' and 'socratic' configs
         'field_mapping': {
             'instruction': 'question',
             'response': 'answer'
@@ -76,8 +77,8 @@ POPULAR_DATASETS = {
         'sample_count': 20000,
         'category': 'coding',
         'field_mapping': {
-            'instruction': 'prompt',
-            'response': 'completion'
+            'instruction': 'instruction',
+            'response': 'output'
         }
     },
     'databricks/databricks-dolly-15k': {
