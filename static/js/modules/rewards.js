@@ -420,18 +420,18 @@ function displayPresetComponents(details) {
         }
 
         return `
-            <div class="component-item mb-3 p-3 border rounded">
-                <div class="d-flex align-items-center justify-content-between mb-2">
+            <div class="component-item mb-3 p-2 border rounded">
+                <div class="d-flex align-items-center justify-content-between mb-1">
                     <div class="d-flex align-items-center">
                         <i class="${icon} me-2 text-primary"></i>
                         <strong>${comp.name}</strong>
                     </div>
                     <span class="badge bg-secondary">${weightPercentage}%</span>
                 </div>
-                <div class="component-description small text-muted mb-2">
+                <div class="component-description small text-muted mb-1">
                     ${comp.description}
                 </div>
-                <div class="progress mb-2" style="height: 8px;">
+                <div class="progress mb-1" style="height: 8px;">
                     <div class="progress-bar bg-primary" role="progressbar"
                          style="width: ${barWidth}%"
                          aria-valuenow="${comp.weight_percentage}"
@@ -553,16 +553,16 @@ function makePresetEditable(details) {
         }
 
         return `
-            <div class="component-item mb-3 p-3 border rounded" data-index="${index}">
+            <div class="component-item mb-3 p-2 border rounded" data-index="${index}">
                 <div class="component-content">
                     <!-- Component Name -->
-                    <div class="d-flex align-items-center mb-2">
+                    <div class="d-flex align-items-center mb-1">
                         <i class="${icon} me-2 text-primary"></i>
                         <strong>${comp.name}</strong>
                     </div>
 
                     <!-- Description -->
-                    <div class="component-description small text-muted mb-3">
+                    <div class="component-description small text-muted mb-2">
                         ${comp.description}
                     </div>
 
@@ -761,15 +761,15 @@ function displayCustomComponents(components) {
         const barWidth = Math.max(5, comp.weight_percentage);
 
         return `
-            <div class="component-item mb-3 p-3 border rounded">
-                <div class="d-flex align-items-center justify-content-between mb-2">
+            <div class="component-item mb-3 p-2 border rounded">
+                <div class="d-flex align-items-center justify-content-between mb-1">
                     <div class="d-flex align-items-center">
                         <i class="${icon} me-2 text-primary"></i>
                         <strong>${comp.name}</strong>
                     </div>
                     <span class="badge bg-secondary">${weightPercentage}% (${comp.weight.toFixed(2)})</span>
                 </div>
-                <div class="progress mb-2" style="height: 8px;">
+                <div class="progress mb-1" style="height: 8px;">
                     <div class="progress-bar bg-primary" role="progressbar"
                          style="width: ${barWidth}%"
                          aria-valuenow="${comp.weight_percentage}"

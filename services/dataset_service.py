@@ -25,20 +25,17 @@ logger = get_logger(__name__)
 class DatasetService:
     """Service for managing datasets."""
 
-    def __init__(self, upload_folder: str = 'uploads', cache_folder: str = 'datasets_cache'):
+    def __init__(self, upload_folder: str = 'uploads'):
         """
         Initialize dataset service.
 
         Args:
             upload_folder: Path to uploaded files directory
-            cache_folder: Path to dataset cache directory
         """
         self.upload_folder = Path(upload_folder)
-        self.cache_folder = Path(cache_folder)
 
-        # Ensure directories exist
+        # Ensure directory exists
         self.upload_folder.mkdir(exist_ok=True)
-        self.cache_folder.mkdir(exist_ok=True)
 
     def get_dataset_status(self, dataset_name: str) -> Dict[str, Any]:
         """
@@ -280,6 +277,11 @@ class DatasetService:
         dataset_info = POPULAR_DATASETS.get(dataset_name, {})
         default_split = dataset_info.get('default_split', 'train')
 
+        # If no dataset_config provided, check if dataset has a predefined one
+        if not dataset_config and 'dataset_config' in dataset_info:
+            dataset_config = dataset_info['dataset_config']
+            logger.info(f"Using predefined config '{dataset_config}' for {dataset_name}")
+
         try:
             from datasets import load_dataset
 
@@ -439,21 +441,28 @@ class DatasetService:
             Dictionary with cache size and dataset count
         """
         try:
+            # Use DatasetHandler to get actual cache info
+            handler = DatasetHandler()
+            cache_dir = handler._cache_dir
+
             total_size = 0
             dataset_count = 0
 
-            if self.cache_folder.exists():
-                for item in self.cache_folder.rglob('*'):
+            if cache_dir.exists():
+                # Count .pkl files as cached datasets
+                pkl_files = list(cache_dir.glob('*.pkl'))
+                dataset_count = len(pkl_files)
+
+                # Calculate total size of cache directory
+                for item in cache_dir.rglob('*'):
                     if item.is_file():
                         total_size += item.stat().st_size
-                    elif item.is_dir():
-                        dataset_count += 1
 
             return {
                 'cache_size_bytes': total_size,
                 'cache_size_mb': round(total_size / (1024 * 1024), 2),
                 'dataset_count': dataset_count,
-                'cache_path': str(self.cache_folder)
+                'cache_path': str(cache_dir)
             }
         except Exception as e:
             logger.error(f"Failed to get cache info: {e}")
@@ -472,13 +481,16 @@ class DatasetService:
         try:
             import shutil
 
-            if self.cache_folder.exists():
-                # Get size before clearing
-                total_size = sum(f.stat().st_size for f in self.cache_folder.rglob('*') if f.is_file())
+            # Use DatasetHandler to access actual cache directory
+            handler = DatasetHandler()
+            cache_dir = handler._cache_dir
 
-                # Clear cache
-                shutil.rmtree(self.cache_folder)
-                self.cache_folder.mkdir(exist_ok=True)
+            if cache_dir.exists():
+                # Get size before clearing
+                total_size = sum(f.stat().st_size for f in cache_dir.rglob('*') if f.is_file())
+
+                # Clear cache using DatasetHandler's method
+                handler.clear_cache()
 
                 logger.info(f"Cleared dataset cache: {total_size} bytes")
 

@@ -310,11 +310,11 @@ class DatasetHandler:
             if not valid:
                 raise ValueError(msg)
 
-            cache_key = self._get_cache_key(self.config.source_path)
+            cache_key = self._get_cache_key(self.config.source_path, self.config.subset)
             cache_path = self._cache_dir / f"{cache_key}.pkl"
 
             # Check cache unless force download
-            if self.config.use_cache and not self.config.force_download and self.is_cached(self.config.source_path):
+            if self.config.use_cache and not self.config.force_download and self.is_cached(self.config.source_path, self.config.subset):
                 self._report_progress(f"Loading {self.config.source_path} from cache...", 0.1, "cache_loading")
 
                 try:

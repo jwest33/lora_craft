@@ -1898,6 +1898,11 @@ body {
     filter: invert(1) grayscale(100%) brightness(200%);
 }
 
+[data-theme="dark"] .modal-body {
+    background-color: var(--bg-card);
+    color: var(--text-primary);
+}
+
 /* Specific modal customizations */
 
 /* Dataset Preview Modal */
@@ -4702,6 +4707,18 @@ body {
 }
 
 /* Dark theme overrides for custom builder */
+[data-theme="dark"] .custom-component {
+    --bs-card-bg: var(--bg-card);
+    background-color: var(--bg-card);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .custom-component .card-body {
+    background-color: var(--bg-card);
+    color: var(--text-primary);
+}
+
 [data-theme="dark"] .custom-component .card-header {
     background-color: var(--bg-tertiary);
     color: var(--text-primary);

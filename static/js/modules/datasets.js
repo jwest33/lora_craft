@@ -83,13 +83,13 @@
         // Load popular datasets from API
         loadPopularDatasets() {
             const grid = document.getElementById('dataset-grid');
-            if (!grid) return;
+            if (!grid) return Promise.resolve();
 
             // Show loading state
             grid.innerHTML = '<div class="text-center p-4"><i class="fas fa-spinner fa-spin fa-2x"></i><p class="mt-2">Loading datasets...</p></div>';
 
-            // Fetch datasets from API
-            fetch('/api/datasets/list')
+            // Fetch datasets from API and return promise
+            return fetch('/api/datasets/list')
                 .then(response => response.json())
                 .then(data => {
                     if (data.datasets && data.datasets.length > 0) {
@@ -97,10 +97,12 @@
                     } else {
                         grid.innerHTML = '<div class="alert alert-info">No datasets available</div>';
                     }
+                    return data;
                 })
                 .catch(error => {
                     console.error('Failed to load datasets:', error);
                     grid.innerHTML = '<div class="alert alert-danger">Failed to load datasets. Please try again.</div>';
+                    throw error;
                 });
         },
 
@@ -1047,9 +1049,20 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    CoreModule.showAlert(`${datasetName} downloaded successfully!`, 'success');
-                    // Refresh the dataset grid to update cached status
-                    this.loadPopularDatasets();
+                    CoreModule.showAlert(`${datasetName} downloaded successfully! Refreshing...`, 'success');
+
+                    // Small delay to ensure cache is fully written to disk
+                    setTimeout(() => {
+                        // Refresh the dataset grid to update cached status
+                        this.loadPopularDatasets()
+                            .then(() => {
+                                CoreModule.showAlert(`${datasetName} is now ready to preview!`, 'success');
+                            })
+                            .catch(error => {
+                                console.error('Failed to refresh dataset list:', error);
+                                CoreModule.showAlert('Dataset downloaded but failed to refresh list. Please reload the page.', 'warning');
+                            });
+                    }, 500);
                 } else {
                     throw new Error(data.error || 'Download failed');
                 }
