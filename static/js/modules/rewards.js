@@ -618,7 +618,7 @@ function updateWeightTotal() {
     if (display) {
         const isValid = Math.abs(total - 1.0) < 0.001;
         display.className = `badge ${isValid ? 'bg-success' : 'bg-warning'} text-white me-2`;
-        display.innerHTML = `Total: ${total.toFixed(3)} ${isValid ? '✓' : ''}`;
+        display.innerHTML = `Total: ${total.toFixed(3)} ${isValid ? '+' : ''}`;
     }
 }
 
@@ -899,7 +899,7 @@ async function showPresetDetails(presetName) {
                                     <div class="mt-3 text-center">
                                         <strong>Total Weight:</strong>
                                         ${details.weight_valid
-                                            ? '<span class="badge bg-success">1.0 ✓</span>'
+                                            ? '<span class="badge bg-success">1.0 +</span>'
                                             : `<span class="badge bg-danger">${details.total_weight.toFixed(2)} ✗</span>`}
                                     </div>
                                 </div>
@@ -2514,7 +2514,7 @@ function updateCustomWeightTotal() {
     if (display) {
         const isValid = Math.abs(total - 1.0) < 0.001;
         display.className = `badge ${isValid ? 'bg-success' : 'bg-warning'}`;
-        display.textContent = `Total Weight: ${total.toFixed(3)} ${isValid ? '✓' : '⚠'}`;
+        display.textContent = `Total Weight: ${total.toFixed(3)} ${isValid ? '+' : 'x'}`;
     }
 }
 

@@ -1193,9 +1193,9 @@ class GRPOModelTrainer:
         logger.info(f"Final success rate: {success_rate*100:.1f}%")
 
         if success_rate >= self.config.pre_training_min_success_rate:
-            logger.info("✅ SUCCESS: Model has learned the format!")
+            logger.info("+ SUCCESS: Model has learned the format!")
         else:
-            logger.warning(f"⚠️  WARNING: Success rate {success_rate*100:.1f}% below target {self.config.pre_training_min_success_rate*100:.0f}%")
+            logger.warning(f"x  WARNING: Success rate {success_rate*100:.1f}% below target {self.config.pre_training_min_success_rate*100:.0f}%")
             logger.warning("   Consider:")
             logger.warning("   - Increasing pre_training_epochs")
             logger.warning("   - Increasing pre_training_max_additional_epochs")

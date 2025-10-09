@@ -34,7 +34,7 @@ def test_load_reward_config(session_id: str):
     session_info = registry.get_session(session_id)
 
     if not session_info:
-        print(f"❌ Session '{session_id}' not found")
+        print(f"X Session '{session_id}' not found")
         return False
 
     print(f"Session found: {session_info.display_name or session_id}")
@@ -43,7 +43,7 @@ def test_load_reward_config(session_id: str):
     reward_builder = load_reward_from_session(session_info)
 
     if not reward_builder:
-        print("❌ Could not load reward configuration from session")
+        print("X Could not load reward configuration from session")
         return False
 
     print(f"Loaded reward function with {len(reward_builder.rewards)} components")
@@ -74,7 +74,7 @@ def test_single_test_with_reward(session_id: str):
     session_info = registry.get_session(session_id)
 
     if not session_info or not session_info.checkpoint_path:
-        print("❌ Session not found or no checkpoint available")
+        print("X Session not found or no checkpoint available")
         return False
 
     # Create model tester
@@ -85,7 +85,7 @@ def test_single_test_with_reward(session_id: str):
     success, error = tester.load_trained_model(session_info.checkpoint_path, session_id)
 
     if not success:
-        print(f"❌ Failed to load model: {error}")
+        print(f"X Failed to load model: {error}")
         return False
 
     print("Model loaded successfully")
@@ -121,7 +121,7 @@ WEAK_BUY
     )
 
     if not result.get('success'):
-        print(f"❌ Generation failed: {result.get('error')}")
+        print(f"X Generation failed: {result.get('error')}")
         return False
 
     print("Generation successful")
@@ -136,7 +136,7 @@ WEAK_BUY
         for comp_name, comp_score in reward_eval['components'].items():
             print(f"    - {comp_name}: {comp_score:.3f}")
     else:
-        print(f"❌ Reward evaluation failed: {reward_eval.get('error') if reward_eval else 'Not evaluated'}")
+        print(f"X Reward evaluation failed: {reward_eval.get('error') if reward_eval else 'Not evaluated'}")
 
     print("\nTEST 2 PASSED\n")
     return True
@@ -183,7 +183,7 @@ def test_batch_test_with_rewards(session_id: str, test_file: str = None):
     session_info = registry.get_session(session_id)
 
     if not session_info or not session_info.checkpoint_path:
-        print("❌ Session not found or no checkpoint available")
+        print("X Session not found or no checkpoint available")
         return False
 
     # Create model tester and load model
@@ -191,7 +191,7 @@ def test_batch_test_with_rewards(session_id: str, test_file: str = None):
     success, error = tester.load_trained_model(session_info.checkpoint_path, session_id)
 
     if not success:
-        print(f"❌ Failed to load model: {error}")
+        print(f"X Failed to load model: {error}")
         return False
 
     print("Model loaded successfully")
@@ -240,7 +240,7 @@ def test_batch_test_with_rewards(session_id: str, test_file: str = None):
         print(f"  Max: {status['max_reward']:.3f}")
         print(f"  Std Dev: {status['reward_std']:.3f}")
     else:
-        print("\n⚠️  No reward statistics available")
+        print("\nx  No reward statistics available")
 
     if results:
         print(f"\nResults saved to: {status['results_file']}")
@@ -282,11 +282,11 @@ def main():
     print("=" * 80)
 
     for test_name, passed in results:
-        status = "PASSED" if passed else "❌ FAILED"
+        status = "PASSED" if passed else "X FAILED"
         print(f"{status}: {test_name}")
 
     all_passed = all(passed for _, passed in results)
-    print(f"\nOverall: {'ALL TESTS PASSED' if all_passed else '❌ SOME TESTS FAILED'}")
+    print(f"\nOverall: {'ALL TESTS PASSED' if all_passed else 'X SOME TESTS FAILED'}")
     print("=" * 80 + "\n")
 
     return 0 if all_passed else 1

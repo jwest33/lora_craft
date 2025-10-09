@@ -47,7 +47,6 @@ Unlike supervised learning (which teaches models to imitate examples), GRPO teac
 
 - **GRPO**: Token-level importance weighting (default, most granular)
 - **GSPO**: Sequence-level optimization (simpler, faster)
-- **OR-GRPO**: Outlier-robust variant (handles noisy rewards better)
 
 ---
 
@@ -157,11 +156,11 @@ Train on curated public datasets or upload your own custom data.
 
 ### Public Dataset Library
 
-Browse 15+ curated datasets with filtering and preview:
-- **Math**: GSM8K, OpenMath, Orca Math (350K+ problems)
-- **Coding**: Code Alpaca, Programming problems (20K+ examples)
-- **General**: Alpaca, Dolly, instruction datasets (100K+ samples)
-- **Q&A**: SQuAD v2, TriviaQA (130K+ questions)
+Browse 7 curated datasets with filtering and preview:
+- **Math**: GSM8K (8.5K problems), OpenMath Reasoning (100K problems), Orca Math (200K problems)
+- **Coding**: Code Alpaca (20K examples)
+- **General**: Alpaca (52K samples), Dolly 15k (15K samples)
+- **Q&A**: SQuAD v2 (130K questions)
 
 ### Custom Dataset Upload
 

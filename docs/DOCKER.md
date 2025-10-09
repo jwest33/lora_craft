@@ -26,12 +26,12 @@
 
 This guide covers deploying LoRA Craft using Docker and Docker Compose. The Docker deployment provides:
 
-- ✅ **Consistent environment** across different systems
-- ✅ **GPU acceleration** with NVIDIA CUDA 12.8
-- ✅ **Persistent data storage** for models, configs, and outputs
-- ✅ **Easy updates** and rollbacks
-- ✅ **Production-ready** configuration
-- ✅ **Isolated dependencies** from host system
+- + **Consistent environment** across different systems
+- + **GPU acceleration** with NVIDIA CUDA 12.8
+- + **Persistent data storage** for models, configs, and outputs
+- + **Easy updates** and rollbacks
+- + **Production-ready** configuration
+- + **Isolated dependencies** from host system
 
 ### Architecture
 

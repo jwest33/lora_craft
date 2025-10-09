@@ -703,9 +703,9 @@ def run_training(session_id: str, config: Dict[str, Any],
                     q.put(('log', f"  Additional epochs: {pre_metrics.get('additional_epochs', 0)}"))
                     q.put(('log', f"  Final success rate: {pre_metrics.get('final_success_rate', 0)*100:.1f}%"))
                     if pre_metrics.get('success'):
-                        q.put(('log', "  ✅ Model successfully learned the format!"))
+                        q.put(('log', "  + Model successfully learned the format!"))
                     else:
-                        q.put(('log', "  ⚠️  Warning: Format learning below target threshold"))
+                        q.put(('log', "  x  Warning: Format learning below target threshold"))
             else:
                 q.put(('log', "Using standard pre-training (adaptive mode disabled)"))
                 pre_metrics = trainer.pre_fine_tune(dataset, template)
@@ -799,13 +799,13 @@ def run_training(session_id: str, config: Dict[str, Any],
                     q.put(('log', f"  Format Compliant: {'YES' if format_ok else '✗ NO'}"))
 
                     if not format_ok:
-                        q.put(('log', "  ⚠️  WARNING: Model may need more pre-training epochs!"))
+                        q.put(('log', "  x  WARNING: Model may need more pre-training epochs!"))
                         if not has_reasoning_markers:
                             q.put(('log', f"    Missing: {template_config_obj.reasoning_start_marker} ... {template_config_obj.reasoning_end_marker}"))
                         if not has_solution_markers:
                             q.put(('log', f"    Missing: {template_config_obj.solution_start_marker} ... {template_config_obj.solution_end_marker}"))
                     else:
-                        q.put(('log', "  ✅ Model has learned the expected format!"))
+                        q.put(('log', "  + Model has learned the expected format!"))
 
                     q.put(('log', "=" * 60))
 
