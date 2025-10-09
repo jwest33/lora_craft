@@ -1,7 +1,15 @@
 <div align="center">
   <img src="static/images/lora_craft.png" alt="LoRA Craft" width="200"/>
   <h1>LoRA Craft</h1>
-  <p>Craft your own LoRA adapters with LoRA Craft - A web-based interface for fine-tuning language models using GRPO (Group Relative Policy Optimization)</p>
+  <p>Craft your own LoRA adapters with LoRA Craft - A web-based interface for fine-tuning pre-trained language models using GRPO (Group Relative Policy Optimization)</p>
+
+  <p>
+    <a href="https://loracraft.org"><img src="https://img.shields.io/badge/Website-loracraft.org-blue?style=for-the-badge&logo=internet-explorer" alt="Website"></a>
+    &nbsp;&nbsp;
+    <a href="https://github.com/jwest33/lora_craft"><img src="https://img.shields.io/badge/GitHub-lora__craft-181717?style=for-the-badge&logo=github" alt="GitHub"></a>
+    &nbsp;&nbsp;
+    <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License"></a>
+  </p>
 </div>
 
 ---
@@ -1168,30 +1176,6 @@ instruction,response
 - Standard Apache Parquet files with `instruction` and `response` columns
 - Supports nested structures and efficient compression
 
-### Directory Structure
-
-```
-lora_craft/
-├── cache/              # Cached datasets from HuggingFace
-├── configs/            # Saved training configurations
-├── core/               # Core training logic
-├── docs/               # Documentation and example images
-├── exports/            # Exported models (GGUF, etc.)
-├── logs/               # Application and training logs
-├── outputs/            # Training outputs (model checkpoints)
-├── routes/             # Flask API routes
-├── services/           # Business logic services
-├── static/             # Static web assets (CSS, JS, images)
-├── templates/          # HTML templates
-├── uploads/            # Uploaded dataset files
-├── utils/              # Utility functions
-├── websockets/         # WebSocket handlers
-├── flask_app.py        # Application entry point
-├── app_factory.py      # Flask application factory
-├── constants.py        # Application constants
-└── requirements.txt    # Python dependencies
-```
-
 ---
 
 ## Appendix
@@ -1263,8 +1247,11 @@ lora_craft/
 - [GitHub Issues](https://github.com/jwest33/lora_craft/issues)
 - [Discussions](https://github.com/jwest33/lora_craft/discussions)
 
----
-
-**License**: MIT
 
 **Acknowledgments**: Built with Unsloth, HuggingFace Transformers, and Flask.
+
+---
+
+Created and maintained by **jwest33** ([loracraft.org](https://loracraft.org))  
+Licensed under the [MIT License](./LICENSE).  
+If you reuse or distribute this project, please retain attribution. Thank you, and happy crafting!

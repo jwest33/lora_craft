@@ -1,0 +1,140 @@
+# Security Headers for loracraft.org
+#
+# IMPORTANT: GitHub Pages does not support custom headers files.
+# This file is for DOCUMENTATION ONLY and will not be used by GitHub Pages.
+#
+# To apply these headers to your Cloudflare-proxied domain (loracraft.org),
+# configure them in the Cloudflare Dashboard:
+#
+# 1. Log into Cloudflare Dashboard
+# 2. Select your domain: loracraft.org
+# 3. Go to: Rules > Transform Rules > Modify Response Header
+# 4. Create a new rule with the headers below
+#
+# Alternatively, use Cloudflare Workers or configure via API.
+# See: https://developers.cloudflare.com/rules/transform/response-header-modification/
+
+# ============================================================================
+# Recommended Cloudflare Security Headers Configuration
+# ============================================================================
+
+/*
+  # Content Security Policy (CSP)
+  # Restricts resource loading to trusted sources
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;
+
+  # Strict Transport Security (HSTS)
+  # Force HTTPS for 1 year, include subdomains
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+
+  # Frame Options
+  # Prevent clickjacking attacks
+  X-Frame-Options: SAMEORIGIN
+
+  # Content Type Options
+  # Prevent MIME-type sniffing
+  X-Content-Type-Options: nosniff
+
+  # XSS Protection (legacy, but still useful for older browsers)
+  # Enable browser XSS filtering
+  X-XSS-Protection: 1; mode=block
+
+  # Referrer Policy
+  # Control referrer information sent with requests
+  Referrer-Policy: strict-origin-when-cross-origin
+
+  # Permissions Policy (formerly Feature-Policy)
+  # Disable unnecessary browser features
+  Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), display-capture=(), clipboard-write=()
+
+# ============================================================================
+# Cloudflare Dashboard Configuration Steps
+# ============================================================================
+#
+# Option 1: Using Transform Rules (Recommended)
+# ----------------------------------------------
+# 1. Dashboard > Rules > Transform Rules > Modify Response Header
+# 2. Create Rule: "Security Headers"
+# 3. Match: All incoming requests (or specific paths)
+# 4. Then: Set static headers (add each header above)
+#
+# Option 2: Using Cloudflare Workers
+# -----------------------------------
+# Create a Worker with the following code:
+#
+# addEventListener('fetch', event => {
+#   event.respondWith(handleRequest(event.request))
+# })
+#
+# async function handleRequest(request) {
+#   const response = await fetch(request)
+#   const newResponse = new Response(response.body, response)
+#
+#   // Add security headers
+#   newResponse.headers.set('Content-Security-Policy', "default-src 'self'; ...")
+#   newResponse.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload')
+#   newResponse.headers.set('X-Frame-Options', 'SAMEORIGIN')
+#   newResponse.headers.set('X-Content-Type-Options', 'nosniff')
+#   newResponse.headers.set('X-XSS-Protection', '1; mode=block')
+#   newResponse.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+#   newResponse.headers.set('Permissions-Policy', 'geolocation=(), ...')
+#
+#   return newResponse
+# }
+#
+# ============================================================================
+# Additional Security Recommendations
+# ============================================================================
+#
+# 1. Enable Cloudflare SSL/TLS:
+#    - Go to SSL/TLS > Overview
+#    - Set to "Full (strict)" mode
+#
+# 2. Enable "Always Use HTTPS":
+#    - Go to SSL/TLS > Edge Certificates
+#    - Toggle "Always Use HTTPS" to On
+#
+# 3. Enable HSTS Preload:
+#    - After setting HSTS header, submit to: https://hstspreload.org/
+#
+# 4. Enable Cloudflare Bot Fight Mode:
+#    - Go to Security > Bots
+#    - Enable "Bot Fight Mode" (free tier)
+#
+# 5. Configure Firewall Rules:
+#    - Go to Security > WAF
+#    - Review and enable appropriate rulesets
+#
+# 6. Enable DDoS Protection:
+#    - Go to Security > DDoS
+#    - Review settings (auto-enabled on Cloudflare)
+#
+# ============================================================================
+# Testing Your Headers
+# ============================================================================
+#
+# After configuring headers in Cloudflare, test with:
+#
+# 1. Browser DevTools:
+#    - Open https://loracraft.org
+#    - F12 > Network tab > Reload page
+#    - Click on the main document request
+#    - Check "Response Headers" section
+#
+# 2. Command Line (curl):
+#    curl -I https://loracraft.org
+#
+# 3. Online Tools:
+#    - https://securityheaders.com/?q=https://loracraft.org
+#    - https://observatory.mozilla.org/analyze/loracraft.org
+#
+# ============================================================================
+# Notes
+# ============================================================================
+#
+# - Meta tags in HTML (already added) provide fallback security
+# - Cloudflare headers override meta tags and provide better protection
+# - CSP 'unsafe-inline' is needed for inline scripts in Jekyll theme
+# - Consider removing 'unsafe-inline' if you can move scripts to external files
+# - Test thoroughly after applying headers to ensure site functionality
+#
