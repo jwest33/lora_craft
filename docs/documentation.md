@@ -23,9 +23,9 @@ Complete technical guide for installing, configuring, and using LoRA Craft.
 
 ## Prerequisites
 
-### Hardware Requirements
+### Hardware Recommendations
 
-- **GPU**: NVIDIA GPU with CUDA support (minimum 8GB VRAM recommended)
+- **GPU**: NVIDIA GPU with CUDA support
   - 8GB VRAM: Small models (0.6B - 1.7B parameters)
   - 12GB VRAM: Medium models (3B - 4B parameters)
   - 16GB+ VRAM: Large models (7B - 8B parameters)

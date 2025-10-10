@@ -1,12 +1,12 @@
 {
-  "name": "technical_analysis.2025.10.7.2",
+  "name": "technical_analysis.2025.10.10.10.1",
   "description": "",
   "config": {
-    "setupMode": "setup-advanced",
+    "setupMode": "setup-recommended",
     "model": {
       "modelName": "unsloth/Qwen3-0.6B",
       "customModelPath": "",
-      "quantization": "auto",
+      "quantization": "q8_0",
       "loraRank": 16,
       "loraAlpha": 32,
       "loraDropout": 0,
@@ -27,7 +27,7 @@
       "split": "train",
       "sample_size": 0,
       "train_split": 80,
-      "max_samples": 300,
+      "max_samples": 500,
       "instruction_field": "input",
       "response_field": "output"
     },
@@ -47,7 +47,7 @@
     },
     "training": {
       "num_epochs": 3,
-      "batch_size": 24,
+      "batch_size": 12,
       "gradient_accumulation": 1,
       "learning_rate": 1e-05,
       "lr_schedule": "cosine",
@@ -56,8 +56,8 @@
       "warmup_steps": 10,
       "weight_decay": 0.001,
       "max_grad_norm": 0.3,
-      "max_sequence_length": 3000,
-      "max_new_tokens": 1024,
+      "max_sequence_length": 300,
+      "max_new_tokens": 600,
       "seed": 42,
       "optimizer": "paged_adamw_32bit"
     },
@@ -66,7 +66,7 @@
       "temperature": 0.7,
       "top_p": 0.95,
       "top_k": 50,
-      "repetition_penalty": 1.1,
+      "repetition_penalty": 1.01,
       "kl_weight": 0.1,
       "kl_penalty": 0.05,
       "clip_range": 0.2,
@@ -87,55 +87,27 @@
     "pre_training": {
       "enabled": true,
       "epochs": 2,
-      "max_samples": 500,
+      "max_samples": 300,
       "filter_by_length": false,
       "validate_format": true
     },
+    "fine_tuning_internals": {
+      "dataset_processing_batch_size": 1000,
+      "short_response_max_words": 3,
+      "short_response_max_chars": 50,
+      "reward_sample_interval": 10,
+      "reward_samples_per_batch": 2,
+      "log_preview_chars": 300,
+      "prompt_length_percentile": 0.9,
+      "prompt_length_buffer": 10,
+      "min_completion_length": 256,
+      "fallback_completion_length": 512,
+      "min_loss_threshold": 0.01
+    },
     "reward": {
-      "components": [
-        {
-          "name": "signal_accuracy",
-          "parameters": {
-            "direction_match_score": 0.7,
-            "valid_signals": [
-              "STRONG_BUY",
-              "WEAK_BUY",
-              "HOLD",
-              "WEAK_SELL",
-              "STRONG_SELL"
-            ]
-          },
-          "type": "continuous",
-          "weight": 0.85
-        },
-        {
-          "name": "template_structure",
-          "parameters": {
-            "order_matters": false,
-            "required_sections": [
-              "signal"
-            ],
-            "section_tags": [
-              "signal",
-              "analysis"
-            ]
-          },
-          "type": "binary",
-          "weight": 0.1
-        },
-        {
-          "name": "response_length",
-          "parameters": {
-            "max_length": 900,
-            "min_length": 10,
-            "optimal_length": 400
-          },
-          "type": "continuous",
-          "weight": 0.05
-        }
-      ],
-      "type": "custom"
+      "type": "preset",
+      "preset_name": "Technical Analysis Signal"
     }
   },
-  "timestamp": 1759832925421
+  "timestamp": 1760092879930
 }

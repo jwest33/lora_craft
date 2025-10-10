@@ -37,7 +37,7 @@ else:
     logger.info("[INFO] Running in CPU mode - Unsloth optimizations disabled")
 
 # Import ML libraries AFTER unsloth to ensure optimizations are applied
-from trl import GRPOConfig as TRLGRPOConfig, GRPOTrainer
+from trl import GRPOConfig as TRLGRPOConfig, GRPOTrainer, SFTTrainer, SFTConfig
 
 from transformers import (
     AutoTokenizer,
@@ -604,6 +604,7 @@ class GRPOModelTrainer:
                 batched=True,
                 batch_size=self.config.dataset_processing_batch_size,
                 load_from_cache_file=False,  # Don't cache intermediate results
+                num_proc=1,  # Disable multiprocessing to avoid serialization issues with Unsloth/TRL
                 desc="Computing sequence lengths"
             )
             pre_train_dataset = dataset_with_lengths.filter(lambda x: x['length'] <= max_length)
@@ -759,6 +760,7 @@ class GRPOModelTrainer:
             apply_template,
             remove_columns=pre_train_dataset.column_names,  # Remove original columns, keep only text
             load_from_cache_file=False,  # Don't cache to reduce memory usage
+            num_proc=1,  # Disable multiprocessing to avoid serialization issues with Unsloth/TRL
             desc="Applying chat template"
         )
 
@@ -766,29 +768,11 @@ class GRPOModelTrainer:
         del pre_train_dataset
         gc.collect()
 
-        # Tokenize the dataset
-        def tokenize_function(examples):
-            return self.tokenizer(
-                examples['text'],
-                truncation=True,
-                padding=False,  # DataCollator will handle padding
-                max_length=self.config.max_sequence_length,
-                return_special_tokens_mask=False
-            )
+        # Note: SFTTrainer handles tokenization internally, so we keep the text dataset
+        # and don't manually tokenize it like we did with standard Trainer
 
-        tokenized_dataset = formatted_dataset.map(
-            tokenize_function,
-            batched=True,
-            remove_columns=['text'],  # Remove text, keep only tokenized data
-            load_from_cache_file=False  # Don't cache to reduce memory usage
-        )
-
-        # Clean up formatted_dataset to free memory
-        del formatted_dataset
-        gc.collect()
-
-        # Setup data collator with matching dtype
-        # Detect the model's actual dtype (critical for Unsloth models which may not match config flags)
+        # Detect the model's actual dtype for precision flags
+        # This is critical because the model may be loaded in a different dtype than config suggests
         model_dtype = None
 
         # Try to get dtype from model directly
@@ -810,44 +794,25 @@ class GRPOModelTrainer:
                     model_dtype = torch.bfloat16
                 logger.info(f"Using dtype from config flags: {model_dtype}")
 
-        data_collator = DataCollatorForLanguageModeling(
-            tokenizer=self.tokenizer,
-            mlm=False,
-        )
-
-        # Override the collator's return_tensors behavior to use correct dtype
-        original_call = data_collator.__call__
-
-        def dtype_aware_call(features):
-            batch = original_call(features)
-            # Convert tensors to model's dtype if specified
-            if model_dtype is not None:
-                for key in batch:
-                    if isinstance(batch[key], torch.Tensor) and batch[key].dtype in (torch.float32, torch.float64):
-                        batch[key] = batch[key].to(dtype=model_dtype)
-                        logger.debug(f"Converted {key} from {batch[key].dtype} to {model_dtype}")
-            return batch
-
-        data_collator.__call__ = dtype_aware_call
-        logger.info(f"Data collator configured with dtype conversion to {model_dtype}")
-
-        # Determine precision flags for TrainingArguments based on actual model dtype
-        # This is critical because the model may be loaded in a different dtype than config suggests
+        # Determine precision flags for SFTConfig based on actual model dtype
         use_fp16 = self.config.fp16
         use_bf16 = self.config.bf16
 
         if model_dtype == torch.bfloat16:
             use_bf16 = True
             use_fp16 = False
-            logger.info("Setting bf16=True in TrainingArguments to match model dtype")
+            logger.info("Setting bf16=True in SFTConfig to match model dtype")
         elif model_dtype == torch.float16:
             use_fp16 = True
             use_bf16 = False
-            logger.info("Setting fp16=True in TrainingArguments to match model dtype")
+            logger.info("Setting fp16=True in SFTConfig to match model dtype")
 
-        # Training arguments for pre-fine-tuning
-        training_args = TrainingArguments(
+        # SFT training configuration for pre-fine-tuning
+        # Using SFTConfig instead of TrainingArguments to match official GRPO notebook
+        training_args = SFTConfig(
             output_dir=f"{self.config.output_dir}/pre_finetune",
+            dataset_text_field="text",  # Required: field containing formatted text
+            dataset_num_proc=1,  # Disable multiprocessing in SFTTrainer to avoid Unsloth serialization issues
             num_train_epochs=epochs,
             per_device_train_batch_size=self.config.per_device_train_batch_size,
             gradient_accumulation_steps=self.config.gradient_accumulation_steps,
@@ -860,17 +825,17 @@ class GRPOModelTrainer:
             bf16=use_bf16,
             optim=self.config.optim,
             seed=self.config.seed,
+            report_to="none",  # Disable wandb/tensorboard by default
         )
 
-        # Create trainer
-        from transformers import Trainer
-
-        trainer = Trainer(
+        # Create SFT trainer (matches official GRPO notebook implementation)
+        # SFTTrainer handles tokenization and data collation internally
+        trainer = SFTTrainer(
             model=self.model,
             args=training_args,
-            train_dataset=tokenized_dataset,
+            train_dataset=formatted_dataset,  # Text dataset with 'text' field
             tokenizer=self.tokenizer,
-            data_collator=data_collator,
+            # No data_collator needed - SFTTrainer uses DataCollatorForLanguageModeling internally
         )
 
         os.environ['UNSLOTH_RETURN_LOGITS'] = '1'
