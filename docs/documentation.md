@@ -199,7 +199,7 @@ You should see `CUDA available: True`.
 #### Step 5: Start Application
 
 ```bash
-python flask_app.py
+python server.py
 ```
 
 Access the web interface at `http://localhost:5000`.
@@ -1065,7 +1065,7 @@ lora_craft/
 ├── uploads/            # Uploaded dataset files
 ├── utils/              # Utility functions
 ├── websockets/         # WebSocket handlers
-├── flask_app.py        # Application entry point
+├── server.py        # Application entry point
 ├── app_factory.py      # Flask application factory
 ├── constants.py        # Application constants
 └── requirements.txt    # Python dependencies

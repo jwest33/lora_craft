@@ -1,0 +1,113 @@
+{
+  "name": "gsm8k_math_example",
+  "description": "Example configuration for training a math reasoning model on GSM8K dataset using GRPO",
+  "config": {
+    "setupMode": "setup-recommended",
+    "model": {
+      "modelName": "unsloth/Qwen2.5-1.5B",
+      "customModelPath": "",
+      "quantization": "q8_0",
+      "loraRank": 16,
+      "loraAlpha": 32,
+      "loraDropout": 0,
+      "targetModulesArray": [
+        "q_proj",
+        "v_proj",
+        "k_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj"
+      ],
+      "family": "qwen"
+    },
+    "dataset": {
+      "source": "huggingface",
+      "path": "openai/gsm8k",
+      "split": "train",
+      "sample_size": 0,
+      "train_split": 80,
+      "max_samples": null,
+      "instruction_field": "question",
+      "response_field": "answer"
+    },
+    "template": {
+      "reasoning_start": "<start_working_out>",
+      "reasoning_end": "</end_working_out>",
+      "solution_start": "<SOLUTION>",
+      "solution_end": "</SOLUTION>",
+      "system_prompt": "You are given a problem.\nThink about the problem and provide your working out.\nPlace it between <start_working_out> and <end_working_out>.\nThen, provide your solution between <SOLUTION></SOLUTION>",
+      "chat_template": "{% if messages[0]['role'] == 'system' %}{{ messages[0]['content'] + eos_token }}{% set loop_messages = messages[1:] %}{% else %}{{ system_prompt + eos_token }}{% set loop_messages = messages %}{% endif %}{% for message in loop_messages %}{% if message['role'] == 'user' %}{{ message['content'] }}{% elif message['role'] == 'assistant' %}{{ message['content'] + eos_token }}{% endif %}{% endfor %}{% if add_generation_prompt %}{{ reasoning_start }}{% endif %}",
+      "chat_template_type": "custom"
+    },
+    "algorithm": {
+      "selected": "grpo",
+      "epsilon": 0.0003,
+      "epsilon_high": 0.0004
+    },
+    "training": {
+      "num_epochs": 3,
+      "batch_size": 1,
+      "gradient_accumulation": 8,
+      "learning_rate": 0.0002,
+      "lr_schedule": "cosine",
+      "lr_scheduler_type": "constant",
+      "warmup_ratio": 0.1,
+      "warmup_steps": 10,
+      "weight_decay": 0.001,
+      "max_grad_norm": 0.3,
+      "max_sequence_length": 2048,
+      "max_new_tokens": 512,
+      "seed": 42,
+      "optimizer": "paged_adamw_32bit"
+    },
+    "grpo": {
+      "num_generations": 2,
+      "temperature": 0.7,
+      "top_p": 0.9,
+      "top_k": 50,
+      "repetition_penalty": 1.01,
+      "kl_weight": 0.1,
+      "kl_penalty": 0.05,
+      "clip_range": 0.2,
+      "value_coefficient": 1
+    },
+    "optimizations": {
+      "use_flash_attention": false,
+      "gradient_checkpointing": true,
+      "mixed_precision": true,
+      "use_bf16": true
+    },
+    "output": {
+      "name": "",
+      "save_steps": 500,
+      "eval_steps": 100,
+      "logging_steps": 10
+    },
+    "pre_training": {
+      "enabled": true,
+      "epochs": 1,
+      "max_samples": 100,
+      "filter_by_length": false,
+      "validate_format": true
+    },
+    "fine_tuning_internals": {
+      "dataset_processing_batch_size": 1000,
+      "short_response_max_words": 3,
+      "short_response_max_chars": 50,
+      "reward_sample_interval": 10,
+      "reward_samples_per_batch": 2,
+      "log_preview_chars": 300,
+      "prompt_length_percentile": 0.9,
+      "prompt_length_buffer": 10,
+      "min_completion_length": 256,
+      "fallback_completion_length": 512,
+      "min_loss_threshold": 0.01
+    },
+    "reward": {
+      "type": "preset",
+      "preset_name": "Math Reasoning"
+    }
+  },
+  "timestamp": 1728950400000
+}

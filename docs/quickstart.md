@@ -175,7 +175,7 @@ You should see `CUDA available: True`.
 ### 1. Launch the Server
 
 ```bash
-python flask_app.py
+python server.py
 ```
 
 ### 2. Open the Interface

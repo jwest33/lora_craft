@@ -15,8 +15,8 @@
 # ============================================================================
 # Note: Requirements below assume GPU installation. For CPU-only, install
 # PyTorch separately using CPU index URL above, then install requirements.txt
-torch==2.8.0+cu128
-torchvision==0.23.0
+#torch==2.8.0+cu128
+#torchvision==0.23.0
 triton-windows==3.4.0.post20
 
 # ============================================================================
@@ -36,7 +36,7 @@ trl==0.21.0
 # Note: bitsandbytes and xformers require CUDA. Skip for CPU-only installations.
 bitsandbytes==0.47.0
 # xformers: Local build detected. For portable install use: xformers>=0.0.33
-xformers>=0.0.33
+xformers>=0.0.32
 
 # Efficient attention and optimization
 cut-cross-entropy==25.1.1

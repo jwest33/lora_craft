@@ -148,4 +148,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 ENTRYPOINT ["/app/src/entrypoint.sh"]
 
 # Default command
-CMD ["python", "flask_app.py"]
+CMD ["python", "server.py"]

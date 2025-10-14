@@ -8,6 +8,10 @@ This is the main entry point that uses the application factory pattern.
 
 import os
 from app_factory import create_app
+import dotenv
+
+# Load environment variables from .env file if it exists
+dotenv.load_dotenv()
 
 if __name__ == '__main__':
     # Create the Flask app and SocketIO instance

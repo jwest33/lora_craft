@@ -1,0 +1,13 @@
+# LoRA Craft CLI Requirements
+
+# Core dependencies
+click>=8.1.0
+requests>=2.31.0
+pyyaml>=6.0
+
+# Terminal UI
+rich>=13.7.0
+
+# WebSocket support (for live monitoring)
+websocket-client>=1.7.0
+python-socketio[client]>=5.11.0

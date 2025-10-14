@@ -14,6 +14,10 @@ title: LoRA Craft - LLM Fine-Tuning
     No ML expertise required—just choose your model, dataset, and reward function.
   </p>
 
+  <div class="alpha-notice" style="background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 15px; margin: 20px 0; color: #856404;">
+    <strong>⚠️ Alpha Software Notice:</strong> LoRA Craft is currently in active development and should be considered alpha software. Features may change, and you may encounter bugs or instability. Thank you for your patience!
+  </div>
+
   <div class="cta-buttons">
     <a href="quickstart.html" class="btn-primary">Get Started</a>
     <a href="https://github.com/jwest33/lora_craft" class="btn-secondary" target="_blank">

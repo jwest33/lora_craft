@@ -10,6 +10,10 @@
     &nbsp;&nbsp;
     <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License"></a>
   </p>
+
+  <blockquote>
+    <strong>⚠️ Alpha Software Notice:</strong> LoRA Craft is currently in active development and should be considered alpha software. Features may change, and you may encounter bugs or instability. Thank you for your patience!
+  </blockquote>
 </div>
 
 ---
@@ -88,6 +92,11 @@ LoRA Craft is a web-based application that enables fine-tuning of large language
 ---
 
 ## Installation
+
+**Fast Windows Install for CUDA**
+  - `pip install -r requirements.txt`
+  - `pip install torch==2.8.0+cu128 --index-url https://download.pytorch.org/whl/cu128`
+  - `pip install -v --no-build-isolation -U git+https://github.com/facebookresearch/xformers.git@main#egg=xformers`
 
 **Choose your installation method:**
 
@@ -333,7 +342,7 @@ You should see the PyTorch version printed.
 
 2. Start the Flask server:
    ```bash
-   python flask_app.py
+   python server.py
    ```
 
 3. Open your web browser and navigate to:
